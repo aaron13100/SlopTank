@@ -47,7 +47,7 @@
     flex: 1 1 auto;
     min-height: 0;
     max-width: 50em;
-    overflow-y: auto;
+    overflow-y: scroll;
     overflow-x: hidden;
     overscroll-behavior: contain;
     scrollbar-gutter: stable;
@@ -59,6 +59,9 @@
     background-size: 100% 14px, 100% 14px;
     background-position: 0 0, 0 100%;
     background-attachment: local, local;
+    box-shadow: inset 0 -10px 10px -10px rgba(0, 0, 0, 0.6);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.55) rgba(0, 0, 0, 0.25);
 
     [dir="ltr"] & {
         padding: 0 3em 1em 1em;
@@ -67,6 +70,24 @@
     [dir="rtl"] & {
         padding: 0 1em 1em 3em;
     }
+}
+
+.playerStats-stats::-webkit-scrollbar {
+    width: 10px;
+}
+
+.playerStats-stats::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.playerStats-stats::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+    border: 2px solid rgba(0, 0, 0, 0.25);
+}
+
+.playerStats-stats::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
 }
 
 .playerStats-stat {
