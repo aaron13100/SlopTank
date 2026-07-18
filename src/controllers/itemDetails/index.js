@@ -1934,11 +1934,6 @@ export default function (view, params) {
         Promise.all([getPromise(apiClient, pageParams), apiClient.getCurrentUser()]).then(([item, user]) => {
             currentItem = item;
             reloadFromItem(instance, page, pageParams, item, user);
-
-            if (pageParams.autoplay && !autoPlayTriggered && playbackManager.canPlay(item)) {
-                autoPlayTriggered = true;
-                playCurrentItem(null, ItemAction.Resume);
-            }
         }).catch((error) => {
             console.error('failed to get item or current user: ', error);
         });
@@ -2099,7 +2094,6 @@ export default function (view, params) {
     }
 
     let currentItem;
-    let autoPlayTriggered = false;
     const self = this;
 
     function init() {
