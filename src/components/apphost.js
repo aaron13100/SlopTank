@@ -8,7 +8,7 @@ import profileBuilder from '../scripts/browserDeviceProfile';
 import { AppFeature } from 'constants/appFeature';
 import { LayoutMode } from 'constants/layoutMode';
 
-const appName = 'Jellyfin Web';
+const appName = 'SlopTank';
 
 const BrowserName = {
     tizen: 'Samsung Smart TV',
