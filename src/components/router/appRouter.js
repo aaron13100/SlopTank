@@ -440,16 +440,17 @@ class AppRouter {
             }
         }
 
+        const autoplaySuffix = options.autoplay ? '&autoplay=1' : '';
         const itemTypes = ['Playlist', 'TvChannel', 'Program', 'BoxSet', 'MusicAlbum', 'MusicGenre', 'Person', 'Recording', 'MusicArtist'];
 
         if (itemTypes.indexOf(itemType) >= 0) {
-            return '#/details?id=' + id + '&serverId=' + serverId;
+            return '#/details?id=' + id + '&serverId=' + serverId + autoplaySuffix;
         }
 
         const contextSuffix = context ? '&context=' + context : '';
 
         if (itemType == 'Series' || itemType == 'Season' || itemType == 'Episode') {
-            return '#/details?id=' + id + contextSuffix + '&serverId=' + serverId;
+            return '#/details?id=' + id + contextSuffix + '&serverId=' + serverId + autoplaySuffix;
         }
 
         if (item.IsFolder) {
@@ -460,7 +461,7 @@ class AppRouter {
             return '#';
         }
 
-        return '#/details?id=' + id + '&serverId=' + serverId;
+        return '#/details?id=' + id + '&serverId=' + serverId + autoplaySuffix;
     }
 
     showLocalLogin(serverId) {

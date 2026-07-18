@@ -378,6 +378,14 @@ export async function getCommands(options) {
         });
     }
 
+    if (!browser.tv && options.share === true && itemHelper.canCopyPlayLink(item, user)) {
+        commands.push({
+            name: globalize.translate('CopyPlayLink'),
+            id: 'copy-play-link',
+            icon: 'content_copy'
+        });
+    }
+
     if (options.openAlbum !== false && item.AlbumId && item.MediaType !== 'Photo') {
         commands.push({
             name: globalize.translate('ViewAlbum'),
@@ -629,6 +637,16 @@ function executeCommand(item, id, options) {
                     url: `${apiClient.serverAddress()}/web/${appRouter.getRouteUrl(item)}`
                 });
                 break;
+            case 'copy-play-link': {
+                const playLinkUrl = `${apiClient.serverAddress()}/web/${appRouter.getRouteUrl(item, { autoplay: true })}`;
+                copy(playLinkUrl).then(() => {
+                    toast(globalize.translate('CopyPlayLinkSuccess'));
+                }).catch(() => {
+                    prompt(globalize.translate('CopyPlayLink'), playLinkUrl);
+                });
+                getResolveFunction(resolve, id)();
+                break;
+            }
             case 'album':
                 appRouter.showItem(item.AlbumId, item.ServerId);
                 getResolveFunction(resolve, id)();

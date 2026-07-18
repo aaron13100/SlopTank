@@ -196,6 +196,8 @@
     "CopyFailed": "Could not copy",
     "CopyStreamURL": "Copy Stream URL",
     "CopyStreamURLSuccess": "URL copied successfully.",
+    "CopyPlayLink": "Copy Play Link",
+    "CopyPlayLinkSuccess": "Play link copied successfully.",
     "CopyLogSuccess": "Log contents copied successfully.",
     "CoverArtist": "Cover artist",
     "Create": "Create",

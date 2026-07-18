@@ -220,7 +220,7 @@ export function canEditLyrics (user, item) {
     return user.Policy.IsAdministrator;
 }
 
-export function canShare (item, user) {
+function canShareItem (item) {
     if (item.Type === 'Program') {
         return false;
     }
@@ -236,10 +236,15 @@ export function canShare (item, user) {
     if (item.Type === 'Recording' && item.Status !== 'Completed') {
         return false;
     }
-    if (isLocalItem(item)) {
-        return false;
-    }
-    return user.Policy.EnablePublicSharing && appHost.supports(AppFeature.Sharing);
+    return !isLocalItem(item);
+}
+
+export function canShare (item, user) {
+    return canShareItem(item) && user.Policy.EnablePublicSharing && appHost.supports(AppFeature.Sharing);
+}
+
+export function canCopyPlayLink (item, user) {
+    return canShareItem(item) && user.Policy.EnablePublicSharing;
 }
 
 export function enableDateAddedDisplay (item) {
@@ -364,6 +369,7 @@ export default {
     canEditSubtitles,
     canEditLyrics,
     canShare: canShare,
+    canCopyPlayLink: canCopyPlayLink,
     enableDateAddedDisplay: enableDateAddedDisplay,
     canMarkPlayed: canMarkPlayed,
     canRate: canRate,
