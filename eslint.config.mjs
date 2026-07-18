@@ -187,6 +187,15 @@ export default tseslint.config(
         }
     },
 
+    // E2E tests run in Node via Playwright's test runner, never shipped to
+    // the browser bundle, so browser-compat checks don't apply here.
+    {
+        files: [ 'e2e/**', 'playwright.config.ts' ],
+        rules: {
+            'compat/compat': 'off'
+        }
+    },
+
     // App files
     {
         files: [

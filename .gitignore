@@ -6,6 +6,12 @@ node_modules
 # test coverage
 coverage
 
+# playwright e2e
+test-results
+playwright-report
+blob-report
+.env.e2e.local
+
 # config
 config.json
 
