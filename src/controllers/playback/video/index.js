@@ -33,6 +33,7 @@ import LibraryMenu from '../../../scripts/libraryMenu';
 import { setBackdropTransparency, TRANSPARENCY_LEVEL } from '../../../components/backdrop/backdrop';
 import { pluginManager } from '../../../components/pluginManager';
 import { PluginType } from '../../../types/plugin.ts';
+import { getParameterByName } from '../../../utils/url.ts';
 
 function getOpenedDialog() {
     return document.querySelector('.dialogContainer .dialog.opened');
@@ -582,12 +583,42 @@ export default function (view) {
         view.querySelector('.osdMediaStatus').classList.add('hide');
     }
 
+    function resumeFromPermalink() {
+        if (playbackManager.getCurrentPlayer()) {
+            return;
+        }
+
+        const id = getParameterByName('id');
+        const serverId = getParameterByName('serverId');
+
+        if (!id || !serverId) {
+            return;
+        }
+
+        const apiClient = ServerConnections.getApiClient(serverId);
+
+        apiClient.getItem(apiClient.getCurrentUserId(), id).then((item) => {
+            if (playbackManager.getCurrentPlayer() || !playbackManager.canPlay(item)) {
+                return;
+            }
+
+            playbackManager.play({
+                items: [item],
+                startPositionTicks: item.UserData?.PlaybackPositionTicks || 0,
+                fullscreen: true
+            });
+        }).catch((error) => {
+            console.error('failed to resume item from permalink: ', error);
+            appRouter.goHome();
+        });
+    }
+
     function bindToPlayer(player) {
         if (player !== currentPlayer) {
             releaseCurrentPlayer();
             currentPlayer = player;
-            if (!player) return;
         }
+        if (!player) return;
         const state = playbackManager.getPlayerState(player);
         onStateChanged.call(player, {
             type: 'init'
@@ -1675,6 +1706,7 @@ export default function (view) {
         try {
             Events.on(playbackManager, 'playerchange', onPlayerChange);
             bindToPlayer(playbackManager.getCurrentPlayer());
+            resumeFromPermalink();
             /* eslint-disable-next-line compat/compat */
             dom.addEventListener(document, window.PointerEvent ? 'pointermove' : 'mousemove', onPointerMove, {
                 passive: true
@@ -1714,7 +1746,8 @@ export default function (view) {
             if (browser.firefox || browser.edge) {
                 dom.addEventListener(document, 'click', onClickCapture, { capture: true });
             }
-        } catch {
+        } catch (error) {
+            console.error('[videoOsd] viewshow handler failed, returning home: ', error);
             setBackdropTransparency(TRANSPARENCY_LEVEL.None); // reset state set in viewbeforeshow
             appRouter.goHome();
         }

@@ -90,7 +90,8 @@ class AppRouter {
         path = path.replace(this.baseUrl(), '');
 
         // can't use this with home right now due to the back menu
-        if (history.location.pathname === path && path !== '/home') {
+        const currentFullPath = history.location.pathname + history.location.search;
+        if ((history.location.pathname === path || currentFullPath === path) && path !== '/home') {
             loading.hide();
             return Promise.resolve();
         }
@@ -440,17 +441,16 @@ class AppRouter {
             }
         }
 
-        const autoplaySuffix = options.autoplay ? '&autoplay=1' : '';
         const itemTypes = ['Playlist', 'TvChannel', 'Program', 'BoxSet', 'MusicAlbum', 'MusicGenre', 'Person', 'Recording', 'MusicArtist'];
 
         if (itemTypes.indexOf(itemType) >= 0) {
-            return '#/details?id=' + id + '&serverId=' + serverId + autoplaySuffix;
+            return '#/details?id=' + id + '&serverId=' + serverId;
         }
 
         const contextSuffix = context ? '&context=' + context : '';
 
         if (itemType == 'Series' || itemType == 'Season' || itemType == 'Episode') {
-            return '#/details?id=' + id + contextSuffix + '&serverId=' + serverId + autoplaySuffix;
+            return '#/details?id=' + id + contextSuffix + '&serverId=' + serverId;
         }
 
         if (item.IsFolder) {
@@ -461,14 +461,18 @@ class AppRouter {
             return '#';
         }
 
-        return '#/details?id=' + id + '&serverId=' + serverId + autoplaySuffix;
+        return '#/details?id=' + id + '&serverId=' + serverId;
     }
 
     showLocalLogin(serverId) {
         return this.show('login?serverid=' + serverId);
     }
 
-    showVideoOsd() {
+    showVideoOsd(item) {
+        if (item && item.Id && item.ServerId) {
+            return this.show('video?id=' + item.Id + '&serverId=' + item.ServerId);
+        }
+
         return this.show('video');
     }
 

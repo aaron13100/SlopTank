@@ -142,6 +142,31 @@ function getMediaStreamTextTracks(mediaSource) {
     });
 }
 
+function getTargetFps(referenceFrameRate) {
+    if (typeof referenceFrameRate === 'number' && Number.isFinite(referenceFrameRate) && referenceFrameRate > 0) {
+        return referenceFrameRate;
+    }
+
+    if (typeof referenceFrameRate === 'string') {
+        const normalized = referenceFrameRate.trim();
+        if (normalized.includes('/')) {
+            const [numeratorPart, denominatorPart] = normalized.split('/');
+            const numerator = Number(numeratorPart);
+            const denominator = Number(denominatorPart);
+            if (Number.isFinite(numerator) && Number.isFinite(denominator) && denominator > 0) {
+                return numerator / denominator;
+            }
+        } else {
+            const parsed = Number(normalized);
+            if (Number.isFinite(parsed) && parsed > 0) {
+                return parsed;
+            }
+        }
+    }
+
+    return 24;
+}
+
 function zoomIn(elem) {
     return new Promise(resolve => {
         const duration = 240;
@@ -225,6 +250,10 @@ export class HtmlVideoPlayer {
      * @type {any | null | undefined}
      */
     #currentAssRenderer;
+    /**
+     * @type {number}
+     */
+    #currentAssRendererRequestId = 0;
     /**
      * @type {any | null | undefined}
      */
@@ -1006,7 +1035,7 @@ export class HtmlVideoPlayer {
             });
 
             if (this._currentPlayOptions.fullscreen) {
-                appRouter.showVideoOsd().then(this.onNavigatedToOsd);
+                appRouter.showVideoOsd(this._currentPlayOptions.item).then(this.onNavigatedToOsd);
             } else {
                 setBackdropTransparency(TRANSPARENCY_LEVEL.Backdrop);
                 this.#videoDialog.classList.remove('videoPlayerContainer-onTop');
@@ -1181,6 +1210,7 @@ export class HtmlVideoPlayer {
      * @private
      */
     destroyCustomTrack(videoElement, targetTrackIndex) {
+        this.#currentAssRendererRequestId++;
         this.destroyCustomRenderedTrackElements(targetTrackIndex);
         this.destroyNativeTracks(videoElement, targetTrackIndex);
         this.destroyStoredTrackInfo(targetTrackIndex);
@@ -1268,6 +1298,7 @@ export class HtmlVideoPlayer {
      * @private
      */
     renderSsaAss(videoElement, track, item) {
+        const requestId = ++this.#currentAssRendererRequestId;
         const supportedFonts = ['application/vnd.ms-opentype', 'application/x-truetype-font', 'font/otf', 'font/ttf', 'font/woff', 'font/woff2'];
         const availableFonts = [];
         const attachments = this._currentPlayOptions.mediaSource.MediaAttachments || [];
@@ -1283,7 +1314,12 @@ export class HtmlVideoPlayer {
             ApiKey: apiClient.accessToken()
         });
         const htmlVideoPlayer = this;
+        const isCurrentRequest = () => requestId === this.#currentAssRendererRequestId;
         import('@jellyfin/libass-wasm').then(({ default: SubtitlesOctopus }) => {
+            if (!isCurrentRequest()) {
+                return;
+            }
+
             const mediaSource = this._currentPlayOptions.mediaSource;
             const videoStream = getMediaStreamVideoTracks(mediaSource)[0];
 
@@ -1309,12 +1345,25 @@ export class HtmlVideoPlayer {
                 dropAllAnimations: false,
                 libassMemoryLimit: 40,
                 libassGlyphLimit: 40,
-                targetFps: videoStream?.ReferenceFrameRate || 24,
+                targetFps: getTargetFps(videoStream?.ReferenceFrameRate),
                 prescaleFactor: 0.8,
                 prescaleHeightLimit: 1080,
                 maxRenderHeight: 2160,
                 resizeVariation: 0.2,
                 renderAhead: 90
+            };
+
+            const createAssRenderer = () => {
+                if (!isCurrentRequest()) {
+                    return;
+                }
+
+                const currentRenderer = this.#currentAssRenderer;
+                if (currentRenderer) {
+                    currentRenderer.dispose();
+                }
+
+                this.#currentAssRenderer = new SubtitlesOctopus(options);
             };
 
             Promise.all([
@@ -1323,23 +1372,48 @@ export class HtmlVideoPlayer {
                 resolveUrl(options.workerUrl),
                 resolveUrl(options.legacyWorkerUrl)
             ]).then(([config, workerUrl, legacyWorkerUrl]) => {
+                if (!isCurrentRequest()) {
+                    return;
+                }
+
                 options.workerUrl = workerUrl;
                 options.legacyWorkerUrl = legacyWorkerUrl;
 
                 if (config.EnableFallbackFont) {
                     apiClient.getJSON(fallbackFontList).then((fontFiles = []) => {
+                        if (!isCurrentRequest()) {
+                            return;
+                        }
+
                         fontFiles.forEach(font => {
                             const fontUrl = apiClient.getUrl(`/FallbackFont/Fonts/${encodeURIComponent(font.Name)}`, {
                                 ApiKey: apiClient.accessToken()
                             });
                             availableFonts.push(fontUrl);
                         });
-                        this.#currentAssRenderer = new SubtitlesOctopus(options);
+                        createAssRenderer();
+                    }).catch((error) => {
+                        console.warn('Failed to load fallback fonts for ASS renderer', error);
+                        createAssRenderer();
                     });
                 } else {
-                    this.#currentAssRenderer = new SubtitlesOctopus(options);
+                    createAssRenderer();
                 }
+            }).catch((error) => {
+                if (!isCurrentRequest()) {
+                    return;
+                }
+
+                console.error('Failed to initialize ASS renderer', error);
+                onErrorInternal(this, MediaError.ASS_RENDER_ERROR);
             });
+        }).catch((error) => {
+            if (!isCurrentRequest()) {
+                return;
+            }
+
+            console.error('Failed to load ASS renderer module', error);
+            onErrorInternal(this, MediaError.ASS_RENDER_ERROR);
         });
     }
 
