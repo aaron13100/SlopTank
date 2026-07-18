@@ -654,7 +654,8 @@ function truncatePlayOptions(playOptions) {
         mediaSourceId: playOptions.mediaSourceId,
         audioStreamIndex: playOptions.audioStreamIndex,
         subtitleStreamIndex: playOptions.subtitleStreamIndex,
-        startPositionTicks: playOptions.startPositionTicks
+        startPositionTicks: playOptions.startPositionTicks,
+        alreadyOnVideoOsd: playOptions.alreadyOnVideoOsd
     };
 }
 
@@ -1743,6 +1744,7 @@ export class PlaybackManager {
 
                         const streamInfo = createStreamInfo(apiClient, currentItem.MediaType, currentItem, currentMediaSource, ticks, player);
                         streamInfo.fullscreen = currentPlayOptions.fullscreen;
+                        streamInfo.alreadyOnVideoOsd = currentPlayOptions.alreadyOnVideoOsd;
                         streamInfo.lastMediaInfoQuery = lastMediaInfoQuery;
                         streamInfo.resetSubtitleOffset = false;
 
@@ -2624,6 +2626,7 @@ export class PlaybackManager {
                 return promise.then(function () {
                     const streamInfo = createStreamInfoFromUrlItem(item);
                     streamInfo.fullscreen = playOptions.fullscreen;
+                    streamInfo.alreadyOnVideoOsd = playOptions.alreadyOnVideoOsd;
                     getPlayerData(player).isChangingStream = false;
                     return player.play(streamInfo).then(() => {
                         loading.hide();
@@ -2714,6 +2717,7 @@ export class PlaybackManager {
                     const streamInfo = createStreamInfo(apiClient, item.MediaType, item, mediaSource, startPosition, player);
                     streamInfo.aspectRatio = playOptions.aspectRatio;
                     streamInfo.fullscreen = playOptions.fullscreen;
+                    streamInfo.alreadyOnVideoOsd = playOptions.alreadyOnVideoOsd;
 
                     const playerData = getPlayerData(player);
 

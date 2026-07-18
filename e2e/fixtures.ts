@@ -35,11 +35,14 @@ export const test = base.extend<{ config: E2eConfig }>({
 export async function login(page: import('@playwright/test').Page, username: string, password: string) {
     await page.goto('/web/#/login');
 
-    const manualForm = page.locator('.manualLoginForm');
-    if (!(await manualForm.isVisible())) {
-        await page.locator('.btnManual').click();
-    }
+    // Wait for the public-user request to finish before changing forms. Clicking
+    // Manual Login earlier races loadUserList(), which switches back to the
+    // visual form and leaves Playwright targeting a hidden submit button.
+    const userButton = page.getByRole('button', { name: username, exact: true });
+    await userButton.click();
 
+    const manualForm = page.locator('.manualLoginForm:visible');
+    await expect(manualForm).toBeVisible();
     await manualForm.locator('#txtManualName').fill(username);
     await manualForm.locator('#txtManualPassword').fill(password);
 

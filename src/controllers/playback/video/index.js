@@ -380,8 +380,10 @@ export default function (view) {
     // TODO: Move all idle-related code to `inputManager` or `idleManager` or `idleHelper` (per dialog thing) and listen event from there.
 
     function resetIdle() {
-        // Restart hide timer if OSD is currently visible and there is no opened dialog
-        if (currentVisibleMenu && !mouseIsDown && !getOpenedDialog()) {
+        // Keep a recovery control visible while playback is paused (including
+        // when a browser blocks autoplay after loading a permalink).
+        if (currentVisibleMenu && !mouseIsDown && !getOpenedDialog()
+                && currentPlayer && !playbackManager.paused(currentPlayer)) {
             startOsdHideTimer();
         } else {
             stopOsdHideTimer();
@@ -529,6 +531,7 @@ export default function (view) {
     function onPlayPauseStateChanged() {
         if (isEnabled) {
             updatePlayPauseState(this.paused());
+            resetIdle();
         }
     }
 
@@ -584,8 +587,8 @@ export default function (view) {
     }
 
     function resumeFromPermalink() {
-        if (playbackManager.getCurrentPlayer()) {
-            return;
+        if (playbackManager.getCurrentPlayer() || permalinkResumePromise) {
+            return permalinkResumePromise;
         }
 
         const id = getParameterByName('id');
@@ -597,20 +600,25 @@ export default function (view) {
 
         const apiClient = ServerConnections.getApiClient(serverId);
 
-        apiClient.getItem(apiClient.getCurrentUserId(), id).then((item) => {
+        permalinkResumePromise = apiClient.getItem(apiClient.getCurrentUserId(), id).then((item) => {
             if (playbackManager.getCurrentPlayer() || !playbackManager.canPlay(item)) {
                 return;
             }
 
-            playbackManager.play({
+            return playbackManager.play({
                 items: [item],
                 startPositionTicks: item.UserData?.PlaybackPositionTicks || 0,
-                fullscreen: true
+                fullscreen: true,
+                alreadyOnVideoOsd: true
             });
         }).catch((error) => {
             console.error('failed to resume item from permalink: ', error);
             appRouter.goHome();
+        }).finally(() => {
+            permalinkResumePromise = null;
         });
+
+        return permalinkResumePromise;
     }
 
     function bindToPlayer(player) {
@@ -635,6 +643,7 @@ export default function (view) {
         Events.on(player, 'beginFetch', onBeginFetch);
         Events.on(player, 'endFetch', onEndFetch);
         resetUpNextDialog();
+        resetIdle();
 
         if (player.isFetching) {
             onBeginFetch();
@@ -1675,6 +1684,8 @@ export default function (view) {
     let playbackStartTimeTicks = 0;
     let subtitleSyncOverlay;
     let trickplayResolution = null;
+    let permalinkResumePromise;
+    let isViewSetup = false;
     const nowPlayingVolumeSlider = view.querySelector('.osdVolumeSlider');
     const nowPlayingVolumeSliderContainer = view.querySelector('.osdVolumeSliderContainer');
     const nowPlayingPositionSlider = view.querySelector('.osdPositionSlider');
@@ -1703,6 +1714,15 @@ export default function (view) {
         setBackdropTransparency(TRANSPARENCY_LEVEL.Full);
     });
     view.addEventListener('viewshow', function () {
+        // A hard reload can dispatch viewshow twice while the router falls back
+        // from restoring this legacy view to loading it. Setup must be
+        // idempotent: playbackManager events do not de-duplicate listeners and
+        // currentPlayer stays null until late in async playback startup.
+        if (isViewSetup) {
+            return;
+        }
+
+        isViewSetup = true;
         try {
             Events.on(playbackManager, 'playerchange', onPlayerChange);
             bindToPlayer(playbackManager.getCurrentPlayer());
@@ -1747,12 +1767,14 @@ export default function (view) {
                 dom.addEventListener(document, 'click', onClickCapture, { capture: true });
             }
         } catch (error) {
+            isViewSetup = false;
             console.error('[videoOsd] viewshow handler failed, returning home: ', error);
             setBackdropTransparency(TRANSPARENCY_LEVEL.None); // reset state set in viewbeforeshow
             appRouter.goHome();
         }
     });
     view.addEventListener('viewbeforehide', function () {
+        isViewSetup = false;
         if (statsOverlay) {
             statsOverlay.enabled(false);
         }
@@ -2105,4 +2127,3 @@ export default function (view) {
         });
     }
 }
-

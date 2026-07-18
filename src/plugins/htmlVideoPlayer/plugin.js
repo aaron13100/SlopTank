@@ -1687,7 +1687,7 @@ export class HtmlVideoPlayer {
                 const playerDlg = document.createElement('div');
                 playerDlg.setAttribute('dir', 'ltr');
                 playerDlg.classList.add('videoPlayerContainer');
-                if (options.fullscreen) {
+                if (options.fullscreen && !options.alreadyOnVideoOsd) {
                     playerDlg.classList.add('videoPlayerContainer-onTop');
                 }
 
@@ -1757,6 +1757,10 @@ export class HtmlVideoPlayer {
                 return videoElement;
             });
         } else {
+            if (options.alreadyOnVideoOsd) {
+                dlg.classList.remove('videoPlayerContainer-onTop');
+            }
+
             if (options.fullscreen) {
                 // we need to hide scrollbar when starting playback from page with animated background
                 document.body.classList.add('hide-scroll');
