@@ -106,10 +106,46 @@
     opacity: 0;
 }
 
+.videoOsdLoading {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 1;
+    display: flex;
+    gap: 0.5em;
+    align-items: center;
+    padding: 0.75em 1em;
+    transform: translate(-50%, -50%);
+    border-radius: 1.5em;
+    background: rgba(16, 16, 16, 0.8);
+    color: #fff;
+    font-size: 1.2em;
+    text-shadow: 0 1px 4px #000;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.videoOsdLoadingSpinner {
+    width: 1em;
+    height: 1em;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    border: 0.15em solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin-clockwise 0.8s linear infinite;
+}
+
 .osdControls {
     pointer-events: all;
     flex-grow: 1;
     padding: 0 0.8em;
+    transition: opacity 0.2s ease-out;
+}
+
+.videoOsd-isPreparing .osdControls {
+    opacity: 0.45;
+    pointer-events: none;
 }
 
 .videoOsdBottom .buttons {

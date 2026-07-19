@@ -1,8 +1,8 @@
 {
-  "name": "jellyfin-web",
+  "name": "sloptank-web",
   "version": "10.12.0",
-  "description": "Web interface for Jellyfin",
-  "repository": "https://github.com/jellyfin/jellyfin-web",
+  "description": "Web interface for SlopTank",
+  "repository": "https://github.com/aaron13100/SlopTank",
   "license": "GPL-2.0-or-later",
   "devDependencies": {
     "@babel/core": "7.27.4",
@@ -88,7 +88,6 @@
     "@fontsource/noto-sans-tc": "5.2.6",
     "@jellyfin/libass-wasm": "4.2.3",
     "@jellyfin/sdk": "0.0.0-unstable.202601270506",
-    "@jellyfin/ux-web": "1.0.0",
     "@mui/icons-material": "6.4.12",
     "@mui/material": "6.4.12",
     "@mui/x-date-pickers": "7.29.4",

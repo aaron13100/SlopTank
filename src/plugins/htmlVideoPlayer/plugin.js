@@ -322,6 +322,18 @@ export class HtmlVideoPlayer {
      * @type {number | null | undefined}
      */
     #currentTime;
+    /**
+     * @type {number | undefined}
+     */
+    #videoFrameCallbackId;
+    /**
+     * @type {boolean | undefined}
+     */
+    #firstVideoFramePresented;
+    /**
+     * @type {boolean | undefined}
+     */
+    #initialMediaPrepared;
 
     /**
      * @private (used in other files)
@@ -398,7 +410,9 @@ export class HtmlVideoPlayer {
         if (mediaSource && item && !mediaSource.RunTimeTicks && isHls(mediaSource) && streamInfo.playMethod === 'Transcode' && (browser.iOS || browser.osx)) {
             const hlsPlaylistUrl = streamInfo.url.replace('master.m3u8', 'live.m3u8');
 
-            loading.show();
+            if (!streamInfo.alreadyOnVideoOsd) {
+                loading.show();
+            }
 
             console.debug(`prefetching hls playlist: ${hlsPlaylistUrl}`);
 
@@ -425,6 +439,8 @@ export class HtmlVideoPlayer {
     async play(options) {
         this.#started = false;
         this.#timeUpdated = false;
+        this.#firstVideoFramePresented = false;
+        this.#initialMediaPrepared = false;
 
         this.#currentTime = null;
 
@@ -888,6 +904,11 @@ export class HtmlVideoPlayer {
         const videoElement = this.#mediaElement;
 
         if (videoElement) {
+            if (this.#videoFrameCallbackId != null && typeof videoElement.cancelVideoFrameCallback === 'function') {
+                videoElement.cancelVideoFrameCallback(this.#videoFrameCallbackId);
+                this.#videoFrameCallbackId = undefined;
+            }
+
             this.#mediaElement = null;
 
             this.destroyCustomTrack(videoElement);
@@ -895,6 +916,7 @@ export class HtmlVideoPlayer {
             videoElement.removeEventListener('ended', this.onEnded);
             videoElement.removeEventListener('volumechange', this.onVolumeChange);
             videoElement.removeEventListener('pause', this.onPause);
+            videoElement.removeEventListener('canplay', this.onCanPlay);
             videoElement.removeEventListener('playing', this.onPlaying);
             videoElement.removeEventListener('play', this.onPlay);
             videoElement.removeEventListener('click', this.onClick);
@@ -1012,6 +1034,80 @@ export class HtmlVideoPlayer {
     }
 
     /**
+     * Keep permalink preparation visible until the browser has submitted an
+     * actual video frame for display. The playing event can fire before the
+     * frame at the resumed position has been painted.
+     * @private
+     */
+    waitForFirstVideoFrame(elem) {
+        if (this.#firstVideoFramePresented || elem !== this.#mediaElement) {
+            return;
+        }
+
+        const onFramePresented = () => {
+            if (this.#firstVideoFramePresented || elem !== this.#mediaElement) {
+                return;
+            }
+
+            this.#firstVideoFramePresented = true;
+            this.#videoFrameCallbackId = undefined;
+            Events.trigger(this, 'firstvideoframe');
+        };
+
+        if (typeof elem.requestVideoFrameCallback === 'function') {
+            this.#videoFrameCallbackId = elem.requestVideoFrameCallback(onFramePresented);
+        } else {
+            requestAnimationFrame(onFramePresented);
+        }
+    }
+
+    /**
+     * Apply the resume seek as soon as the media is playable. If autoplay was
+     * blocked, the OSD can stop saying "Preparing" and expose Play once the
+     * seek is ready; otherwise it waits for the first painted frame.
+     * @private
+     */
+    prepareInitialMedia(elem) {
+        if (this.#initialMediaPrepared || elem !== this.#mediaElement) {
+            return;
+        }
+
+        this.#initialMediaPrepared = true;
+        const onMediaReady = () => {
+            if (this.#currentAssRenderer) {
+                this.#currentAssRenderer.timeOffset = (this._currentPlayOptions.transcodingOffsetTicks || 0) / 10000000 + this.#currentTrackOffset;
+                this.#currentAssRenderer.resize();
+                this.#currentAssRenderer.resetRenderAheadCache(false);
+            }
+
+            this.waitForFirstVideoFrame(elem);
+            if (elem.paused) {
+                if (elem.seeking) {
+                    elem.addEventListener('seeked', () => {
+                        Events.trigger(this, 'videoready');
+                    }, { once: true });
+                } else {
+                    Events.trigger(this, 'videoready');
+                }
+            }
+        };
+        const startPositionTicks = this._currentPlayOptions.playerStartPositionTicks;
+        seekOnPlaybackStart(this, elem, startPositionTicks, onMediaReady);
+        if (!startPositionTicks) {
+            onMediaReady();
+        }
+    }
+
+    /**
+     * @private
+     */
+    onCanPlay = (e) => {
+        if (this._currentPlayOptions?.alreadyOnVideoOsd) {
+            this.prepareInitialMedia(e.target);
+        }
+    };
+
+    /**
      * @private
      * @param e {Event} The event received from the `<video>` element
      */
@@ -1026,16 +1122,14 @@ export class HtmlVideoPlayer {
 
             loading.hide();
 
-            seekOnPlaybackStart(this, e.target, this._currentPlayOptions.playerStartPositionTicks, () => {
-                if (this.#currentAssRenderer) {
-                    this.#currentAssRenderer.timeOffset = (this._currentPlayOptions.transcodingOffsetTicks || 0) / 10000000 + this.#currentTrackOffset;
-                    this.#currentAssRenderer.resize();
-                    this.#currentAssRenderer.resetRenderAheadCache(false);
-                }
-            });
+            this.prepareInitialMedia(elem);
 
             if (this._currentPlayOptions.fullscreen) {
-                appRouter.showVideoOsd(this._currentPlayOptions.item).then(this.onNavigatedToOsd);
+                if (this._currentPlayOptions.alreadyOnVideoOsd) {
+                    this.onNavigatedToOsd();
+                } else {
+                    appRouter.showVideoOsd(this._currentPlayOptions.item).then(this.onNavigatedToOsd);
+                }
             } else {
                 setBackdropTransparency(TRANSPARENCY_LEVEL.Backdrop);
                 this.#videoDialog.classList.remove('videoPlayerContainer-onTop');
@@ -1682,7 +1776,7 @@ export class HtmlVideoPlayer {
 
         if (!dlg) {
             return import('./style.scss').then(() => {
-                if (options.fullscreen) loading.show();
+                if (options.fullscreen && !options.alreadyOnVideoOsd) loading.show();
 
                 const playerDlg = document.createElement('div');
                 playerDlg.setAttribute('dir', 'ltr');
@@ -1719,6 +1813,7 @@ export class HtmlVideoPlayer {
                 videoElement.addEventListener('ended', this.onEnded);
                 videoElement.addEventListener('volumechange', this.onVolumeChange);
                 videoElement.addEventListener('pause', this.onPause);
+                videoElement.addEventListener('canplay', this.onCanPlay);
                 videoElement.addEventListener('playing', this.onPlaying);
                 videoElement.addEventListener('play', this.onPlay);
                 videoElement.addEventListener('click', this.onClick);

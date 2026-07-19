@@ -586,6 +586,16 @@ export default function (view) {
         view.querySelector('.osdMediaStatus').classList.add('hide');
     }
 
+    function setPermalinkPreparing(isPreparing) {
+        view.classList.toggle('videoOsd-isPreparing', isPreparing);
+        view.toggleAttribute('aria-busy', isPreparing);
+        view.querySelector('.videoOsdLoading').classList.toggle('hide', !isPreparing);
+    }
+
+    function onVideoReady() {
+        setPermalinkPreparing(false);
+    }
+
     function resumeFromPermalink() {
         if (playbackManager.getCurrentPlayer() || permalinkResumePromise) {
             return permalinkResumePromise;
@@ -599,9 +609,11 @@ export default function (view) {
         }
 
         const apiClient = ServerConnections.getApiClient(serverId);
+        setPermalinkPreparing(true);
 
         permalinkResumePromise = apiClient.getItem(apiClient.getCurrentUserId(), id).then((item) => {
             if (playbackManager.getCurrentPlayer() || !playbackManager.canPlay(item)) {
+                setPermalinkPreparing(false);
                 return;
             }
 
@@ -611,7 +623,16 @@ export default function (view) {
                 fullscreen: true,
                 alreadyOnVideoOsd: true
             });
+        }).then(() => {
+            // The first play() can be interrupted while the resume seek is
+            // applied. Retry automatically once preparation has completed so
+            // a direct link never depends on a click made during startup.
+            const player = playbackManager.getCurrentPlayer();
+            if (player && playbackManager.paused(player)) {
+                return playbackManager.unpause(player);
+            }
         }).catch((error) => {
+            setPermalinkPreparing(false);
             console.error('failed to resume item from permalink: ', error);
             appRouter.goHome();
         }).finally(() => {
@@ -637,6 +658,8 @@ export default function (view) {
         Events.on(player, 'volumechange', onVolumeChanged);
         Events.on(player, 'pause', onPlayPauseStateChanged);
         Events.on(player, 'unpause', onPlayPauseStateChanged);
+        Events.on(player, 'firstvideoframe', onVideoReady);
+        Events.on(player, 'videoready', onVideoReady);
         Events.on(player, 'timeupdate', onTimeUpdate);
         Events.on(player, 'fullscreenchange', onFullscreenChanged);
         Events.on(player, 'mediastreamschange', onMediaStreamsChanged);
@@ -663,6 +686,8 @@ export default function (view) {
             Events.off(player, 'volumechange', onVolumeChanged);
             Events.off(player, 'pause', onPlayPauseStateChanged);
             Events.off(player, 'unpause', onPlayPauseStateChanged);
+            Events.off(player, 'firstvideoframe', onVideoReady);
+            Events.off(player, 'videoready', onVideoReady);
             Events.off(player, 'timeupdate', onTimeUpdate);
             Events.off(player, 'fullscreenchange', onFullscreenChanged);
             Events.off(player, 'mediastreamschange', onMediaStreamsChanged);

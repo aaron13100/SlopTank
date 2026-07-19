@@ -64,7 +64,36 @@ test('video url becomes a durable permalink that survives a reload', async ({ pa
     expect(urlAfterPlay.hash).toContain(`id=${config.itemId}`);
     expect(urlAfterPlay.hash).toContain(`serverId=${config.serverId}`);
 
+    // Make both preparation phases deterministic. Completing PlaybackInfo is
+    // not enough to hide the message: it must remain until the browser can
+    // render an actual frame from the video response.
+    await video.evaluate((el: HTMLVideoElement) => el.pause());
+    await page.route('**/Items/*/PlaybackInfo*', async (route) => {
+        await new Promise(resolve => setTimeout(resolve, 1_000));
+        await route.continue();
+    }, { times: 1 });
+    let releaseVideoResponse: () => void;
+    const videoResponseGate = new Promise<void>((resolve) => {
+        releaseVideoResponse = resolve;
+    });
+    let markVideoRequestSeen: () => void;
+    const videoRequestSeen = new Promise<void>((resolve) => {
+        markVideoRequestSeen = resolve;
+    });
+    await page.route(/\/Videos\/.*(?:stream|m3u8)/i, async (route) => {
+        markVideoRequestSeen();
+        await videoResponseGate;
+        await route.continue();
+    }, { times: 1 });
     await page.reload();
+
+    const preparingStatus = page.getByRole('status');
+    await expect(preparingStatus).toContainText('Preparing video');
+    await expect(page.locator('#videoOsdPage')).toHaveAttribute('aria-busy', '');
+    await videoRequestSeen;
+    await expect(preparingStatus).toBeVisible();
+    await expect(page.locator('.docspinner.mdlSpinnerActive')).toHaveCount(0);
+    releaseVideoResponse();
 
     const videoContainer = page.locator('.videoPlayerContainer');
     await expect(videoContainer).toBeVisible({ timeout: 20_000 });
@@ -82,4 +111,37 @@ test('video url becomes a durable permalink that survives a reload', async ({ pa
             contentType: 'text/plain'
         });
     });
+    await expect(preparingStatus).toBeHidden();
+
+    // Exercise the browser-policy fallback as a second real navigation. When
+    // autoplay is rejected, preparation ends once the media is seeked and
+    // playable; the OSD must expose Play instead of retaining the message.
+    await page.addInitScript(() => {
+        const nativePlay = HTMLMediaElement.prototype.play;
+        HTMLMediaElement.prototype.play = function () {
+            if (sessionStorage.getItem('e2e-block-autoplay') === '1') {
+                this.autoplay = false;
+                this.preload = 'auto';
+                this.load();
+                return Promise.reject(new DOMException('Autoplay blocked by test browser policy', 'NotAllowedError'));
+            }
+
+            return nativePlay.call(this);
+        };
+    });
+    await page.evaluate(() => sessionStorage.setItem('e2e-block-autoplay', '1'));
+    await page.reload();
+    await expect(preparingStatus).toBeVisible();
+    await expect(preparingStatus).toBeHidden({ timeout: 20_000 });
+    await expect
+        .poll(async () => video.evaluate((el: HTMLVideoElement) => el.readyState))
+        .toBeGreaterThanOrEqual(2);
+    await expect.poll(async () => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(true);
+    await page.mouse.move(20, 20);
+    await page.mouse.move(100, 100);
+    await expect(playPauseButton).toBeVisible();
+
+    await page.evaluate(() => sessionStorage.removeItem('e2e-block-autoplay'));
+    await playPauseButton.click();
+    await expectPlaybackToAdvance(video, 20_000);
 });

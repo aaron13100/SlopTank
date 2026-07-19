@@ -938,7 +938,7 @@
     "LabelRecord": "రికార్డ్",
     "LabelReasonForTranscoding": "ట్రాన్స్‌కోడింగ్‌కు కారణం",
     "LabelQuickConnectCode": "త్వరిత కనెక్ట్ కోడ్",
-    "LabelPublishedServerUriHelp": "ఇంటర్‌ఫేస్ లేదా క్లయింట్ ఐపీ చిరునామా ఆధారంగా జెల్లీఫిన్ ఉపయోగించే యుఆర్ఐని ఓవర్‌రైడ్ చేయండి. ఉదాహరణకు: internal=http://jellyfin.example.com, external=https://jellyfin.example.com, లేదా all=https://jellyfin.example.com",
+    "LabelPublishedServerUriHelp": "ఇంటర్‌ఫేస్ లేదా క్లయింట్ ఐపీ చిరునామా ఆధారంగా జెల్లీఫిన్ ఉపయోగించే యుఆర్ఐని ఓవర్‌రైడ్ చేయండి. ఉదాహరణకు: internal=http://sloptank.example.com, external=https://sloptank.example.com, లేదా all=https://sloptank.example.com",
     "LabelPublishedServerUri": "ప్రచురించిన సర్వర్ URI లు",
     "LabelPublicHttpsPortHelp": "స్థానిక పోర్ట్ నంబర్‌ను స్థానిక హెచ్‌టిటిపిఎస్ పోర్ట్‌కు మ్యాప్ చేయాలి.",
     "LabelPublicHttpsPort": "పబ్లిక్ HTTPS పోర్ట్ సంఖ్య",

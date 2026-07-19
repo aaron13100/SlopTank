@@ -27,7 +27,7 @@ const FallbackRoute = () => {
     }, [ location ]);
 
     if (to) {
-        console.warn('[FallbackRoute] You are using a deprecated URL format. This will stop working in a future Jellyfin update.');
+        console.warn('[FallbackRoute] You are using a deprecated URL format. This will stop working in a future SlopTank update.');
 
         return (
             <Navigate

@@ -2098,7 +2098,7 @@ export class PlaybackManager {
                 }
             }
 
-            if (options.fullscreen) {
+            if (options.fullscreen && !options.alreadyOnVideoOsd) {
                 loading.show();
             }
 
@@ -2367,7 +2367,7 @@ export class PlaybackManager {
             // TODO: This should be the media type requested, not the original media type
             const mediaType = item.MediaType;
 
-            if (playOptions.fullscreen) {
+            if (playOptions.fullscreen && !playOptions.alreadyOnVideoOsd) {
                 loading.show();
             }
 

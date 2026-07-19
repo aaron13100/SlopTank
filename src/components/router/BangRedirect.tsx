@@ -21,7 +21,7 @@ const BangRedirect = () => {
 
     if (!to) return null;
 
-    console.warn('[BangRedirect] You are using a deprecated URL format. This will stop working in a future Jellyfin update.');
+    console.warn('[BangRedirect] You are using a deprecated URL format. This will stop working in a future SlopTank update.');
 
     return (
         <Navigate
