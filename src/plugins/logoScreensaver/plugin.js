@@ -1,4 +1,4 @@
-import banner from 'assets/img/branding/sloptank-banner.png';
+import banner from 'assets/img/branding/sloptank-banner-transparent.png';
 
 import { PluginType } from '../../types/plugin.ts';
 import { randomInt } from '../../utils/number.ts';

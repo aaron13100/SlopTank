@@ -1,4 +1,4 @@
-import icon from 'assets/img/branding/sloptank-icon.png';
+import icon from 'assets/img/branding/sloptank-icon-transparent.png';
 import Button from '@mui/material/Button/Button';
 import React, { FC } from 'react';
 import { Link } from 'react-router-dom';
