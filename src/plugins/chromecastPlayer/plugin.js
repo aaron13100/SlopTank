@@ -101,6 +101,14 @@ class CastPlayer {
         }
 
         if (!chrome.cast?.isAvailable) {
+            // This used to retry forever without ever logging, so a Cast API
+            // that never became available looked identical to "no devices".
+            this.availabilityAttempts = (this.availabilityAttempts || 0) + 1;
+            if (this.availabilityAttempts > 15) {
+                console.warn('[chromecastPlayer] chrome.cast.isAvailable still false after '
+                    + `${this.availabilityAttempts} attempts; giving up on cast initialization.`);
+                return;
+            }
             setTimeout(this.initializeCastPlayer.bind(this), 1000);
             return;
         }
@@ -617,6 +625,10 @@ class ChromecastPlayer {
             if (ServerConnections.currentUserId) {
                 initializeChromecast.call(this);
             }
+        }).catch(err => {
+            // Without this the SDK failure was invisible: the plugin stayed
+            // loaded, getTargets() kept returning [], and nothing was logged.
+            console.warn('[chromecastPlayer] Cast SDK unavailable, casting disabled:', err.message);
         });
     }
 

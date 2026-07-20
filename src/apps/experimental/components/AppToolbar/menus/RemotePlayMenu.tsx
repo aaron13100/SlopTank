@@ -1,5 +1,5 @@
 import Warning from '@mui/icons-material/Warning';
-import Divider from '@mui/material/Divider';
+import CircularProgress from '@mui/material/CircularProgress';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import Menu, { type MenuProps } from '@mui/material/Menu';
@@ -12,6 +12,7 @@ import { pluginManager } from 'components/pluginManager';
 import type { PlayTarget } from 'types/playTarget';
 
 import PlayTargetIcon from '../../PlayTargetIcon';
+import { getRemotePlayMenuState } from './remotePlayMenuState';
 
 interface RemotePlayMenuProps extends MenuProps {
     onMenuClose: () => void
@@ -27,7 +28,9 @@ const RemotePlayMenu: FC<RemotePlayMenuProps> = ({
     // TODO: Add other checks for support (Android app, secure context, etc)
     const isChromecastPluginLoaded = !!pluginManager.plugins.find(plugin => plugin.id === 'chromecast');
 
-    const [ playbackTargets, setPlaybackTargets ] = useState<PlayTarget[]>([]);
+    // null means the lookup has not completed yet, which is rendered as a
+    // "searching" state rather than being conflated with "found nothing".
+    const [ playbackTargets, setPlaybackTargets ] = useState<PlayTarget[] | null>(null);
 
     const onPlayTargetClick = (target: PlayTarget) => {
         playbackManager.trySetActivePlayer(target.playerName, target);
@@ -42,12 +45,18 @@ const RemotePlayMenu: FC<RemotePlayMenuProps> = ({
         };
 
         if (open) {
+            setPlaybackTargets(null);
             fetchPlaybackTargets()
                 .catch(err => {
                     console.error('[AppRemotePlayMenu] unable to get playback targets', err);
+                    // Surface the failure as "none found" instead of leaving the
+                    // menu stuck on the searching state forever.
+                    setPlaybackTargets([]);
                 });
         }
     }, [ open, setPlaybackTargets ]);
+
+    const menuState = getRemotePlayMenuState(isChromecastPluginLoaded, playbackTargets);
 
     return (
         <Menu
@@ -65,7 +74,7 @@ const RemotePlayMenu: FC<RemotePlayMenuProps> = ({
             open={open}
             onClose={onMenuClose}
         >
-            {!isChromecastPluginLoaded && (
+            {menuState.kind === 'unsupported' && (
                 <MenuItem disabled>
                     <ListItemIcon>
                         <Warning />
@@ -76,11 +85,29 @@ const RemotePlayMenu: FC<RemotePlayMenuProps> = ({
                 </MenuItem>
             )}
 
-            {!isChromecastPluginLoaded && playbackTargets.length > 0 && (
-                <Divider />
+            {menuState.kind === 'discovering' && (
+                <MenuItem disabled>
+                    <ListItemIcon>
+                        <CircularProgress size={20} />
+                    </ListItemIcon>
+                    <ListItemText>
+                        {globalize.translate('SearchingForCastDevices')}
+                    </ListItemText>
+                </MenuItem>
             )}
 
-            {playbackTargets.map(target => (
+            {menuState.kind === 'empty' && (
+                <MenuItem disabled>
+                    <ListItemIcon>
+                        <Warning />
+                    </ListItemIcon>
+                    <ListItemText>
+                        {globalize.translate('NoCastDevicesFound')}
+                    </ListItemText>
+                </MenuItem>
+            )}
+
+            {menuState.kind === 'targets' && menuState.targets.map(target => (
                 <MenuItem
                     key={target.id}
                     // Since we are looping over targets there is no good way to avoid creating a new function here
