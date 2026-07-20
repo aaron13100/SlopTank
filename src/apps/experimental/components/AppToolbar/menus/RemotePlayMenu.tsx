@@ -7,8 +7,6 @@ import MenuItem from '@mui/material/MenuItem';
 import React, { FC, useEffect, useState } from 'react';
 
 import globalize from 'lib/globalize';
-import { playbackManager } from 'components/playback/playbackmanager';
-import { pluginManager } from 'components/pluginManager';
 import type { PlayTarget } from 'types/playTarget';
 
 import PlayTargetIcon from '../../PlayTargetIcon';
@@ -16,32 +14,43 @@ import { getRemotePlayMenuState } from './remotePlayMenuState';
 
 interface RemotePlayMenuProps extends MenuProps {
     onMenuClose: () => void
+    /** Supplies the available play targets. */
+    fetchTargets: () => Promise<PlayTarget[]>
+    /** Whether the cast plugin was loaded at startup. */
+    isCastPluginLoaded: boolean
+    /** Invoked with the target the user picked. */
+    onSelectTarget: (target: PlayTarget) => void
 }
 
 export const ID = 'app-remote-play-menu';
 
+/**
+ * Presentational menu listing the available remote play targets.
+ *
+ * Deliberately holds no reference to the playback or plugin singletons: its
+ * data arrives through props so the menu can be rendered and asserted on
+ * without booting the rest of the app.
+ */
 const RemotePlayMenu: FC<RemotePlayMenuProps> = ({
     anchorEl,
     open,
-    onMenuClose
+    onMenuClose,
+    fetchTargets,
+    isCastPluginLoaded,
+    onSelectTarget
 }) => {
-    // TODO: Add other checks for support (Android app, secure context, etc)
-    const isChromecastPluginLoaded = !!pluginManager.plugins.find(plugin => plugin.id === 'chromecast');
-
     // null means the lookup has not completed yet, which is rendered as a
     // "searching" state rather than being conflated with "found nothing".
     const [ playbackTargets, setPlaybackTargets ] = useState<PlayTarget[] | null>(null);
 
     const onPlayTargetClick = (target: PlayTarget) => {
-        playbackManager.trySetActivePlayer(target.playerName, target);
+        onSelectTarget(target);
         onMenuClose();
     };
 
     useEffect(() => {
         const fetchPlaybackTargets = async () => {
-            setPlaybackTargets(
-                await playbackManager.getTargets()
-            );
+            setPlaybackTargets(await fetchTargets());
         };
 
         if (open) {
@@ -54,9 +63,9 @@ const RemotePlayMenu: FC<RemotePlayMenuProps> = ({
                     setPlaybackTargets([]);
                 });
         }
-    }, [ open, setPlaybackTargets ]);
+    }, [ open, setPlaybackTargets, fetchTargets ]);
 
-    const menuState = getRemotePlayMenuState(isChromecastPluginLoaded, playbackTargets);
+    const menuState = getRemotePlayMenuState(isCastPluginLoaded, playbackTargets);
 
     return (
         <Menu

@@ -8,7 +8,9 @@ import type {} from '@mui/material/themeCssVarsAugmentation';
 import Tooltip from '@mui/material/Tooltip';
 
 import { playbackManager } from 'components/playback/playbackmanager';
+import { pluginManager } from 'components/pluginManager';
 import globalize from 'lib/globalize';
+import type { PlayTarget } from 'types/playTarget';
 import Events from 'utils/events';
 
 import RemotePlayMenu, { ID } from './menus/RemotePlayMenu';
@@ -28,6 +30,15 @@ const RemotePlayButton = () => {
             Events.off(playbackManager, 'playerchange', updatePlayerInfo);
         };
     }, [ updatePlayerInfo ]);
+
+    // TODO: Add other checks for support (Android app, secure context, etc)
+    const isCastPluginLoaded = !!pluginManager.plugins.find(plugin => plugin.id === 'chromecast');
+
+    const fetchPlayTargets = useCallback(() => playbackManager.getTargets(), []);
+
+    const onSelectPlayTarget = useCallback((target: PlayTarget) => {
+        playbackManager.trySetActivePlayer(target.playerName, target);
+    }, []);
 
     const [ remotePlayMenuAnchorEl, setRemotePlayMenuAnchorEl ] = useState<null | HTMLElement>(null);
     const isRemotePlayMenuOpen = Boolean(remotePlayMenuAnchorEl);
@@ -97,6 +108,9 @@ const RemotePlayButton = () => {
                 open={isRemotePlayMenuOpen}
                 anchorEl={remotePlayMenuAnchorEl}
                 onMenuClose={onRemotePlayMenuClose}
+                isCastPluginLoaded={isCastPluginLoaded}
+                fetchTargets={fetchPlayTargets}
+                onSelectTarget={onSelectPlayTarget}
             />
 
             <RemotePlayActiveMenu
