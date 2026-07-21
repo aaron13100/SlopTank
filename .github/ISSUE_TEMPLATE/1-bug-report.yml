@@ -9,9 +9,9 @@ body:
       label: "This issue respects the following points:"
       description: All conditions are **required**.
       options:
-        - label: This issue is **not** already reported on [GitHub](https://github.com/jellyfin/jellyfin-web/issues?q=is%3Aissue) _(I've searched it)_.
+        - label: This issue is **not** already reported on [GitHub](https://github.com/aaron13100/SlopTank/issues?q=is%3Aissue) _(I've searched it)_.
           required: true
-        - label: I agree to follow Jellyfin's [Code of Conduct](https://jellyfin.org/docs/general/community-standards.html#code-of-conduct).
+        - label: I understand SlopTank is an independent fork and is not supported by the Jellyfin project, and I agree to keep this report civil and on topic.
           required: true
         - label: This report addresses only a single issue; If you encounter multiple issues, kindly create separate reports for each one.
           required: true

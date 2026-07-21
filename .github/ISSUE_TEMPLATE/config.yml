@@ -1,8 +1,5 @@
-blank_issues_enabled: false
+blank_issues_enabled: true
 contact_links:
-  - name: Feature Request
-    url: https://features.jellyfin.org/
-    about: Please head over to our feature request hub to vote on or submit a feature.
   - name: Help Or Question
-    url: https://matrix.to/#/#jellyfin-troubleshooting:matrix.org
-    about: Please join the troubleshooting Matrix channel to get some help.
+    url: https://github.com/aaron13100/SlopTank/blob/master/.github/SUPPORT.md
+    about: Read how SlopTank support works before opening an issue.

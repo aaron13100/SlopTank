@@ -30,7 +30,7 @@ jobs:
 
       - name: Run a production build
         env:
-          JELLYFIN_VERSION: ${{ inputs.commit || github.sha }}
+          SLOPTANK_VERSION: ${{ inputs.commit || github.sha }}
         run: npm run build:production
 
       - name: Update config.json for testing

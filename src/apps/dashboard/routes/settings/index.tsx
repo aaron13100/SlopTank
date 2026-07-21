@@ -8,6 +8,7 @@ import Typography from '@mui/material/Typography';
 import { useLocalizationOptions } from 'apps/dashboard/features/settings/api/useLocalizationOptions';
 import Loading from 'components/loading/LoadingComponent';
 import Page from 'components/Page';
+import { PROJECT_REPO_URL } from 'constants/branding';
 import { QUERY_KEY, useConfiguration } from 'hooks/useConfiguration';
 import globalize from 'lib/globalize';
 import { ServerConnections } from 'lib/jellyfin-apiclient';
@@ -158,7 +159,7 @@ export const Component = () => {
                                 helperText={(
                                     <>
                                         <span>{globalize.translate('LabelDisplayLanguageHelp')}</span>
-                                        <Link href='https://jellyfin.org/docs/general/contributing/#translating' target='_blank'>
+                                        <Link href={PROJECT_REPO_URL} target='_blank'>
                                             {globalize.translate('LearnHowYouCanContribute')}
                                         </Link>
                                     </>

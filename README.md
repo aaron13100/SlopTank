@@ -4,38 +4,24 @@
 ---
 
 <p align="center">
-<img alt="Logo Banner" src="https://raw.githubusercontent.com/jellyfin/jellyfin-ux/master/branding/SVG/banner-logo-solid.svg?sanitize=true"/>
+<img alt="SlopTank" src="src/assets/img/branding/sloptank-banner-transparent-v2.png"/>
 <br/>
 <br/>
-<a href="https://github.com/jellyfin/jellyfin-web">
-<img alt="GPL 2.0 License" src="https://img.shields.io/github/license/jellyfin/jellyfin-web.svg"/>
+<a href="https://github.com/aaron13100/SlopTank/blob/master/LICENSE">
+<img alt="GPL 2.0 License" src="https://img.shields.io/github/license/aaron13100/SlopTank.svg"/>
 </a>
-<a href="https://github.com/jellyfin/jellyfin-web/releases">
-<img alt="Current Release" src="https://img.shields.io/github/release/jellyfin/jellyfin-web.svg"/>
-</a>
-<a href="https://translate.jellyfin.org/projects/jellyfin/jellyfin-web/?utm_source=widget">
-<img src="https://translate.jellyfin.org/widgets/jellyfin/-/jellyfin-web/svg-badge.svg" alt="Translation Status"/>
-</a>
-<br/>
-<a href="https://opencollective.com/jellyfin">
-<img alt="Donate" src="https://img.shields.io/opencollective/all/jellyfin.svg?label=backers"/>
-</a>
-<a href="https://features.jellyfin.org">
-<img alt="Feature Requests" src="https://img.shields.io/badge/fider-vote%20on%20features-success.svg"/>
-</a>
-<a href="https://matrix.to/#/+jellyfin:matrix.org">
-<img alt="Chat on Matrix" src="https://img.shields.io/matrix/jellyfin:matrix.org.svg?logo=matrix"/>
-</a>
-<a href="https://www.reddit.com/r/jellyfin">
-<img alt="Join our Subreddit" src="https://img.shields.io/badge/reddit-r%2Fjellyfin-%23FF5700.svg"/>
+<a href="https://github.com/aaron13100/SlopTank/issues">
+<img alt="Issues" src="https://img.shields.io/github/issues/aaron13100/SlopTank.svg"/>
 </a>
 </p>
 
-SlopTank is a customized frontend based on Jellyfin Web for desktop browsers and compatible clients. Upstream translation work is managed through the <a href="https://translate.jellyfin.org/projects/jellyfin/jellyfin-web">Jellyfin Weblate</a> instance.
+SlopTank is a customized frontend based on Jellyfin Web for desktop browsers and compatible clients.
+It is an independent fork: it is not affiliated with, endorsed by, or supported by the Jellyfin
+project, and it does not use the Jellyfin name or logo as its own identity.
 
-<a href="https://translate.jellyfin.org/engage/jellyfin/?utm_source=widget">
-<img src="https://translate.jellyfin.org/widgets/jellyfin/-/jellyfin-web/multi-auto.svg" alt="Detailed Translation Status"/>
-</a>
+Translations are inherited from upstream Jellyfin Web, whose translation work is managed on the
+<a href="https://translate.jellyfin.org/projects/jellyfin/jellyfin-web">Jellyfin Weblate</a>
+instance. SlopTank-specific strings are edited directly in `src/strings/en-us.json`.
 
 ## Build Process
 
@@ -49,8 +35,8 @@ SlopTank is a customized frontend based on Jellyfin Web for desktop browsers and
 1. Clone or download this repository.
 
    ```sh
-   git clone https://github.com/jellyfin/jellyfin-web.git
-   cd jellyfin-web
+   git clone https://github.com/aaron13100/SlopTank.git
+   cd SlopTank
    ```
 
 2. Install build dependencies in the project directory.
@@ -74,7 +60,7 @@ SlopTank is a customized frontend based on Jellyfin Web for desktop browsers and
 ## Directory Structure
 
 > [!NOTE]
-> We are in the process of refactoring to a [new structure](https://forum.jellyfin.org/t-proposed-update-to-the-structure-of-jellyfin-web) based on [Bulletproof React](https://github.com/alan2207/bulletproof-react/blob/master/docs/project-structure.md) architecture guidelines.
+> Upstream Jellyfin Web is refactoring to a [new structure](https://forum.jellyfin.org/t-proposed-update-to-the-structure-of-jellyfin-web) based on [Bulletproof React](https://github.com/alan2207/bulletproof-react/blob/master/docs/project-structure.md) architecture guidelines, and SlopTank follows it.
 > Most new code should be organized under the appropriate app directory unless it is common/shared.
 
 ```
@@ -106,6 +92,6 @@ SlopTank is a customized frontend based on Jellyfin Web for desktop browsers and
     └── utils                   # Utility functions
 ```
 
-- ❌ &mdash; Deprecated, do **not** create new files here
-- 🧹 &mdash; Needs cleanup
-- 🐉 &mdash; Serious mess (Here be dragons)
+- ❌ - Deprecated, do **not** create new files here
+- 🧹 - Needs cleanup
+- 🐉 - Serious mess (Here be dragons)

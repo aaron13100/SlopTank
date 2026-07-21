@@ -11,6 +11,7 @@ import React from 'react';
 import { DATE_LOCALE_OPTIONS, LANGUAGE_OPTIONS } from 'apps/experimental/features/preferences/constants/locales';
 import { appHost } from 'components/apphost';
 import { AppFeature } from 'constants/appFeature';
+import { PROJECT_REPO_URL } from 'constants/branding';
 import globalize from 'lib/globalize';
 import datetime from 'scripts/datetime';
 
@@ -49,7 +50,7 @@ export function LocalizationPreferences({ onChange, values }: Readonly<Localizat
                         <span>{globalize.translate('LabelDisplayLanguageHelp')}</span>
                         { appHost.supports(AppFeature.ExternalLinks) && (
                             <Link
-                                href='https://github.com/jellyfin/jellyfin'
+                                href={PROJECT_REPO_URL}
                                 rel='noopener noreferrer'
                                 target='_blank'
                             >

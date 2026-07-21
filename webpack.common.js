@@ -44,7 +44,7 @@ const config = {
     context: path.resolve(__dirname, 'src'),
     target: 'browserslist',
     entry: {
-        'main.jellyfin': './index.jsx',
+        'main.sloptank': './index.jsx',
         ...THEMES_BY_ID
     },
     resolve: {
@@ -60,7 +60,7 @@ const config = {
             __JF_BUILD_VERSION__: JSON.stringify(
                 process.env.WEBPACK_SERVE ?
                     'Dev Server' :
-                    process.env.JELLYFIN_VERSION || 'Release'),
+                    process.env.SLOPTANK_VERSION || 'Release'),
             __PACKAGE_JSON_NAME__: JSON.stringify(packageJson.name),
             __PACKAGE_JSON_VERSION__: JSON.stringify(packageJson.version),
             __USE_SYSTEM_FONTS__: !!JSON.parse(process.env.USE_SYSTEM_FONTS || '0'),
@@ -73,7 +73,7 @@ const config = {
             // Append file hashes to bundle urls for cache busting
             hash: true,
             chunks: [
-                'main.jellyfin',
+                'main.sloptank',
                 'serviceworker'
             ]
         }),
