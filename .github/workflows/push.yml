@@ -1,4 +1,4 @@
-name: Push & Release 🌍
+name: Push 🌍
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.ref }}
@@ -13,18 +13,6 @@ on:
       - '**/*.md'
 
 jobs:
-  automation:
-    name: Automation 🎛️
-    if: ${{ github.repository == 'jellyfin/jellyfin-web' }}
-    uses: ./.github/workflows/__automation.yml
-    secrets: inherit
-
-  main:
-    name: 'Unstable release 🚀⚠️'
-    uses: ./.github/workflows/__package.yml
-    with:
-      commit: ${{ github.sha }}
-
   quality_checks:
     name: Quality checks 👌🧪
     if: ${{ always() && !cancelled() }}
@@ -42,17 +30,3 @@ jobs:
       security-events: write
     with:
       commit: ${{ github.sha }}
-
-  deploy:
-    name: Deploy 🚀
-    if: ${{ github.repository == 'jellyfin/jellyfin-web' }}
-    uses: ./.github/workflows/__deploy.yml
-    needs:
-      - main
-    permissions:
-      contents: read
-      deployments: write
-    secrets: inherit
-    with:
-      branch: ${{ github.ref_name }}
-      comment: false
