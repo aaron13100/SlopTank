@@ -41,7 +41,7 @@ video[controls]::-webkit-media-controls {
 }
 
 .htmlvideoplayer::-webkit-media-text-track-container {
-    font-size: 170% !important; /* Override element inline style */
+    font-size: var(--subtitle-font-size, 1.25rem) !important; /* Override element inline style */
     line-height: 50%; /* Child element cannot set line height smaller than its parent has. This allow smaller values for children */
 }
 
@@ -57,7 +57,7 @@ video[controls]::-webkit-media-controls {
     left: 0;
     right: 0;
     color: #fff;
-    font-size: 170%;
+    font-size: var(--subtitle-font-size, 1.25rem);
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
     padding-bottom: env(safe-area-inset-bottom);

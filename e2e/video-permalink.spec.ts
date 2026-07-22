@@ -145,3 +145,40 @@ test('video url becomes a durable permalink that survives a reload', async ({ pa
     await playPauseButton.click();
     await expectPlaybackToAdvance(video, 20_000);
 });
+
+test('subtitle size follows video height and changes live from the player menu', async ({ page, config }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    await login(page, config.username, config.password);
+    await page.goto(`/web/#/details?id=${config.itemId}&serverId=${config.serverId}`);
+    await page.locator('.mainDetailButtons .btnPlay').click();
+    await page.waitForURL(/#\/video\?id=/, { timeout: 60_000 });
+
+    const video = page.locator('video').first();
+    await expectPlaybackToAdvance(video, 20_000);
+    await page.mouse.move(20, 20);
+    await page.mouse.move(100, 100);
+
+    const subtitleButton = page.locator('.videoOsdBottom-maincontrols .btnSubtitles');
+    await expect(subtitleButton).toBeVisible();
+    await subtitleButton.click();
+    await page.getByText('Subtitle Size', { exact: true }).click();
+    await page.getByText('75%', { exact: true }).click();
+
+    const videoContainer = page.locator('.videoPlayerContainer');
+    await expect.poll(async () => videoContainer.evaluate(element => {
+        const value = element.style.getPropertyValue('--subtitle-font-size');
+        return Number.parseFloat(value);
+    })).toBeCloseTo(17.55, 1);
+    await expect.poll(async () => page.locator('#htmlvideoplayer-cuestyle').textContent())
+        .toContain('calc(var(--subtitle-font-size, 1em) * 0.75)');
+
+    await subtitleButton.click();
+    await page.getByText('Subtitle Size', { exact: true }).click();
+    const selectedPreset = page.getByText('75%', { exact: true }).locator('..');
+    await expect(selectedPreset.locator('.listItemIcon')).toBeVisible();
+
+    await page.screenshot({
+        path: '../deliverables/subtitle-size-phone.png',
+        fullPage: true
+    });
+});

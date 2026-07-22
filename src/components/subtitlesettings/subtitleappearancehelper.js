@@ -3,30 +3,53 @@
  * @module components/subtitleSettings/subtitleAppearanceHelper
  */
 
-function getTextStyles(settings, preview) {
-    const list = [];
+const SUBTITLE_HEIGHT_RATIO = 0.045;
 
-    switch (settings.textSize || '') {
+/**
+ * Resolve a persisted subtitle text-size choice to a multiplier around the
+ * proportional video-height baseline. Unknown and legacy default values fail
+ * safe to 100%.
+ * @param {string} textSize - Persisted subtitle text-size value.
+ * @returns {number} Multiplier applied to the proportional baseline.
+ */
+export function getTextSizeMultiplier(textSize) {
+    switch (textSize || '') {
         case 'smaller':
-            list.push({ name: 'font-size', value: '.8em' });
-            break;
         case 'small':
-            list.push({ name: 'font-size', value: 'inherit' });
-            break;
-        case 'larger':
-            list.push({ name: 'font-size', value: '2em' });
-            break;
-        case 'extralarge':
-            list.push({ name: 'font-size', value: '2.2em' });
-            break;
+            return 0.75;
         case 'large':
-            list.push({ name: 'font-size', value: '1.72em' });
-            break;
+            return 1.25;
+        case 'larger':
+            return 1.5;
+        case 'extralarge':
+            return 2;
         case 'medium':
         default:
-            list.push({ name: 'font-size', value: '1.36em' });
-            break;
+            return 1;
     }
+}
+
+/**
+ * Calculate the comfortable subtitle baseline from rendered video height.
+ * Invalid observations return null so callers retain the last valid size.
+ * @param {number} videoHeight - Rendered video height in CSS pixels.
+ * @returns {number|null} Subtitle font size in CSS pixels.
+ */
+export function getSubtitleFontSize(videoHeight) {
+    if (typeof videoHeight !== 'number' || !Number.isFinite(videoHeight) || videoHeight <= 0) {
+        return null;
+    }
+
+    return Math.round(videoHeight * SUBTITLE_HEIGHT_RATIO * 100) / 100;
+}
+
+function getTextStyles(settings, preview) {
+    const list = [];
+    const textSizeMultiplier = getTextSizeMultiplier(settings.textSize);
+    list.push({
+        name: 'font-size',
+        value: `calc(var(--subtitle-font-size, 1em) * ${textSizeMultiplier})`
+    });
 
     switch (settings.textWeight || '') {
         case 'bold':
@@ -159,5 +182,7 @@ export function applyStyles(elements, appearanceSettings) {
 }
 export default {
     getStyles: getStyles,
-    applyStyles: applyStyles
+    applyStyles: applyStyles,
+    getSubtitleFontSize: getSubtitleFontSize,
+    getTextSizeMultiplier: getTextSizeMultiplier
 };

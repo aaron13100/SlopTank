@@ -34,6 +34,7 @@ import { setBackdropTransparency, TRANSPARENCY_LEVEL } from '../../../components
 import { pluginManager } from '../../../components/pluginManager';
 import { PluginType } from '../../../types/plugin.ts';
 import { getParameterByName } from '../../../utils/url.ts';
+import SubtitleTrackMenu from './SubtitleTrackMenu';
 
 function getOpenedDialog() {
     return document.querySelector('.dialogContainer .dialog.opened');
@@ -1122,133 +1123,6 @@ export default function (view) {
         });
     }
 
-    function showSecondarySubtitlesMenu(actionsheet, positionTo) {
-        const player = currentPlayer;
-        if (!playbackManager.playerHasSecondarySubtitleSupport(player)) return;
-        let currentIndex = playbackManager.getSecondarySubtitleStreamIndex(player);
-        const streams = playbackManager.secondarySubtitleTracks(player);
-
-        if (currentIndex == null) {
-            currentIndex = -1;
-        }
-
-        streams.unshift({
-            Index: -1,
-            DisplayTitle: globalize.translate('Off')
-        });
-
-        const menuItems = streams.map(function (stream) {
-            const opt = {
-                name: stream.DisplayTitle,
-                id: stream.Index
-            };
-
-            if (stream.Index === currentIndex) {
-                opt.selected = true;
-            }
-
-            return opt;
-        });
-
-        actionsheet.show({
-            title: globalize.translate('SecondarySubtitles'),
-            items: menuItems,
-            positionTo
-        }).then(function (id) {
-            if (id) {
-                const index = parseInt(id, 10);
-                if (index !== currentIndex) {
-                    playbackManager.setSecondarySubtitleStreamIndex(index, player);
-                }
-            }
-        })
-            .finally(() => {
-                resetIdle();
-            });
-
-        setTimeout(resetIdle, 0);
-    }
-
-    function showSubtitleTrackSelection() {
-        const player = currentPlayer;
-        const streams = playbackManager.subtitleTracks(player);
-        const secondaryStreams = playbackManager.secondarySubtitleTracks(player);
-        let currentIndex = playbackManager.getSubtitleStreamIndex(player);
-
-        if (currentIndex == null) {
-            currentIndex = -1;
-        }
-
-        streams.unshift({
-            Index: -1,
-            DisplayTitle: globalize.translate('Off')
-        });
-        const menuItems = streams.map(function (stream) {
-            const opt = {
-                name: stream.DisplayTitle,
-                id: stream.Index
-            };
-
-            if (stream.Index === currentIndex) {
-                opt.selected = true;
-            }
-
-            return opt;
-        });
-
-        /**
-            * Only show option if:
-            * - player has support
-            * - has more than 1 subtitle track
-            * - has valid secondary tracks
-            * - primary subtitle is not off
-            * - primary subtitle has support
-            */
-        const currentTrackCanAddSecondarySubtitle = playbackManager.playerHasSecondarySubtitleSupport(player)
-                && streams.length > 1
-                && secondaryStreams.length > 0
-                && currentIndex !== -1
-                && playbackManager.trackHasSecondarySubtitleSupport(playbackManager.getSubtitleStream(player, currentIndex), player);
-
-        if (currentTrackCanAddSecondarySubtitle) {
-            const secondarySubtitleMenuItem = {
-                name: globalize.translate('SecondarySubtitles'),
-                id: 'secondarysubtitle'
-            };
-            menuItems.unshift(secondarySubtitleMenuItem);
-        }
-
-        const positionTo = this;
-
-        import('../../../components/actionSheet/actionSheet').then(({ default: actionsheet }) => {
-            actionsheet.show({
-                title: globalize.translate('Subtitles'),
-                items: menuItems,
-                positionTo: positionTo
-            }).then(function (id) {
-                if (id === 'secondarysubtitle') {
-                    try {
-                        showSecondarySubtitlesMenu(actionsheet, positionTo);
-                    } catch (e) {
-                        console.error(e);
-                    }
-                } else {
-                    const index = parseInt(id, 10);
-
-                    if (index !== currentIndex) {
-                        playbackManager.setSubtitleStreamIndex(index, player);
-                    }
-                }
-
-                toggleSubtitleSync();
-            }).finally(() => {
-                resetIdle();
-            });
-
-            setTimeout(resetIdle, 0);
-        });
-    }
-
     function toggleSubtitleSync(action) {
         const player = currentPlayer;
         if (subtitleSyncOverlay) {
@@ -1724,6 +1598,17 @@ export default function (view) {
     const transitionEndEventName = dom.whichTransitionEvent();
     const headerElement = document.querySelector('.skinHeader');
     const osdBottomElement = view.querySelector('.videoOsdBottom-maincontrols');
+    const subtitleTrackMenu = new SubtitleTrackMenu({
+        button: view.querySelector('.btnSubtitles'),
+        getPlayer: () => currentPlayer,
+        loadActionSheet: () => import('../../../components/actionSheet/actionSheet')
+            .then(({ default: actionSheet }) => actionSheet),
+        playback: playbackManager,
+        resetIdle,
+        settings: userSettings,
+        translate: globalize.translate,
+        toggleSubtitleSync
+    });
 
     nowPlayingPositionSlider.enableKeyboardDragging();
     nowPlayingVolumeSlider.enableKeyboardDragging();
@@ -1874,6 +1759,7 @@ export default function (view) {
 
         destroyStats();
         destroySubtitleSync();
+        subtitleTrackMenu.destroy();
     });
     let lastPointerDown = 0;
     /* eslint-disable-next-line compat/compat */
@@ -2041,7 +1927,6 @@ export default function (view) {
         playbackManager.fastForward(currentPlayer);
     });
     view.querySelector('.btnAudio').addEventListener('click', showAudioTrackSelection);
-    view.querySelector('.btnSubtitles').addEventListener('click', showSubtitleTrackSelection);
 
     // HACK: Remove `emby-button` from the rating button to make it look like the other buttons
     view.querySelector('.btnUserRating').classList.remove('emby-button');

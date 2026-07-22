@@ -1,5 +1,6 @@
 import DOMPurify from 'dompurify';
 import debounce from 'lodash-es/debounce';
+import ResizeObserver from 'resize-observer-polyfill';
 import Screenfull from 'screenfull';
 
 import { useCustomSubtitles } from 'apps/stable/features/playback/utils/subtitleStyles';
@@ -302,6 +303,10 @@ export class HtmlVideoPlayer {
      * @type {HTMLVideoElement | null | undefined}
      */
     #mediaElement;
+    /**
+     * @type {ResizeObserver | null | undefined}
+     */
+    #subtitleResizeObserver;
     /**
      * @type {number}
      */
@@ -894,6 +899,11 @@ export class HtmlVideoPlayer {
 
     destroy() {
         this.setSubtitleOffset.cancel();
+
+        if (this.#subtitleResizeObserver) {
+            this.#subtitleResizeObserver.disconnect();
+            this.#subtitleResizeObserver = null;
+        }
 
         destroyHlsPlayer(this);
         destroyFlvPlayer(this);
@@ -1581,6 +1591,56 @@ export class HtmlVideoPlayer {
     }
 
     /**
+     * Reapply the persisted subtitle appearance without restarting playback.
+     * Native cues and custom subtitle elements consume the same proportional
+     * font-size variable and multiplier mapping.
+     * @returns {void}
+     */
+    updateSubtitleAppearance() {
+        const subtitlesContainer = this.#videoSubtitlesElem?.parentNode
+            || this.#videoSecondarySubtitlesElem?.parentNode;
+
+        if (subtitlesContainer && this.#videoSubtitlesElem) {
+            this.setSubtitleAppearance(subtitlesContainer, this.#videoSubtitlesElem);
+        }
+        if (subtitlesContainer && this.#videoSecondarySubtitlesElem) {
+            this.setSubtitleAppearance(subtitlesContainer, this.#videoSecondarySubtitlesElem);
+        }
+
+        this.setCueAppearance();
+    }
+
+    /**
+     * Observe the rendered video height and publish the shared subtitle
+     * baseline on the player container. Invalid zero-size observations retain
+     * the most recent valid value.
+     * @private
+     * @param {HTMLVideoElement} videoElement - Active video element.
+     * @returns {void}
+     */
+    observeSubtitleSize(videoElement) {
+        if (this.#subtitleResizeObserver) {
+            this.#subtitleResizeObserver.disconnect();
+        }
+
+        const applyVideoHeight = videoHeight => {
+            const fontSize = subtitleAppearanceHelper.getSubtitleFontSize(videoHeight);
+            if (fontSize !== null) {
+                this.#videoDialog?.style.setProperty('--subtitle-font-size', `${fontSize}px`);
+            }
+        };
+
+        this.#subtitleResizeObserver = new ResizeObserver(entries => {
+            const videoEntry = entries.find(entry => entry.target === videoElement);
+            if (videoEntry) {
+                applyVideoHeight(videoEntry.contentRect.height);
+            }
+        });
+        this.#subtitleResizeObserver.observe(videoElement);
+        applyVideoHeight(videoElement.getBoundingClientRect().height);
+    }
+
+    /**
      * @private
      */
     getCueCss(appearance, selector) {
@@ -1832,6 +1892,7 @@ export class HtmlVideoPlayer {
                 document.body.insertBefore(playerDlg, document.body.firstChild);
                 this.#videoDialog = playerDlg;
                 this.#mediaElement = videoElement;
+                this.observeSubtitleSize(videoElement);
 
                 delete this.forcedFullscreen;
 
@@ -1875,6 +1936,9 @@ export class HtmlVideoPlayer {
             }
 
             const videoElement = dlg.querySelector('video');
+            this.#videoDialog = dlg;
+            this.#mediaElement = videoElement;
+            this.observeSubtitleSize(videoElement);
             if (options.backdropUrl) {
                 // update backdrop image
                 videoElement.poster = options.backdropUrl;
