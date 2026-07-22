@@ -608,7 +608,9 @@ export class UserSettings {
      */
     getSubtitleAppearanceSettings(key) {
         key = key || 'localplayersubtitleappearance3';
-        return Object.assign(defaultSubtitleAppearanceSettings, JSON.parse(this.get(key, false) || '{}'));
+        // Merge into a fresh object: assigning onto the shared defaults object
+        // would make every read poison the defaults for later reads.
+        return Object.assign({}, defaultSubtitleAppearanceSettings, JSON.parse(this.get(key, false) || '{}'));
     }
 
     /**

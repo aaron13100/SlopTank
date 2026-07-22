@@ -24,6 +24,34 @@ describe('subtitle appearance sizing', () => {
     });
 
     it.each([
+        [ '0.25', 0.25 ],
+        [ '0.6', 0.6 ],
+        [ '1', 1 ],
+        [ '1.35', 1.35 ],
+        [ '2', 2 ],
+        [ 1.5, 1.5 ]
+    ])('parses the persisted numeric multiplier %s directly', (textSize, multiplier) => {
+        expect(getFontSize(textSize)).toBe(`calc(var(--subtitle-font-size, 1em) * ${multiplier})`);
+    });
+
+    it.each([
+        [ '0.1', 0.25 ],
+        [ '0', 0.25 ],
+        [ '-1', 0.25 ],
+        [ '3.5', 2 ],
+        [ '250', 2 ]
+    ])('clamps the out-of-range numeric multiplier %s into 25%%-200%%', (textSize, multiplier) => {
+        expect(getFontSize(textSize)).toBe(`calc(var(--subtitle-font-size, 1em) * ${multiplier})`);
+    });
+
+    it.each([ 'NaN', 'Infinity', '-Infinity', '1.2.3px' ])(
+        'fails a non-finite numeric-looking value (%s) safe to 100%%',
+        textSize => {
+            expect(getFontSize(textSize)).toBe('calc(var(--subtitle-font-size, 1em) * 1)');
+        }
+    );
+
+    it.each([
         [ 360, 16.2 ],
         [ 720, 32.4 ],
         [ 1080, 48.6 ]

@@ -5,14 +5,28 @@
 
 const SUBTITLE_HEIGHT_RATIO = 0.045;
 
+export const TEXT_SIZE_MIN_MULTIPLIER = 0.25;
+export const TEXT_SIZE_MAX_MULTIPLIER = 2;
+
 /**
  * Resolve a persisted subtitle text-size choice to a multiplier around the
- * proportional video-height baseline. Unknown and legacy default values fail
- * safe to 100%.
- * @param {string} textSize - Persisted subtitle text-size value.
+ * proportional video-height baseline. The persisted value is either a numeric
+ * multiplier (the current write format, clamped to [0.25, 2]) or one of the
+ * legacy named presets, which keep parsing forever. Unknown values fail safe
+ * to 100%.
+ * @param {string|number} textSize - Persisted subtitle text-size value.
  * @returns {number} Multiplier applied to the proportional baseline.
  */
 export function getTextSizeMultiplier(textSize) {
+    // Number() rejects trailing garbage that parseFloat would prefix-parse;
+    // the empty string (legacy 100% default) must skip numeric parsing
+    // because Number('') is 0.
+    const isNonEmptyString = typeof textSize === 'string' && textSize.trim() !== '';
+    const numeric = typeof textSize === 'number' ? textSize : (isNonEmptyString ? Number(textSize) : NaN);
+    if (Number.isFinite(numeric)) {
+        return Math.min(TEXT_SIZE_MAX_MULTIPLIER, Math.max(TEXT_SIZE_MIN_MULTIPLIER, numeric));
+    }
+
     switch (textSize || '') {
         case 'smaller':
         case 'small':
