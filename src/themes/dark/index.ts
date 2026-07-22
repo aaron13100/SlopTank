@@ -9,9 +9,39 @@ const theme = merge<ColorSystemOptions, ColorSystemOptions, ColorSystemOptions>(
     DEFAULT_COLOR_SCHEME,
     {
         palette: {
+            primary: {
+                main: '#39e6c3',
+                contrastText: '#03110f'
+            },
+            secondary: {
+                main: '#ff8b6a'
+            },
+            background: {
+                default: '#071018',
+                paper: '#0e1d2a'
+            },
+            text: {
+                primary: '#eefcff',
+                secondary: 'rgba(222, 243, 247, 0.74)'
+            },
+            action: {
+                focus: 'rgba(57, 230, 195, 0.2)',
+                hover: 'rgba(57, 230, 195, 0.1)',
+                selectedOpacity: 0.18
+            },
+            AppBar: {
+                defaultBg: '#0b1722'
+            },
+            Button: {
+                inheritContainedBg: '#162938',
+                inheritContainedHoverBg: '#1d3547'
+            },
+            FilledInput: {
+                bg: 'rgba(238, 252, 255, 0.08)'
+            },
             SnackbarContent: {
-                bg: '#303030',
-                color: 'rgba(255, 255, 255, 0.87)'
+                bg: '#142938',
+                color: '#eefcff'
             }
         }
     }

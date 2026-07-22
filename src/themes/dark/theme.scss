@@ -1,31 +1,98 @@
-/* Import the base theme */
-@use '../_base/theme';
+/* Import the base theme with Electric Lagoon overrides for the dark theme only. */
+@use '../_base/theme' with (
+    $background-default: #071018,
+    $background-paper: #0e1d2a,
+    $primary-main: #39e6c3,
+    $primary-dark: #1fb99e,
+    $primary-light: #8af5df,
+    $primary-hover: rgba(57, 230, 195, 0.18),
+    $primary-contrastText: #03110f,
+    $text-primary: #eefcff,
+    $text-secondary: rgba(222, 243, 247, 0.74),
+    $action-focus: rgba(57, 230, 195, 0.2),
+    $action-hover: rgba(57, 230, 195, 0.1),
+    $divider: rgba(168, 255, 240, 0.14),
+    $appBar-defaultBg: #0b1722,
+    $appBar-transparentBg: rgba(7, 16, 24, 0.72),
+    $filledInput-bg: rgba(238, 252, 255, 0.08),
+    $button-inheritContainedBg: #162938,
+    $button-inheritContainedHoverBg: #1d3547,
+    $snackbarContent-bg: #142938,
+    $snackbarContent-color: #eefcff
+);
 
 /* Card background color variants */
 .defaultCardBackground1 {
-    background-color: #00455c;
+    background-color: #12394a;
 }
 
 .defaultCardBackground2 {
-    background-color: #44bae1;
+    background-color: #176f77;
 }
 
 .defaultCardBackground3 {
-    background-color: #00a4db;
+    background-color: #168b83;
 }
 
 .defaultCardBackground4 {
-    background-color: #1c4c5c;
+    background-color: #21465a;
 }
 
 .defaultCardBackground5 {
-    background-color: #007ea8;
+    background-color: #2a5f68;
+}
+
+.backgroundContainer:not(.withBackdrop) {
+    background:
+        radial-gradient(circle at 12% -10%, rgba(57, 230, 195, 0.13), transparent 34rem),
+        radial-gradient(circle at 88% 110%, rgba(34, 184, 214, 0.1), transparent 38rem),
+        #071018;
+}
+
+.skinHeader-withBackground {
+    backdrop-filter: blur(18px);
+    background: rgba(11, 23, 34, 0.9);
+    border-bottom: 1px solid rgba(168, 255, 240, 0.1);
+}
+
+.dialog,
+.paperList,
+.visualCardBox {
+    border: 1px solid rgba(168, 255, 240, 0.1);
+    box-shadow: 0 0.8rem 2.4rem rgba(0, 0, 0, 0.24);
+}
+
+.visualCardBox,
+.visualCardBox .cardContent,
+.visualCardBox .cardImageContainer,
+.visualCardBox .cardScalable {
+    border-radius: 0.8rem;
+}
+
+.emby-input,
+.emby-textarea,
+.raised {
+    border-radius: 0.75rem;
+}
+
+.detailButton-content {
+    background: rgba(14, 29, 42, 0.76);
+    border: 1px solid rgba(168, 255, 240, 0.14);
+    border-radius: 50%;
+}
+
+.detailButton:focus .detailButton-content,
+.detailButton.show-focus:focus .detailButton-content {
+    outline: 3px solid #39e6c3;
+    outline-offset: 3px;
 }
 
 /* Detail ribbon on item details pages */
 .detailRibbon {
-    background: rgba(32, 32, 32, 0.8);
-    background: rgba(var(--jf-palette-background-paperChannel) / 0.8);
+    backdrop-filter: blur(18px);
+    background: rgba(7, 16, 24, 0.82);
+    border-bottom: 1px solid rgba(168, 255, 240, 0.1);
+    border-top: 1px solid rgba(168, 255, 240, 0.1);
 
     .layout-tv & {
         background: none;

@@ -1,3 +1,68 @@
+.sloptankLoginShell {
+    box-sizing: border-box;
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 54rem;
+    width: calc(100% - 2rem);
+}
+
+.sloptankLoginBrand {
+    display: block;
+    height: auto;
+    margin: 0 auto 1.25rem;
+    max-width: 22rem;
+    width: min(70vw, 22rem);
+}
+
+[data-theme='dark'] #loginPage {
+    &::before {
+        background:
+            radial-gradient(circle at 18% 18%, rgba(57, 230, 195, 0.16), transparent 32rem),
+            radial-gradient(circle at 82% 78%, rgba(34, 184, 214, 0.12), transparent 28rem);
+        content: '';
+        inset: 0;
+        pointer-events: none;
+        position: absolute;
+    }
+
+    .sloptankLoginShell {
+        backdrop-filter: blur(20px);
+        background: rgba(11, 27, 41, 0.84);
+        border: 1px solid rgba(57, 230, 195, 0.22);
+        border-radius: 1.5rem;
+        box-shadow: 0 2rem 5rem rgba(0, 0, 0, 0.42);
+        padding-top: 2rem;
+        position: relative;
+    }
+
+    .sloptankLoginHeading {
+        color: #eefcff;
+        font-weight: 600;
+        letter-spacing: -0.025em;
+    }
+
+    .raised {
+        border: 1px solid rgba(168, 255, 240, 0.08);
+        border-radius: 0.8rem;
+    }
+}
+
+@media (max-width: 40em) {
+    .sloptankLoginShell {
+        width: calc(100% - 1rem);
+    }
+
+    [data-theme='dark'] #loginPage .sloptankLoginShell {
+        border-radius: 1.1rem;
+        padding-top: 1.25rem;
+    }
+
+    .sloptankLoginBrand {
+        margin-bottom: 0.75rem;
+        width: min(76vw, 18rem);
+    }
+}
+
 .loginDisclaimerContainer {
     display: flex;
     margin-top: 2em;

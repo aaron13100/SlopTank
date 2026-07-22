@@ -4,29 +4,45 @@
     "lang": "en-US",
     "short_name": "SlopTank",
     "start_url": "index.html#/home",
-    "theme_color": "#101010",
-    "background_color": "#101010",
+    "theme_color": "#071018",
+    "background_color": "#071018",
     "display": "standalone",
     "icons": [
         {
             "sizes": "72x72",
             "src": "assets/favicons/sloptank-touchicon72.png",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any"
         },
         {
             "sizes": "114x114",
             "src": "assets/favicons/sloptank-touchicon114.png",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any"
         },
         {
             "sizes": "144x144",
             "src": "assets/favicons/sloptank-touchicon144.png",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "sizes": "192x192",
+            "src": "assets/favicons/sloptank-icon192.png",
+            "type": "image/png",
+            "purpose": "any"
         },
         {
             "sizes": "512x512",
             "src": "assets/favicons/sloptank-touchicon512.png",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "sizes": "512x512",
+            "src": "assets/favicons/sloptank-maskable512.png",
+            "type": "image/png",
+            "purpose": "maskable"
         }
     ]
 }

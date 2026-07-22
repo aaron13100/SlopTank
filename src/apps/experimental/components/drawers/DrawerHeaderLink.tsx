@@ -6,7 +6,7 @@ import React from 'react';
 import { useSystemInfo } from 'hooks/useSystemInfo';
 import ListItemLink from 'components/ListItemLink';
 
-import appIcon from 'assets/img/branding/sloptank-icon-transparent.png';
+import appIcon from 'assets/img/branding/sloptank-mark.svg';
 
 const DrawerHeaderLink = () => {
     const { data: systemInfo } = useSystemInfo();
