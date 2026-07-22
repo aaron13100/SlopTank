@@ -171,6 +171,18 @@
     "test:watch": "vitest --config vite.config.ts",
     "stylelint": "stylelint \"src/**/*.{css,scss}\""
   },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": ">=24.0.0",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": ">=11.0.0",
+      "onFail": "error"
+    }
+  },
   "engines": {
     "node": ">=24.0.0",
     "npm": ">=11.0.0",
