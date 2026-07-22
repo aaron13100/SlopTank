@@ -161,6 +161,13 @@ test('subtitle size follows video height and changes live from the player menu',
     const subtitleButton = page.locator('.videoOsdBottom-maincontrols .btnSubtitles');
     await expect(subtitleButton).toBeVisible();
     await subtitleButton.click();
+    const subtitleTrack = page.locator(
+        '.actionSheetMenuItem[data-id]:not([data-id="-1"]):not([data-id="subtitlesize"]):not([data-id="secondarysubtitle"])'
+    ).first();
+    await expect(subtitleTrack).toBeVisible();
+    await subtitleTrack.click();
+
+    await subtitleButton.click();
     await page.getByText('Subtitle Size', { exact: true }).click();
     await page.getByText('75%', { exact: true }).click();
 
@@ -174,10 +181,35 @@ test('subtitle size follows video height and changes live from the player menu',
 
     await subtitleButton.click();
     await page.getByText('Subtitle Size', { exact: true }).click();
-    const selectedPreset = page.getByText('75%', { exact: true }).locator('..');
-    await expect(selectedPreset.locator('.listItemIcon')).toBeVisible();
+    const selectedPreset = page.getByRole('button', { name: '75%', exact: true });
+    await expect(selectedPreset.locator('.listItemIcon.check')).toBeVisible();
+    await page.getByRole('button', { name: '100%', exact: true }).click();
+
+    await expect.poll(async () => video.evaluate(element => {
+        for (const track of Array.from(element.textTracks)) {
+            if (track.cues?.length) {
+                return track.cues[0].startTime;
+            }
+        }
+        return -1;
+    })).toBeGreaterThanOrEqual(0);
+    const cueStartTime = await video.evaluate(element => {
+        for (const track of Array.from(element.textTracks)) {
+            if (track.cues?.length) {
+                return track.cues[0].startTime;
+            }
+        }
+        return 0;
+    });
+    await video.evaluate((element, startTime) => {
+        element.currentTime = startTime + 0.1;
+        element.pause();
+    }, cueStartTime);
+    await expect.poll(async () => video.evaluate(element => Array.from(element.textTracks)
+        .some(track => Boolean(track.activeCues?.length)))).toBe(true);
 
     await page.screenshot({
+        animations: 'disabled',
         path: '../deliverables/subtitle-size-phone.png',
         fullPage: true
     });
