@@ -10,6 +10,9 @@ export default defineConfig({
     testDir: './e2e',
     fullyParallel: false,
     retries: 0,
+    // The disposable server has one mutable user and one playback session.
+    // Serialize CI files so their login and playback state cannot collide.
+    workers: process.env.CI ? 1 : undefined,
     reporter: [ [ 'list' ] ],
     // No video/trace retained on success; only on failure, and cleaned up
     // between runs by `npm run test:e2e` (see package.json).

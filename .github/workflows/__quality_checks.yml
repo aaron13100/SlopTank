@@ -6,27 +6,11 @@ on:
       commit:
         required: true
         type: string
-  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  dependency-review:
-    name: Vulnerable dependencies 🔎
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          ref: ${{ inputs.commit }}
-          show-progress: false
-
-      - name: Scan
-        uses: actions/dependency-review-action@3c4e3dcb1aa7874d2c16be7d79418e9b7efd6261 # v4.8.2
-        with:
-          ## Workaround from https://github.com/actions/dependency-review-action/issues/456
-          ## TODO: Remove when necessary
-          base-ref: ${{ github.event.pull_request.base.sha || 'master' }}
-          head-ref: ${{ github.event.pull_request.head.sha || github.ref }}
-
   quality:
     name: Run ${{ matrix.command }} 🕵️‍♂️
     runs-on: ubuntu-latest
@@ -46,6 +30,7 @@ jobs:
         with:
           ref: ${{ inputs.commit }}
           show-progress: false
+          persist-credentials: false
 
       - name: Setup node environment ⚙️
         uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
@@ -59,3 +44,123 @@ jobs:
 
       - name: Run ${{ matrix.command }} ⚙️
         run: npm run ${{ matrix.command }}
+
+  e2e:
+    name: Real-server Playwright 🎭
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: true
+
+    steps:
+      - name: Checkout web client ⬇️
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ inputs.commit }}
+          show-progress: false
+          persist-credentials: false
+
+      - name: Checkout pinned SlopTank server ⬇️
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          repository: aaron13100/SlopTank-server
+          ref: dd0b273b2604af0016bd0e135a5276f2d56d39dd
+          path: server
+          show-progress: false
+          persist-credentials: false
+
+      - name: Setup node environment ⚙️
+        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          check-latest: true
+
+      - name: Setup .NET environment ⚙️
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install web dependencies 📦
+        run: npm ci --no-audit
+
+      - name: Build production web client 🏗️
+        run: npm run build:production
+
+      - name: Build SlopTank server 🏗️
+        run: |
+          dotnet restore server/Jellyfin.Server/Jellyfin.Server.csproj
+          dotnet build server/Jellyfin.Server/Jellyfin.Server.csproj --configuration Release --no-restore
+
+      - name: Install Playwright Chrome 🎭
+        run: npx playwright install --with-deps chrome
+
+      - name: Create deterministic media fixtures 🎬
+        shell: bash
+        run: |
+          set -euo pipefail
+          media_dir="$RUNNER_TEMP/sloptank-e2e/media"
+          mkdir -p "$media_dir"
+          ffmpeg -hide_banner -loglevel error \
+            -f lavfi -i "color=c=0x071018:size=160x90:rate=2:duration=120" \
+            -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=120" \
+            -c:v libx264 -preset ultrafast -crf 35 -g 8 -pix_fmt yuv420p \
+            -c:a aac -b:a 96k -movflags +faststart -shortest \
+            "$media_dir/ci-e2e-fixture.mp4"
+          ffmpeg -hide_banner -loglevel error \
+            -f lavfi -i "color=c=0x071018:size=160x90:rate=2:duration=660" \
+            -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=660" \
+            -c:v libx264 -preset ultrafast -crf 35 -g 8 -pix_fmt yuv420p \
+            -c:a ac3 -b:a 96k -shortest \
+            "$media_dir/ci-e2e-transcode.mkv"
+          printf '%s\n' \
+            '1' '00:01:34,000 --> 00:01:38,000' 'First CI subtitle cue' '' \
+            '2' '00:01:42,000 --> 00:01:46,000' 'Second CI subtitle cue' \
+            > "$media_dir/ci-e2e-fixture.en.srt"
+
+      - name: Start real SlopTank server 🚀
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_dir="$RUNNER_TEMP/sloptank-e2e"
+          mkdir -p "$runtime_dir/data" "$runtime_dir/cache" "$runtime_dir/config" "$runtime_dir/log"
+          nohup dotnet run --project server/Jellyfin.Server \
+            --configuration Release --no-build -- \
+            --datadir "$runtime_dir/data" \
+            --cachedir "$runtime_dir/cache" \
+            --configdir "$runtime_dir/config" \
+            --logdir "$runtime_dir/log" \
+            --webdir "$GITHUB_WORKSPACE/dist" \
+            --ffmpeg "$(command -v ffmpeg)" \
+            --nonetchange \
+            > "$runtime_dir/server.log" 2>&1 &
+          printf '%s\n' "$!" > "$runtime_dir/server.pid"
+
+      - name: Provision user and media library 📚
+        shell: bash
+        run: |
+          node e2e/ci/provision-server.mjs \
+            --base-url http://127.0.0.1:8096 \
+            --media-path "$RUNNER_TEMP/sloptank-e2e/media" \
+            --username sloptank-ci \
+            --password sloptank-ci-password \
+            --item-name ci-e2e-fixture \
+            --transcode-item-name ci-e2e-transcode \
+            --max-attempts 180 \
+            --poll-interval-ms 1000 \
+            >> "$GITHUB_ENV"
+
+      - name: Run Playwright e2e suite 🎭
+        run: npm run test:e2e
+
+      - name: Report server diagnostics and stop server
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          runtime_dir="$RUNNER_TEMP/sloptank-e2e"
+          if [ -f "$runtime_dir/server.log" ]; then
+            tail -200 "$runtime_dir/server.log"
+          fi
+          if [ -f "$runtime_dir/server.pid" ]; then
+            kill "$(sed -n '1p' "$runtime_dir/server.pid")" 2>/dev/null || true
+          fi
