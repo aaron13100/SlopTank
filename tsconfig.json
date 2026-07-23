@@ -20,5 +20,15 @@
   },
   "include": [
     "src"
+  ],
+  "exclude": [
+    // src/modularity.test.js (currently src/modularity.test.js.pending-owner-setup,
+    // see docs/new-project-checklist.md section 2) is the owner-locked
+    // modularity gate: protect-modularity-test.sh blocks Claude from editing
+    // it, so it must never be able to fail a type-check Claude cannot fix.
+    // No-op today (checkJs is false, so plain .js files aren't type-checked
+    // regardless), kept explicit in case checkJs is ever enabled.
+    "src/modularity.test.js.pending-owner-setup",
+    "src/modularity.test.js"
   ]
 }
