@@ -1,0 +1,14 @@
+{
+    "schemaVersion": 1,
+    "_meta": {
+        "note": "Coverage ratchet floor for `npm run test:coverage` (wired into vitest's coverage.thresholds by vite.config.ts). These are the percentages the committed suite already achieves, rounded down; a change that drops below any of them fails the run. Raise them with `npm run coverage:baseline` after adding tests. Lowering requires `node scripts/coverage-baseline.mjs --allow-decrease`, which is deliberate: coverage is meant to ratchet up, never silently regress.",
+        "generatedBy": "scripts/coverage-baseline.mjs"
+    },
+    "thresholds": {
+        "lines": 6.76,
+        "statements": 6.76,
+        "functions": 33.44,
+        "branches": 57.53
+    },
+    "schema_version": 1
+}

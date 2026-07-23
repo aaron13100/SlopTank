@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { defineConfig, type Plugin } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
+import { readCoverageBaseline } from './scripts/coverage-baseline.mjs';
+
 /**
  * The webpack build imports component templates as strings via html-loader;
  * mirror that here so components with `import template from './x.html'` are
@@ -38,7 +40,19 @@ export default defineConfig({
     test: {
         include: [ 'src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}' ],
         coverage: {
-            include: [ 'src' ]
+            include: [ 'src' ],
+            // json-summary is what `npm run coverage:baseline` reads back; the
+            // other four are vitest's defaults, restated because naming any
+            // reporter replaces the default list.
+            reporter: [ 'text', 'html', 'clover', 'json', 'json-summary' ],
+            // The ratchet: `npm run test:coverage` (the command CI runs) fails
+            // if global coverage drops below the floor committed in
+            // coverage-baseline.json. Raise the floor with
+            // `npm run coverage:baseline` once new tests land; lowering it takes
+            // an explicit --allow-decrease. Reading the file can throw, and is
+            // meant to: a missing or malformed baseline must fail loudly rather
+            // than silently leave the suite ungated.
+            thresholds: readCoverageBaseline()
         },
         environment: 'jsdom',
         restoreMocks: true

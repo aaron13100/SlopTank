@@ -166,6 +166,7 @@
     "build:check": "tsc --noEmit",
     "build:es-check": "npm run build:production && npm run escheck",
     "escheck": "es-check",
+    "coverage:baseline": "node scripts/coverage-baseline.mjs",
     "features": "node scripts/validate-features.mjs",
     "depcruise": "depcruise --config .dependency-cruiser.js --ignore-known .dependency-cruiser-known-violations.json src",
     "depcruise:baseline": "depcruise --config .dependency-cruiser.js --output-type baseline src > .dependency-cruiser-known-violations.json",
