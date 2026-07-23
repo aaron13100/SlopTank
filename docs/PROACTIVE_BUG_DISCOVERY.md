@@ -58,3 +58,42 @@ security finding, or postmortem), not theoretical risk.
   for module-scope singleton calls: only `serverNotifications.js:208`.
   Upward imports of the composition root (`from 'RootAppRouter'`):
   `appRouter.js`, `dialogHelper.js`; both fixed in the same change.
+
+### 4.3 Unbounded retry-and-swallow in a third-party streaming library's fatal-error handler
+
+- **Shape:** an `on('error', ...)` handler for a third-party media/streaming
+  library reacts to a *fatal* event by unconditionally re-invoking a
+  recovery method (`hls.startLoad()`), with no attempt counter and no
+  give-up branch. When the underlying condition is persistent (a server-side
+  hang, not a transient blip), the library keeps re-emitting the same fatal
+  event forever: the handler keeps retrying, never calls `reject`/surfaces
+  an error to the caller, and the UI is left wedged with no user-visible
+  feedback and no automatic recovery.
+- **Fix pattern:** track a per-attempt retry counter scoped to the binding
+  call (not module-level, so it naturally resets per playback session), and
+  reset it on a genuine-progress event (`Hls.Events.FRAG_BUFFERED`) rather
+  than a fixed time window. After a bounded number of attempts
+  (`MAX_FATAL_NETWORK_ERROR_RETRIES = 3`), stop retrying and surface the
+  error via the same `reject`/`onErrorInternal` path already used by the
+  handler's other terminal branches (`bindEventsToHlsPlayer`,
+  `src/components/htmlMediaHelper.js`, t_260722_234509_771).
+- **Evidence:** `deliverables/audio-transcode-stall-three-lists.md` timeline
+  (server-side segment kill-timer at 19:47:38, no client resume/error
+  report until 19:54:52) matches hls.js exhausting its fragment-load retry
+  ladder against a hung segment endpoint and going fatal, with the page
+  wedging silently; queued as t_260722_234509_771 from that investigation.
+  Reproduced directly: `src/components/htmlMediaHelper.test.js` drove the
+  real hls.js event bus with repeated fatal `NETWORK_ERROR`/`fragLoadTimeOut`
+  events and observed `hls.startLoad()` retry without bound, with no
+  `reject`/error event ever firing, before the fix.
+- **Sibling search:** grepped `src` for `try to recover`, `startLoad()`,
+  `recoverMediaError`, `reconnect`, `retryCount`, `retry(`, and all
+  `Hls.Events.ERROR`/`hls.on(` registrations. The only other recovery path
+  is `handleHlsJsMediaError`'s `MEDIA_ERROR` recovery (same file, lines
+  ~79-110), which already has a bounded give-up via the
+  `recoverDecodingErrorDate`/`recoverSwapAudioCodecDate` cooldown-timestamp
+  counters -- not a sibling instance. Checked the WebSocket/reconnect logic
+  in `src/lib/jellyfin-apiclient/connectionManager.js` (vendored API
+  client, different subsystem): only a single `ensureWebSocket()` call, no
+  unbounded fatal-retry loop. No other unbounded fatal-error retry loops
+  found in `src/`.

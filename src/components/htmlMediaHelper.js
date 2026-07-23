@@ -259,7 +259,21 @@ export function destroyFlvPlayer(instance) {
     }
 }
 
+const MAX_FATAL_NETWORK_ERROR_RETRIES = 3;
+
 export function bindEventsToHlsPlayer(instance, hls, elem, onErrorFn, resolve, reject) {
+    // A fatal NETWORK_ERROR with no response object means hls.js already
+    // exhausted its own internal retry ladder on a request that never
+    // completed (e.g. a segment hung server-side), not a completed 4xx/5xx
+    // or CORS response. Calling hls.startLoad() unconditionally here would
+    // just repeat the same hang forever: a real fragment never buffers, so
+    // the retry count below only resets on genuine progress.
+    let fatalNetworkErrorRetries = 0;
+
+    hls.on(Hls.Events.FRAG_BUFFERED, function () {
+        fatalNetworkErrorRetries = 0;
+    });
+
     hls.on(Hls.Events.MANIFEST_PARSED, function () {
         playWithPromise(elem, onErrorFn).then(resolve, function () {
             if (reject) {
@@ -309,9 +323,22 @@ export function bindEventsToHlsPlayer(instance, hls, elem, onErrorFn, resolve, r
                         } else {
                             onErrorInternal(instance, MediaError.NETWORK_ERROR);
                         }
-                    } else {
-                        console.debug('fatal network error encountered, try to recover');
+                    } else if (fatalNetworkErrorRetries < MAX_FATAL_NETWORK_ERROR_RETRIES) {
+                        fatalNetworkErrorRetries += 1;
+                        console.debug(`fatal network error encountered, try to recover (attempt ${fatalNetworkErrorRetries}/${MAX_FATAL_NETWORK_ERROR_RETRIES})`);
                         hls.startLoad();
+                    } else {
+                        console.error('fatal network error encountered, retry limit exceeded - giving up');
+
+                        // Trigger failure differently depending on whether this is prior to start of playback, or after
+                        hls.destroy();
+
+                        if (reject) {
+                            reject(MediaError.NETWORK_ERROR);
+                            reject = null;
+                        } else {
+                            onErrorInternal(instance, MediaError.NETWORK_ERROR);
+                        }
                     }
 
                     break;
