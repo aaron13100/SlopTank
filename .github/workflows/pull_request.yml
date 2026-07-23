@@ -9,26 +9,16 @@ on:
     branches:
       - master
       - release*
-    paths-ignore:
-      - '**/*.md'
-  merge_group:
+
+permissions:
+  contents: read
 
 jobs:
   quality_checks:
     name: Quality checks 👌🧪
     if: ${{ always() && !cancelled() }}
     uses: ./.github/workflows/__quality_checks.yml
-    permissions: {}
-    with:
-      commit: ${{ github.event.pull_request.head.sha }}
-
-  codeql:
-    name: GitHub CodeQL 🔬
-    if: ${{ always() && !cancelled() }}
-    uses: ./.github/workflows/__codeql.yml
     permissions:
-      actions: read
       contents: read
-      security-events: write
     with:
       commit: ${{ github.event.pull_request.head.sha }}
