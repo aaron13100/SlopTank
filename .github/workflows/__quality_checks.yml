@@ -20,6 +20,7 @@ jobs:
         command:
           - build:es-check
           - features
+          - depcruise
           - lint
           - stylelint
           - build:check

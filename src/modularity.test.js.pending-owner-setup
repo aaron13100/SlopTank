@@ -1,0 +1,170 @@
+// @vitest-environment node
+// src/modularity.test.js - owner-locked, do not edit via Claude.
+//
+// Lives at the src/ root (not tests/) because tests/ is a reserved private
+// root in this fork's public-boundary policy (tools/public-boundary-manifest.json
+// PB-001: "Public web smoke tests stay co-located under src/ or e2e/"). The
+// protect-modularity-test.sh lock matches on basename only, so this still
+// gets the same owner-lock protection as the canonical tests/modularity.test.js
+// path from docs/new-project-checklist.md. See t_260723_054720_705.
+//
+// BASELINE RATCHET, not a greenfield gate: this repo is a ~790-file fork of
+// upstream jellyfin-web written to no such limits, so failing every existing
+// violation on day one (or exempting a fraction of the tree large enough to
+// make the gate pass) would make the gate meaningless. src/modularity.ignore.json
+// snapshots the violations that already existed when this gate was scaffolded
+// (2026-07-23) as recorded DEBT, not a licence: anything not in the snapshot
+// must fit under the limits below, and any snapshotted entry that regresses
+// further than its recorded baseline fails too. Shrink the snapshot over time
+// by refactoring an entry down, then regenerating it with
+// `node scripts/modularity-baseline.mjs` (refuses silent growth by default).
+//
+// One test() per CATEGORY (file size / function+class size / naming),
+// rather than one test() per file or function, is a deliberate choice: this
+// repo has ~790 files and ~7,700 functions, and vitest's own per-test
+// bookkeeping overhead on that many discrete test() calls made a naive
+// test.each version of this gate take 30+ seconds in `collect` alone before
+// the pre-commit hook (which runs this on every commit) even started
+// checking anything. Each test below accumulates every violation it finds
+// into a list and asserts the list is empty; a failure's diff still names
+// every offending file/function/class and its line count, satisfying "fail
+// loudly with the file path, function name, and line count" without paying
+// per-test overhead thousands of times over.
+//
+// The scan logic below is deliberately duplicated in scripts/modularity-baseline.mjs
+// rather than imported from it. This file is owner-locked by
+// protect-modularity-test.sh specifically so limits/logic can't be weakened;
+// if the scan logic lived in a shared, editable module, editing that module
+// would be an equivalent way to weaken this gate. Keep both copies in sync by
+// hand if the scan logic ever needs to change (owner-only, per the lock).
+import { describe, test, expect } from 'vitest';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
+import ts from 'typescript';
+
+const SRC = resolve(import.meta.dirname);
+const ROOT = resolve(SRC, '..');
+
+const FILE_LIMIT = 300;
+const FUNCTION_LIMIT = 50;
+const CLASS_LIMIT = 200;
+
+const BANNED_NAME_PATTERN = /(Trait_|_part\d+\.|_old\.|_new\.|_v\d+\.|_copy\.|_backup\.|Helper\d+\.|Util\d+\.)/;
+
+const CODE_EXT = /\.(js|jsx|ts|tsx|mjs|cjs)$/;
+const TEST_EXT = /\.(test|spec)\.[jt]sx?$/;
+
+const IGNORE = JSON.parse(readFileSync(join(SRC, 'modularity.ignore.json'), 'utf8'));
+
+function walk(dir) {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) return walk(full);
+        if (CODE_EXT.test(entry.name) && !TEST_EXT.test(entry.name)) return [full];
+        return [];
+    });
+}
+
+function countCodeLines(text) {
+    return text.split('\n').filter((line) => {
+        const trimmed = line.trim();
+        return trimmed.length > 0 && !trimmed.startsWith('//') && !trimmed.startsWith('*') && !trimmed.startsWith('/*');
+    }).length;
+}
+
+function scriptKindFor(path) {
+    if (path.endsWith('.tsx')) return ts.ScriptKind.TSX;
+    if (path.endsWith('.ts')) return ts.ScriptKind.TS;
+    if (path.endsWith('.jsx')) return ts.ScriptKind.JSX;
+    return ts.ScriptKind.JS;
+}
+
+function nameOf(node, sourceFile) {
+    if (node.name) return node.name.getText(sourceFile);
+    const parent = node.parent;
+    if (parent && (ts.isVariableDeclaration(parent) || ts.isPropertyAssignment(parent) || ts.isPropertyDeclaration(parent)) && parent.name) {
+        return parent.name.getText(sourceFile);
+    }
+    return '<anonymous>';
+}
+
+function collectSpans(sourceFile, text) {
+    const functions = [];
+    const classes = [];
+    function visit(node) {
+        if (
+            ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)
+            || ts.isArrowFunction(node) || ts.isMethodDeclaration(node)
+            || ts.isGetAccessor(node) || ts.isSetAccessor(node) || ts.isConstructorDeclaration(node)
+        ) {
+            if (node.body) {
+                const startLine = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
+                const bodyText = text.slice(node.body.getFullStart(), node.body.getEnd());
+                functions.push({ name: nameOf(node, sourceFile), startLine, lines: countCodeLines(bodyText) });
+            }
+        } else if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
+            const startLine = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
+            const bodyText = text.slice(node.getStart(sourceFile), node.getEnd());
+            classes.push({ name: nameOf(node, sourceFile) || '<anonymous>', startLine, lines: countCodeLines(bodyText) });
+        }
+        ts.forEachChild(node, visit);
+    }
+    visit(sourceFile);
+    return { functions, classes };
+}
+
+function checkAgainstBaseline(key, actual, limit, baselineSection) {
+    const baseline = baselineSection[key];
+    if (baseline !== undefined) {
+        if (actual > baseline) {
+            return `${key}: ${actual} lines, grew past its recorded baseline of ${baseline} (shrink it back down; do not raise the baseline to paper over it)`;
+        }
+        return null;
+    }
+    if (actual > limit) {
+        return `${key}: ${actual} lines, over the ${limit}-line limit, with no baseline entry (this is new debt or a new violation; fix it or run scripts/modularity-baseline.mjs to record it deliberately)`;
+    }
+    return null;
+}
+
+const files = walk(SRC).map((f) => relative(ROOT, f)).sort();
+
+describe('modularity', () => {
+    test('every file stays within its line budget', () => {
+        const violations = [];
+        for (const file of files) {
+            const lines = countCodeLines(readFileSync(join(ROOT, file), 'utf8'));
+            const violation = checkAgainstBaseline(file, lines, FILE_LIMIT, IGNORE.files);
+            if (violation) violations.push(violation);
+        }
+        expect(violations).toEqual([]);
+    });
+
+    test('every function and class stays within its line budget', () => {
+        // One shared AST pass per file for both functions and classes: parsing
+        // ~790 files takes long enough that doing it twice (once per check)
+        // pushed this past vitest's default per-test timeout for no benefit.
+        const violations = [];
+        for (const file of files) {
+            const text = readFileSync(join(ROOT, file), 'utf8');
+            const sourceFile = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, scriptKindFor(file));
+            const { functions, classes } = collectSpans(sourceFile, text);
+            for (const fn of functions) {
+                const key = `${file}::${fn.name}::${fn.startLine}`;
+                const violation = checkAgainstBaseline(key, fn.lines, FUNCTION_LIMIT, IGNORE.functions);
+                if (violation) violations.push(`function ${violation}`);
+            }
+            for (const cls of classes) {
+                const key = `${file}::${cls.name}::${cls.startLine}`;
+                const violation = checkAgainstBaseline(key, cls.lines, CLASS_LIMIT, IGNORE.classes);
+                if (violation) violations.push(`class ${violation}`);
+            }
+        }
+        expect(violations).toEqual([]);
+    }, 60000);
+
+    test('no file names signal a mechanical split, trait/mixin dump, or unkilled drift fork', () => {
+        const offenders = files.filter((f) => BANNED_NAME_PATTERN.test(f.split('/').pop()));
+        expect(offenders, 'See docs/PROACTIVE_BUG_DISCOVERY.md and the modularity-extraction skill.').toEqual([]);
+    });
+});
