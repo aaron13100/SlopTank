@@ -4,7 +4,6 @@ import { playbackManager } from 'components/playback/playbackmanager';
 import { pluginManager } from 'components/pluginManager';
 import { appRouter } from 'components/router/appRouter';
 import toast from 'components/toast/toast';
-import { ServerConnections } from 'lib/jellyfin-apiclient';
 import inputManager from 'scripts/inputManager';
 import Events from 'utils/events.ts';
 import { PluginType } from 'types/plugin.ts';
@@ -205,9 +204,18 @@ function bindEvents(apiClient) {
     Events.on(apiClient, 'message', onMessageReceived);
 }
 
-ServerConnections.getApiClients().forEach(bindEvents);
-Events.on(ServerConnections, 'apiclientcreated', function (e, newApiClient) {
-    bindEvents(newApiClient);
+// This module sits on a circular import chain with lib/jellyfin-apiclient,
+// so a static import of ServerConnections can be an uninitialized binding
+// when this module is evaluated first. Resolve it via dynamic import once
+// the graph has settled; module evaluation always finishes before any
+// connection is made, so no api client can be missed.
+void import('lib/jellyfin-apiclient').then(({ ServerConnections }) => {
+    ServerConnections.getApiClients().forEach(bindEvents);
+    Events.on(ServerConnections, 'apiclientcreated', function (e, newApiClient) {
+        bindEvents(newApiClient);
+    });
+}).catch((error) => {
+    console.error('[serverNotifications] failed to bind api client events: ', error);
 });
 
 window.ServerNotifications = serverNotifications;
