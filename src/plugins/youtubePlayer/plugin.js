@@ -1,7 +1,8 @@
 import browser from '../../scripts/browser';
-import { appRouter } from '../../components/router/appRouter';
 import loading from '../../components/loading/loading';
+import { playbackManager } from '../../components/playback/playbackmanager';
 import { setBackdropTransparency, TRANSPARENCY_LEVEL } from '../../components/backdrop/backdrop';
+import globalize from '../../lib/globalize';
 import { PluginType } from '../../types/plugin.ts';
 import Events from '../../utils/events.ts';
 
@@ -25,6 +26,32 @@ function zoomIn(elem, iterations) {
     return elem.animate(keyframes, timing);
 }
 
+/**
+ * Wires the user-facing ways out of the trailer overlay: the overlay close
+ * button, the Escape key and browser back. With YouTube's own chrome owning
+ * the player controls there is no app OSD fronting the iframe, so the
+ * plugin itself must provide the exit affordances. The document/window
+ * handlers are removed in destroy().
+ * @param {YoutubePlayer} instance
+ * @param {HTMLElement} closeButton
+ */
+function bindCloseControls(instance, closeButton) {
+    const stopPlayback = function () {
+        playbackManager.stop(instance);
+    };
+    instance.closeControlHandlers = {
+        onKeyDown: function (e) {
+            if (e.key === 'Escape') {
+                stopPlayback();
+            }
+        },
+        onPopState: stopPlayback
+    };
+    closeButton.addEventListener('click', stopPlayback);
+    document.addEventListener('keydown', instance.closeControlHandlers.onKeyDown);
+    window.addEventListener('popstate', instance.closeControlHandlers.onPopState);
+}
+
 function createMediaElement(instance, options) {
     return new Promise(function (resolve) {
         const dlg = document.querySelector('.youtubePlayerContainer');
@@ -43,6 +70,15 @@ function createMediaElement(instance, options) {
 
                 playerDlg.innerHTML = '<div id="player"></div>';
                 const videoElement = playerDlg.querySelector('#player');
+
+                const closeButton = document.createElement('button');
+                closeButton.type = 'button';
+                closeButton.classList.add('youtubePlayerCloseButton', 'paper-icon-button-light');
+                closeButton.title = globalize.translate('ButtonClose');
+                closeButton.setAttribute('aria-label', closeButton.title);
+                closeButton.innerHTML = '<span class="material-icons close" aria-hidden="true"></span>';
+                playerDlg.appendChild(closeButton);
+                bindCloseControls(instance, closeButton);
 
                 document.body.insertBefore(playerDlg, document.body.firstChild);
                 instance.videoDialog = playerDlg;
@@ -63,11 +99,41 @@ function createMediaElement(instance, options) {
             // we need to hide scrollbar when starting playback from page with animated background
             if (options.fullscreen) {
                 document.body.classList.add('hide-scroll');
+                dlg.classList.add('onTop');
             }
 
-            resolve(dlg.querySelector('#player'));
+            // After YT.Player.destroy() the placeholder element may be
+            // gone; recreate it so replays and dead-trailer retries always
+            // have a target element to attach to.
+            let videoElement = dlg.querySelector('#player');
+            if (!videoElement) {
+                videoElement = document.createElement('div');
+                videoElement.id = 'player';
+                dlg.insertBefore(videoElement, dlg.firstChild);
+            }
+
+            resolve(videoElement);
         }
     });
+}
+
+/**
+ * Calls a YouTube iframe API player method if it is actually available.
+ * The iframe API attaches playback methods to the player object
+ * asynchronously (only once the embedded player reports ready); until then
+ * only construction-time members exist. Observed live: closing the overlay
+ * while the player was still loading threw "stopVideo is not a function"
+ * from an unguarded call. A partially initialized player is treated the
+ * same as no player.
+ * @param {object|null} player The YT.Player instance (possibly not ready).
+ * @param {string} method The API method name to invoke.
+ * @param {any[]} [args] Arguments for the method.
+ * @returns {any} The method's return value, or undefined when unavailable.
+ */
+function invokePlayerMethod(player, method, args) {
+    if (player && typeof player[method] === 'function') {
+        return player[method].apply(player, args || []);
+    }
 }
 
 function onVideoResize() {
@@ -75,7 +141,7 @@ function onVideoResize() {
     const player = instance.currentYoutubePlayer;
     const dlg = instance.videoDialog;
     if (player && dlg) {
-        player.setSize(dlg.offsetWidth, dlg.offsetHeight);
+        invokePlayerMethod(player, 'setSize', [dlg.offsetWidth, dlg.offsetHeight]);
     }
 }
 
@@ -102,9 +168,7 @@ function onEndedInternal(instance) {
     Events.trigger(instance, 'stopped', [stopInfo]);
 
     instance._currentSrc = null;
-    if (instance.currentYoutubePlayer) {
-        instance.currentYoutubePlayer.destroy();
-    }
+    invokePlayerMethod(instance.currentYoutubePlayer, 'destroy');
     instance.currentYoutubePlayer = null;
 }
 
@@ -124,11 +188,12 @@ function onPlaying(instance, playOptions, resolve) {
         clearTimeUpdateInterval(instance);
         instance.timeUpdateInterval = setInterval(onTimeUpdate.bind(instance), 500);
 
-        if (playOptions.fullscreen) {
-            appRouter.showVideoOsd(playOptions.item).then(function () {
-                instance.videoDialog.classList.remove('onTop');
-            });
-        } else {
+        // Fullscreen trailers keep the dialog on top and let YouTube's own
+        // chrome (controls: 1) drive playback. The app's video OSD is
+        // deliberately NOT shown for this player: it cannot control the
+        // iframe's captions or quality, and its overlay would collide with
+        // the native YouTube controls.
+        if (!playOptions.fullscreen) {
             setBackdropTransparency(TRANSPARENCY_LEVEL.Backdrop);
             instance.videoDialog.classList.remove('onTop');
         }
@@ -162,12 +227,20 @@ function setCurrentSrc(instance, elem, options) {
                     'onError': (e) => reject(errorCodes[e.data] || 'ErrorDefault')
                 },
                 playerVars: {
-                    controls: 0,
+                    // YouTube's own chrome owns the trailer control
+                    // surface: the iframe is a black box to the app OSD
+                    // (captions/quality are not scriptable), so the native
+                    // controls are the only layer that can drive them.
+                    controls: 1,
+                    // Auto-captions default OFF; the CC button turns them on.
+                    // eslint-disable-next-line @typescript-eslint/naming-convention -- YouTube iframe API parameter name
+                    cc_load_policy: 0,
                     enablejsapi: 1,
                     modestbranding: 1,
                     rel: 0,
                     showinfo: 0,
-                    fs: 0,
+                    // Native controls include a working fullscreen toggle.
+                    fs: 1,
                     playsinline: 1
                 }
             });
@@ -216,14 +289,15 @@ class YoutubePlayer {
         const src = this._currentSrc;
 
         if (src) {
-            if (this.currentYoutubePlayer) {
-                this.currentYoutubePlayer.stopVideo();
-            }
+            invokePlayerMethod(this.currentYoutubePlayer, 'stopVideo');
             onEndedInternal(this);
+        }
 
-            if (destroyPlayer) {
-                this.destroy();
-            }
+        // Destroy even when there is no current src: after a natural ENDED
+        // the src is already cleared, but the overlay dialog is still up
+        // and a user-requested stop must still tear it down.
+        if (destroyPlayer) {
+            this.destroy();
         }
 
         return Promise.resolve();
@@ -231,6 +305,13 @@ class YoutubePlayer {
     destroy() {
         setBackdropTransparency(TRANSPARENCY_LEVEL.None);
         document.body.classList.remove('hide-scroll');
+
+        const closeControlHandlers = this.closeControlHandlers;
+        if (closeControlHandlers) {
+            this.closeControlHandlers = null;
+            document.removeEventListener('keydown', closeControlHandlers.onKeyDown);
+            window.removeEventListener('popstate', closeControlHandlers.onPopState);
+        }
 
         const dlg = this.videoDialog;
         if (dlg) {
@@ -272,18 +353,18 @@ class YoutubePlayer {
 
         if (currentYoutubePlayer) {
             if (val != null) {
-                currentYoutubePlayer.seekTo(val / 1000, true);
+                invokePlayerMethod(currentYoutubePlayer, 'seekTo', [val / 1000, true]);
                 return;
             }
 
-            return currentYoutubePlayer.getCurrentTime() * 1000;
+            return (invokePlayerMethod(currentYoutubePlayer, 'getCurrentTime') || 0) * 1000;
         }
     }
     duration() {
         const currentYoutubePlayer = this.currentYoutubePlayer;
 
         if (currentYoutubePlayer) {
-            return currentYoutubePlayer.getDuration() * 1000;
+            return (invokePlayerMethod(currentYoutubePlayer, 'getDuration') || 0) * 1000;
         }
         return null;
     }
@@ -291,7 +372,7 @@ class YoutubePlayer {
         const currentYoutubePlayer = this.currentYoutubePlayer;
 
         if (currentYoutubePlayer) {
-            currentYoutubePlayer.pauseVideo();
+            invokePlayerMethod(currentYoutubePlayer, 'pauseVideo');
 
             const instance = this;
 
@@ -305,7 +386,7 @@ class YoutubePlayer {
         const currentYoutubePlayer = this.currentYoutubePlayer;
 
         if (currentYoutubePlayer) {
-            currentYoutubePlayer.playVideo();
+            invokePlayerMethod(currentYoutubePlayer, 'playVideo');
 
             const instance = this;
 
@@ -319,7 +400,7 @@ class YoutubePlayer {
         const currentYoutubePlayer = this.currentYoutubePlayer;
 
         if (currentYoutubePlayer) {
-            return currentYoutubePlayer.getPlayerState() === 2;
+            return invokePlayerMethod(currentYoutubePlayer, 'getPlayerState') === 2;
         }
 
         return false;
@@ -332,36 +413,18 @@ class YoutubePlayer {
         return this.getVolume();
     }
     setVolume(val) {
-        const currentYoutubePlayer = this.currentYoutubePlayer;
-
-        if (currentYoutubePlayer && val != null) {
-            currentYoutubePlayer.setVolume(val);
+        if (val != null) {
+            invokePlayerMethod(this.currentYoutubePlayer, 'setVolume', [val]);
         }
     }
     getVolume() {
-        const currentYoutubePlayer = this.currentYoutubePlayer;
-
-        if (currentYoutubePlayer) {
-            return currentYoutubePlayer.getVolume();
-        }
+        return invokePlayerMethod(this.currentYoutubePlayer, 'getVolume');
     }
     setMute(mute) {
-        const currentYoutubePlayer = this.currentYoutubePlayer;
-
-        if (mute) {
-            if (currentYoutubePlayer) {
-                currentYoutubePlayer.mute();
-            }
-        } else if (currentYoutubePlayer) {
-            currentYoutubePlayer.unMute();
-        }
+        invokePlayerMethod(this.currentYoutubePlayer, mute ? 'mute' : 'unMute');
     }
     isMuted() {
-        const currentYoutubePlayer = this.currentYoutubePlayer;
-
-        if (currentYoutubePlayer) {
-            return currentYoutubePlayer.isMuted();
-        }
+        return invokePlayerMethod(this.currentYoutubePlayer, 'isMuted');
     }
 }
 

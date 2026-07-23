@@ -10,7 +10,10 @@
 }
 
 .youtubePlayerContainer.onTop {
-    z-index: 1000;
+    /* Above the app toolbar/drawer (the trailer no longer navigates to the
+       OSD route, so page chrome stays mounted behind it) but below alert
+       dialogs (999998+) and the loading spinner (9999999). */
+    z-index: 999990;
 }
 
 .youtubePlayerContainer video {
@@ -18,4 +21,23 @@
     padding: 0 !important;
     width: 100%;
     height: 100%;
+}
+
+/* The overlay's own exit affordance: YouTube's native chrome (controls: 1)
+   has no close control, and the app OSD is not shown for this player. */
+.youtubePlayerCloseButton {
+    position: absolute;
+    top: 0.5em;
+    left: 0.5em;
+    z-index: 1;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.5);
+    border: 0;
+    border-radius: 50%;
+    padding: 0.4em;
+    cursor: pointer;
+}
+
+.youtubePlayerCloseButton:hover {
+    background: rgba(0, 0, 0, 0.8);
 }

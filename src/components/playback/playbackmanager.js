@@ -636,9 +636,15 @@ function validatePlaybackInfoResult(instance, result) {
     return true;
 }
 
-function showPlaybackInfoErrorMessage(instance, errorCode) {
+/**
+ * Shows the playback error alert for a translation key.
+ * @param {PlaybackManager} instance
+ * @param {string} errorCode Translation key for the message body.
+ * @param {...string} args Substitution values for the key's placeholders.
+ */
+function showPlaybackInfoErrorMessage(instance, errorCode, ...args) {
     alert({
-        text: globalize.translate(errorCode),
+        text: globalize.translate(errorCode, ...args),
         title: globalize.translate('HeaderPlaybackError')
     });
 }
@@ -2606,6 +2612,26 @@ export class PlaybackManager {
                 .catch(() => getSavedMaxStreamingBitrate(apiClient, mediaType));
         }
 
+        /**
+         * Returns the queued trailer items after a trailer that failed to
+         * play. Prefers the originating play request's item list (present
+         * when the failed item was the first of a play() call, before the
+         * queue is committed on playback start); falls back to the live
+         * play queue for failures while advancing through an
+         * already-started trailer list.
+         * @param {object} failedItem The trailer item whose playback failed.
+         * @param {object} playOptions The play options passed to playInternal.
+         * @returns {object[]} The remaining trailer items (possibly empty).
+         */
+        function getRemainingTrailers(failedItem, playOptions) {
+            const sourceItems = playOptions.items || self._playQueueManager.getPlaylist();
+            const failedIndex = sourceItems.indexOf(failedItem);
+            if (failedIndex === -1) {
+                return [];
+            }
+            return sourceItems.slice(failedIndex + 1).filter((remainingItem) => remainingItem.Type === 'Trailer');
+        }
+
         function playAfterBitrateDetect(maxBitrate, item, playOptions, onPlaybackStartedFn, prevSource) {
             const startPosition = playOptions.startPositionTicks;
 
@@ -2642,9 +2668,38 @@ export class PlaybackManager {
                         onPlaybackStartedFn();
                         onPlaybackStarted(player, playOptions, streamInfo);
                     }).catch((errorCode) => {
+                        const errorKey = typeof errorCode === 'string' && errorCode ? errorCode : 'ErrorDefault';
+
+                        // Trailer playlists (YouTube URLs from remote
+                        // metadata) routinely contain dead entries: skip to
+                        // the next trailer instead of aborting the whole
+                        // list. Scoped to Trailer items so ordinary playback
+                        // error handling is unchanged.
+                        const remainingTrailers = item.Type === 'Trailer' ? getRemainingTrailers(item, playOptions) : [];
+                        if (remainingTrailers.length) {
+                            console.warn(`[playbackmanager] trailer failed (${errorKey}); skipping to the next trailer`);
+                            // Tear down the failed attempt without letting
+                            // 'stopped' report a user-facing stop (which
+                            // would reset the queue), then play the rest.
+                            unbindStopped(player);
+                            return player.stop(false).then(() => {
+                                bindStopped(player);
+                                return self.play({
+                                    items: remainingTrailers,
+                                    fullscreen: playOptions.fullscreen
+                                });
+                            });
+                        }
+
                         self.stop(player);
                         loading.hide();
-                        showPlaybackInfoErrorMessage(self, errorCode || 'ErrorDefault');
+                        if (item.Type === 'Trailer') {
+                            // Every trailer failed: name the real mapped
+                            // reason instead of a generic error.
+                            showPlaybackInfoErrorMessage(self, 'TrailerUnavailable', globalize.translate(errorKey));
+                        } else {
+                            showPlaybackInfoErrorMessage(self, errorKey);
+                        }
                     });
                 });
             }
@@ -3527,7 +3582,10 @@ export class PlaybackManager {
         function onPlaybackChanging(activePlayer, newPlayer, newItem) {
             const state = self.getPlayerState(activePlayer);
 
-            const serverId = self.currentItem(activePlayer).ServerId;
+            // The active player can have no current item when its last play
+            // attempt failed before starting (e.g. a dead trailer URL);
+            // reportPlayback below already no-ops without a serverId.
+            const serverId = self.currentItem(activePlayer)?.ServerId;
 
             // User started playing something new while existing content is playing
             let promise;
