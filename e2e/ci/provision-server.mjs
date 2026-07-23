@@ -23,10 +23,12 @@ class ProvisioningError extends Error {
 const requiredOptions = [
     'base-url',
     'media-path',
+    'tv-media-path',
     'username',
     'password',
     'item-name',
     'transcode-item-name',
+    'series-name',
     'max-attempts',
     'poll-interval-ms'
 ];
@@ -181,17 +183,19 @@ async function waitForServer(options) {
 }
 
 /**
- * Waits until the generated movie is visible through the authenticated Items API.
+ * Waits until a named item of the given type is visible through the
+ * authenticated Items API.
  * @param {Record<string, string>} options Provisioning options.
  * @param {string} token Admin access token.
+ * @param {string} itemType Jellyfin item type, e.g. 'Movie' or 'Series'.
  * @param {string} itemName Exact fixture name.
  * @returns {Promise<string>} Indexed item ID.
  */
-async function waitForFixture(options, token, itemName) {
+async function waitForItemByName(options, token, itemType, itemName) {
     const attempts = Number.parseInt(options['max-attempts'], 10);
     const interval = Number.parseInt(options['poll-interval-ms'], 10);
     const query = new URLSearchParams({
-        IncludeItemTypes: 'Movie',
+        IncludeItemTypes: itemType,
         Recursive: 'true',
         SearchTerm: itemName
     });
@@ -216,8 +220,59 @@ async function waitForFixture(options, token, itemName) {
 
     throw new ProvisioningError(
         'FIXTURE_SCAN_TIMEOUT',
-        `Media item ${itemName} was not indexed after ${attempts} attempts`,
+        `${itemType} ${itemName} was not indexed after ${attempts} attempts`,
         `Confirm ${options['media-path']} contains the generated fixture and inspect the library scan log.`
+    );
+}
+
+/**
+ * Waits until the generated TV series has at least two indexed episodes, so
+ * the web client's "up next" playlist is guaranteed to be non-empty, and
+ * returns the earliest episode (lowest season/episode number).
+ * @param {Record<string, string>} options Provisioning options.
+ * @param {string} token Admin access token.
+ * @param {string} seriesId The series' item ID.
+ * @returns {Promise<string>} The earliest episode's item ID.
+ */
+async function waitForEpisodes(options, token, seriesId) {
+    const attempts = Number.parseInt(options['max-attempts'], 10);
+    const interval = Number.parseInt(options['poll-interval-ms'], 10);
+
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+        const document = await requestJson(
+            options['base-url'],
+            `/Shows/${encodeURIComponent(seriesId)}/Episodes`,
+            { token }
+        );
+        const items = document && typeof document === 'object' && Array.isArray(document.Items) ?
+            document.Items :
+            [];
+        // The scanner creates each episode's row (Name, Id) before its
+        // season/episode-number metadata is parsed and committed, so a
+        // numberless episode can briefly appear alongside an already-numbered
+        // one. Sorting before that number lands would rank it as episode 0,
+        // ahead of the real first episode: require every episode indexed so
+        // far to carry a real number before trusting the sort.
+        const fullyIndexed = items.length >= 2
+            && items.every(item => typeof item?.IndexNumber === 'number');
+        if (fullyIndexed) {
+            const [ earliest ] = [ ...items ].sort((a, b) => {
+                const seasonDiff = (a.ParentIndexNumber ?? 0) - (b.ParentIndexNumber ?? 0);
+                return seasonDiff !== 0 ? seasonDiff : a.IndexNumber - b.IndexNumber;
+            });
+            if (typeof earliest?.Id === 'string') {
+                return earliest.Id;
+            }
+        }
+        if (attempt + 1 < attempts) {
+            await new Promise(resolve => setTimeout(resolve, interval));
+        }
+    }
+
+    throw new ProvisioningError(
+        'FIXTURE_SCAN_TIMEOUT',
+        `Series ${seriesId} did not index at least two episodes after ${attempts} attempts`,
+        `Confirm ${options['tv-media-path']} contains two distinct episode files and inspect the library scan log.`
     );
 }
 
@@ -258,6 +313,17 @@ async function provision(options) {
         body: {},
         method: 'POST'
     });
+
+    const tvLibraryQuery = new URLSearchParams({
+        collectionType: 'tvshows',
+        name: 'E2E TV Shows',
+        paths: options['tv-media-path'],
+        refreshLibrary: 'true'
+    });
+    await requestJson(baseUrl, `/Library/VirtualFolders?${tvLibraryQuery.toString()}`, {
+        body: {},
+        method: 'POST'
+    });
     await requestJson(baseUrl, '/Startup/Complete', { method: 'POST' });
 
     const authentication = await requestJson(baseUrl, '/Users/AuthenticateByName', {
@@ -293,18 +359,22 @@ async function provision(options) {
         }
     );
 
-    const itemId = await waitForFixture(options, authentication.AccessToken, options['item-name']);
-    const transcodeItemId = await waitForFixture(
+    const itemId = await waitForItemByName(options, authentication.AccessToken, 'Movie', options['item-name']);
+    const transcodeItemId = await waitForItemByName(
         options,
         authentication.AccessToken,
+        'Movie',
         options['transcode-item-name']
     );
+    const seriesId = await waitForItemByName(options, authentication.AccessToken, 'Series', options['series-name']);
+    const episodeItemId = await waitForEpisodes(options, authentication.AccessToken, seriesId);
     return {
         E2E_BASE_URL: baseUrl,
         E2E_USERNAME: options.username,
         E2E_PASSWORD: options.password,
         E2E_ITEM_ID: itemId,
         E2E_TRANSCODE_ITEM_ID: transcodeItemId,
+        E2E_EPISODE_ITEM_ID: episodeItemId,
         E2E_SERVER_ID: authentication.ServerId
     };
 }

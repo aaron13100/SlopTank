@@ -117,6 +117,24 @@ jobs:
             '1' '00:01:34,000 --> 00:01:38,000' 'First CI subtitle cue' '' \
             '2' '00:01:42,000 --> 00:01:46,000' 'Second CI subtitle cue' \
             > "$media_dir/ci-e2e-fixture.en.srt"
+          # A sibling of media_dir, not nested inside it: Jellyfin's movies
+          # library recurses through media_dir, so a TV folder nested inside
+          # it gets claimed as plain Movie items instead of Series/Episodes.
+          tv_media_dir="$RUNNER_TEMP/sloptank-e2e/tvmedia"
+          tv_dir="$tv_media_dir/ci-e2e-show/Season 01"
+          mkdir -p "$tv_dir"
+          ffmpeg -hide_banner -loglevel error \
+            -f lavfi -i "color=c=0x071018:size=160x90:rate=2:duration=60" \
+            -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=60" \
+            -c:v libx264 -preset ultrafast -crf 35 -g 8 -pix_fmt yuv420p \
+            -c:a aac -b:a 96k -movflags +faststart -shortest \
+            "$tv_dir/ci-e2e-show S01E01.mp4"
+          ffmpeg -hide_banner -loglevel error \
+            -f lavfi -i "color=c=0x071018:size=160x90:rate=2:duration=60" \
+            -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=60" \
+            -c:v libx264 -preset ultrafast -crf 35 -g 8 -pix_fmt yuv420p \
+            -c:a aac -b:a 96k -movflags +faststart -shortest \
+            "$tv_dir/ci-e2e-show S01E02.mp4"
 
       - name: Start real SlopTank server 🚀
         shell: bash
@@ -142,10 +160,12 @@ jobs:
           node e2e/ci/provision-server.mjs \
             --base-url http://127.0.0.1:8096 \
             --media-path "$RUNNER_TEMP/sloptank-e2e/media" \
+            --tv-media-path "$RUNNER_TEMP/sloptank-e2e/tvmedia" \
             --username sloptank-ci \
             --password sloptank-ci-password \
             --item-name ci-e2e-fixture \
             --transcode-item-name ci-e2e-transcode \
+            --series-name ci-e2e-show \
             --max-attempts 180 \
             --poll-interval-ms 1000 \
             >> "$GITHUB_ENV"
