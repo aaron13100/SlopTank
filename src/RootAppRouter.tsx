@@ -15,6 +15,7 @@ import AppHeader from 'components/AppHeader';
 import Backdrop from 'components/Backdrop';
 import { SETTING_KEY as LAYOUT_SETTING_KEY } from 'components/layoutManager';
 import BangRedirect from 'components/router/BangRedirect';
+import { appRouter } from 'components/router/appRouter';
 import { createRouterHistory } from 'components/router/routerHistory';
 import { LayoutMode } from 'constants/layoutMode';
 import browser from 'scripts/browser';
@@ -40,6 +41,11 @@ const router = createHashRouter([
 ]);
 
 export const history = createRouterHistory(router);
+
+// The composition root hands the router-backed history to the appRouter
+// singleton; appRouter must not import this module (the upward dependency
+// used to force the whole route tree to load as an import side effect).
+appRouter.initialize(history);
 
 export default function RootAppRouter() {
     return <RouterProvider router={router} />;

@@ -114,6 +114,11 @@ export function handleCommand(commandName, options) {
                 appRouter.back();
             } else if (appHost.supports(AppFeature.Exit)) {
                 appHost.exit();
+            } else if (!appRouter.isStartPage()) {
+                // Nowhere back and no app shell to exit (e.g. a permalink
+                // opened in a fresh browser tab): leave toward home instead
+                // of silently doing nothing.
+                appRouter.goHome();
             }
         },
         'select': () => {

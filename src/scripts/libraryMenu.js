@@ -626,7 +626,11 @@ function updateTitle(page) {
 
 function updateBackButton(page) {
     if (headerBackButton) {
-        if (page.getAttribute('data-backbutton') !== 'false' && appRouter.canGoBack()) {
+        // Back is always functional off the start pages: appRouter.back()
+        // pops in-app history and falls back to home when there is none
+        // (e.g. a permalink opened in a fresh tab), so the arrow can show
+        // whenever leaving the page is meaningful.
+        if (page.getAttribute('data-backbutton') !== 'false' && !appRouter.isStartPage()) {
             headerBackButton.classList.remove('hide');
         } else {
             headerBackButton.classList.add('hide');

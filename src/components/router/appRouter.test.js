@@ -1,0 +1,91 @@
+import { createMemoryHistory } from 'history';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { AppRouter } from './appRouter';
+
+/**
+ * These tests drive AppRouter over a real history implementation (the same
+ * `history` package whose History interface the router history wrapper
+ * implements), injected via AppRouter's constructor seam. The assertions are
+ * about the shape of the back stack: the video-permalink feature must never
+ * let episode transitions pile up player entries.
+ */
+
+function createHarness(initialEntries) {
+    const memoryHistory = createMemoryHistory({ initialEntries });
+    const appRouter = new AppRouter(memoryHistory);
+    return { memoryHistory, appRouter };
+}
+
+/**
+ * appRouter defers the history mutation with setTimeout(0) and resolves its
+ * promise on the next 'viewshow' event (normally fired by the viewManager
+ * once the route's view mounts). Flush both here.
+ */
+async function settleNavigation(promise) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    document.dispatchEvent(new CustomEvent('viewshow'));
+    await promise;
+}
+
+function fullPath(memoryHistory) {
+    return memoryHistory.location.pathname + memoryHistory.location.search;
+}
+
+describe('appRouter video OSD navigation', () => {
+    afterEach(() => {
+        // Settle any trailing setTimeout(0) navigation before the next test.
+        return new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    it('pushes a history entry when entering the player from another page', async () => {
+        const { memoryHistory, appRouter } = createHarness(['/details?id=show1&serverId=s1']);
+
+        await settleNavigation(appRouter.showVideoOsd({ Id: 'ep1', ServerId: 's1' }));
+        expect(fullPath(memoryHistory)).toBe('/video?id=ep1&serverId=s1');
+        expect(memoryHistory.index).toBe(1);
+
+        // Back exits the player toward the page that launched it.
+        memoryHistory.back();
+        expect(fullPath(memoryHistory)).toBe('/details?id=show1&serverId=s1');
+    });
+
+    it('replaces the player entry on an in-player item change so Back exits the player', async () => {
+        const { memoryHistory, appRouter } = createHarness([
+            '/details?id=show1&serverId=s1',
+            '/video?id=ep1&serverId=s1'
+        ]);
+
+        // Next episode starts while the OSD is already showing.
+        await settleNavigation(appRouter.showVideoOsd({ Id: 'ep2', ServerId: 's1' }));
+        expect(fullPath(memoryHistory)).toBe('/video?id=ep2&serverId=s1');
+        expect(memoryHistory.index).toBe(1);
+
+        // Back must leave the player, not step to the previous episode.
+        memoryHistory.back();
+        expect(fullPath(memoryHistory)).toBe('/details?id=show1&serverId=s1');
+    });
+
+    it('does not navigate at all when the same item is shown again', async () => {
+        const { memoryHistory, appRouter } = createHarness([
+            '/details?id=show1&serverId=s1',
+            '/video?id=ep1&serverId=s1'
+        ]);
+
+        await appRouter.showVideoOsd({ Id: 'ep1', ServerId: 's1' });
+        expect(fullPath(memoryHistory)).toBe('/video?id=ep1&serverId=s1');
+        expect(memoryHistory.index).toBe(1);
+    });
+
+    it('back() routes home instead of hanging when there is no session history behind the page', async () => {
+        const { memoryHistory, appRouter } = createHarness(['/video?id=ep1&serverId=s1']);
+
+        // A permalink opened in a fresh tab: the session history holds only
+        // this page, so a pop would be a silent no-op and the router's
+        // pending promise would never settle.
+        expect(window.history.length).toBe(1);
+
+        await settleNavigation(appRouter.back());
+        expect(fullPath(memoryHistory)).toBe('/home');
+    });
+});

@@ -6,7 +6,7 @@ import { toBoolean } from '../../utils/string.ts';
 import { hide } from '../loading/loading.ts';
 import dom from '../../utils/dom';
 
-import { history } from 'RootAppRouter';
+import { appRouter } from '../router/appRouter';
 
 import './dialoghelper.scss';
 import '../../styles/scrollstyles.scss';
@@ -109,19 +109,20 @@ function DialogHashHandler(dlg, hash, resolve) {
         }
 
         if (isHistoryEnabled(dlg)) {
-            const state = history.location.state || {};
+            const routerHistory = appRouter.history;
+            const state = routerHistory.location.state || {};
             if (state.dialogs?.length > 0) {
                 if (state.dialogs[state.dialogs.length - 1] === hash) {
-                    unlisten = history.listen(finishClose);
-                    history.back();
+                    unlisten = routerHistory.listen(finishClose);
+                    routerHistory.back();
                 } else if (state.dialogs.includes(hash)) {
                     console.warn('[dialogHelper] dialog "%s" was closed, but is not the last dialog opened', hash);
 
-                    unlisten = history.listen(finishClose);
+                    unlisten = routerHistory.listen(finishClose);
 
                     // Remove the closed dialog hash from the history state
-                    history.replace(
-                        `${history.location.pathname}${history.location.search}`,
+                    routerHistory.replace(
+                        `${routerHistory.location.pathname}${routerHistory.location.search}`,
                         {
                             ...state,
                             dialogs: state.dialogs.filter(dialog => dialog !== hash)
@@ -177,20 +178,21 @@ function DialogHashHandler(dlg, hash, resolve) {
     animateDialogOpen(dlg);
 
     if (isHistoryEnabled(dlg)) {
-        const state = history.location.state || {};
+        const routerHistory = appRouter.history;
+        const state = routerHistory.location.state || {};
         const dialogs = state.dialogs || [];
         // Add new dialog to the list of open dialogs
         dialogs.push(hash);
 
-        history.push(
-            `${history.location.pathname}${history.location.search}`,
+        routerHistory.push(
+            `${routerHistory.location.pathname}${routerHistory.location.search}`,
             {
                 ...state,
                 dialogs
             }
         );
 
-        unlisten = history.listen(onHashChange);
+        unlisten = routerHistory.listen(onHashChange);
     } else {
         inputManager.on(dlg, onBackCommand);
     }

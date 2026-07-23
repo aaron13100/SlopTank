@@ -1,7 +1,6 @@
 import { CollectionType } from '@jellyfin/sdk/lib/generated-client/models/collection-type';
 
 import { setBackdropTransparency } from '../backdrop/backdrop';
-import globalize from '../../lib/globalize';
 import itemHelper from '../itemHelper';
 import loading from '../loading/loading';
 import alert from '../alert';
@@ -11,7 +10,6 @@ import { getItemQuery } from 'hooks/useItem';
 import { ServerConnections } from 'lib/jellyfin-apiclient';
 import { toApi } from 'utils/jellyfin-apiclient/compat';
 import { queryClient } from 'utils/query/queryClient';
-import { history } from 'RootAppRouter';
 
 /** Pages of "no return" (when "Go back" should behave differently, probably quitting the application). */
 const START_PAGE_PATHS = ['/home', '/login', '/selectserver'];
@@ -31,17 +29,23 @@ export const PUBLIC_PATHS = [
     '/wizarduser'
 ];
 
-class AppRouter {
+export class AppRouter {
     forcedLogoutMsg;
     msgTimeout;
     promiseShow;
     resolveOnNextShow;
+    /** @type {import('history').History|undefined} The history backing navigation. */
+    history;
+    #unlisten;
 
-    constructor() {
+    /**
+     * @param {import('history').History} [routerHistory] The history backing
+     * navigation. The app singleton is constructed without one and receives
+     * the real router history from the composition root (RootAppRouter) via
+     * initialize(); tests pass a memory history here directly.
+     */
+    constructor(routerHistory) {
         document.addEventListener('viewshow', () => this.onViewShow());
-
-        this.lastPath = history.location.pathname + history.location.search;
-        this.listen();
 
         // TODO: Can this baseRoute logic be simplified?
         this.baseRoute = window.location.href.split('?')[0].replace(this.#getRequestFile(), '');
@@ -50,28 +54,85 @@ class AppRouter {
         if (this.baseRoute.endsWith('/') && !this.baseRoute.endsWith('://')) {
             this.baseRoute = this.baseRoute.substring(0, this.baseRoute.length - 1);
         }
+
+        if (routerHistory) {
+            this.initialize(routerHistory);
+        }
+    }
+
+    /**
+     * Attaches the history that backs all navigation. Called once by the
+     * composition root after the router is created; navigation methods must
+     * not be used before then.
+     * @param {import('history').History} routerHistory
+     */
+    initialize(routerHistory) {
+        if (this.history === routerHistory) return;
+
+        this.#unlisten?.();
+        this.history = routerHistory;
+        this.lastPath = this.history.location.pathname + this.history.location.search;
+        this.#unlisten = this.listen();
     }
 
     ready() {
         return this.promiseShow || Promise.resolve();
     }
 
+    /**
+     * Whether there is an in-app history entry behind the current one.
+     * React-router tracks its entry index in history.state.idx; 0 means this
+     * is the first in-app entry, so a pop would leave the app or, when the
+     * browser marks the previous entry skippable, silently do nothing. Falls
+     * back to the session-history length when the router state is absent.
+     */
+    #hasInAppHistory() {
+        const routerIdx = window.history.state?.idx;
+        if (routerIdx != null) {
+            return routerIdx > 0;
+        }
+
+        return window.history.length > 1;
+    }
+
     async back() {
         if (this.promiseShow) await this.promiseShow;
 
+        // With no in-app history behind this page (e.g. a permalink opened
+        // in a fresh tab), a pop is a silent no-op: the history listener
+        // below would never fire, leaving promiseShow pending forever and
+        // wedging every later navigation behind it. Route home instead so
+        // "back" always leaves the page.
+        if (!this.#hasInAppHistory()) {
+            return this.goHome();
+        }
+
         this.promiseShow = new Promise((resolve) => {
-            const unlisten = history.listen(() => {
+            const unlisten = this.history.listen(() => {
                 unlisten();
                 this.promiseShow = null;
                 resolve();
             });
-            history.back();
+            this.history.back();
         });
 
         return this.promiseShow;
     }
 
     async show(path, options) {
+        return this.#navigate(path, options, false);
+    }
+
+    /**
+     * Navigates like show(), but replaces the current history entry instead
+     * of pushing a new one. Use for in-place transitions (such as the video
+     * player moving to the next episode) that must not grow the back stack.
+     */
+    async replace(path, options) {
+        return this.#navigate(path, options, true);
+    }
+
+    async #navigate(path, options, replace) {
         if (this.promiseShow) await this.promiseShow;
 
         // ensure the path does not start with '#' since the router adds this
@@ -90,8 +151,8 @@ class AppRouter {
         path = path.replace(this.baseUrl(), '');
 
         // can't use this with home right now due to the back menu
-        const currentFullPath = history.location.pathname + history.location.search;
-        if ((history.location.pathname === path || currentFullPath === path) && path !== '/home') {
+        const currentFullPath = this.history.location.pathname + this.history.location.search;
+        if ((this.history.location.pathname === path || currentFullPath === path) && path !== '/home') {
             loading.hide();
             return Promise.resolve();
         }
@@ -99,14 +160,20 @@ class AppRouter {
         this.promiseShow = new Promise((resolve) => {
             this.resolveOnNextShow = resolve;
             // Schedule a call to return the promise
-            setTimeout(() => history.push(path, options), 0);
+            setTimeout(() => {
+                if (replace) {
+                    this.history.replace(path, options);
+                } else {
+                    this.history.push(path, options);
+                }
+            }, 0);
         });
 
         return this.promiseShow;
     }
 
     listen() {
-        history.listen(({ location }) => {
+        return this.history.listen(({ location }) => {
             const normalizedPath = location.pathname.replace(/^!/, '');
             const fullPath = normalizedPath + location.search;
 
@@ -123,15 +190,23 @@ class AppRouter {
         return this.baseRoute;
     }
 
-    canGoBack(path = history.location.pathname) {
+    /**
+     * Whether the given page (current one by default) is a "no return" start
+     * page, where going back would mean leaving the application.
+     */
+    isStartPage(path = this.history.location.pathname) {
+        return START_PAGE_PATHS.includes(path);
+    }
+
+    canGoBack(path = this.history.location.pathname) {
         if (
             !document.querySelector('.dialogContainer')
-            && START_PAGE_PATHS.includes(path)
+            && this.isStartPage(path)
         ) {
             return false;
         }
 
-        return window.history.length > 1;
+        return this.#hasInAppHistory();
     }
 
     showItem(item, serverId, options) {
@@ -194,20 +269,6 @@ class AppRouter {
         }
 
         this.msgTimeout = setTimeout(this.onForcedLogoutMessageTimeout, 100);
-    }
-
-    onRequestFail(_e, data) {
-        const apiClient = this;
-
-        if (data.status === 403 && data.errorCode === 'ParentalControl') {
-            const isPublicPage = PUBLIC_PATHS.includes(history.location.pathname);
-
-            // Bounce to the login screen, but not if a password entry fails, obviously
-            if (!isPublicPage) {
-                appRouter.showForcedLogoutMessage(globalize.translate('AccessRestrictedTryAgainLater'));
-                appRouter.showLocalLogin(apiClient.serverId());
-            }
-        }
     }
 
     #getRequestFile() {
@@ -469,11 +530,19 @@ class AppRouter {
     }
 
     showVideoOsd(item) {
-        if (item && item.Id && item.ServerId) {
-            return this.show('video?id=' + item.Id + '&serverId=' + item.ServerId);
+        const path = item && item.Id && item.ServerId ?
+            'video?id=' + item.Id + '&serverId=' + item.ServerId :
+            'video';
+
+        // An item change while the player is already showing (next/previous
+        // episode, autoplay, queue jump) must not grow the history stack:
+        // replace the entry so Back always exits the player instead of
+        // stepping back through previously played episodes.
+        if (this.history.location.pathname === '/video') {
+            return this.replace(path);
         }
 
-        return this.show('video');
+        return this.show(path);
     }
 
     showSelectServer() {
@@ -515,7 +584,7 @@ class AppRouter {
 
 export const appRouter = new AppRouter();
 
-export const isLyricsPage = () => history.location.pathname.toLowerCase() === '/lyrics';
+export const isLyricsPage = () => appRouter.history.location.pathname.toLowerCase() === '/lyrics';
 
 window.Emby = window.Emby || {};
 window.Emby.Page = appRouter;
