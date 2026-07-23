@@ -58,7 +58,7 @@ describe('SlopTank GitHub Actions repository policy', () => {
             .filter(line => line.startsWith('  ') && !line.startsWith('    ') && line.endsWith(':'))
             .map(line => line.slice(2, -1));
 
-        expect(jobNames).toEqual([ 'quality_checks' ]);
+        expect(jobNames).toEqual([ 'quality_checks', 'product_identity' ]);
     });
 
     it('keeps the quality matrix limited to build, lint, type-check, and public smoke commands', () => {
@@ -70,10 +70,12 @@ describe('SlopTank GitHub Actions repository policy', () => {
 
         expect(commands).toEqual([
             'build:es-check',
+            'features',
+            'depcruise',
             'lint',
             'stylelint',
             'build:check',
-            'test'
+            'test:coverage'
         ]);
         expect(qualityChecksWorkflow).not.toMatch(
             /private-tests|hidden-tests|sloptank-tests/
