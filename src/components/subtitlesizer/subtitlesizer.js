@@ -29,11 +29,17 @@ export default class SubtitleSizer {
      * @param {Object} options.settings - User settings adapter
      * (getSubtitleAppearanceSettings / setSubtitleAppearanceSettings).
      * @param {Function} options.translate - String translation adapter.
+     * @param {Function} [options.onInteract] - Called on every adjustment, so
+     * the host can keep its controls awake while the user is working.
+     * @param {Function} [options.onClose] - Called once the overlay has torn
+     * itself down, so the owner never holds a reference to a dead overlay.
      */
     constructor(options) {
         this.player = options.player;
         this.settings = options.settings;
         this.translate = options.translate;
+        this.onInteract = options.onInteract;
+        this.onClose = options.onClose;
 
         const parent = document.createElement('div');
         document.body.appendChild(parent);
@@ -57,6 +63,9 @@ export default class SubtitleSizer {
         this.slider.addEventListener('change', this.onSliderChange);
         parent.querySelector('.subtitleSizer-closeButton')
             .addEventListener('click', this.onCloseClick);
+        // Capture phase: dismissing this overlay is what Escape means while it
+        // is open, so the key must not also reach the player's own handler.
+        document.addEventListener('keydown', this.onKeyDown, true);
         Events.on(this.player, 'subtitlerenderpathchange', this.onRenderPathChange);
 
         this.applyCapability();
@@ -66,15 +75,27 @@ export default class SubtitleSizer {
     onSliderInput = () => {
         this.updateValueLabel();
         this.beginPreview();
+        this.onInteract?.();
     };
 
     onSliderChange = () => {
         this.updateValueLabel();
         this.beginPreview();
         this.persist();
+        this.onInteract?.();
     };
 
     onCloseClick = () => {
+        this.destroy();
+    };
+
+    onKeyDown = event => {
+        if (event.key !== 'Escape' && event.key !== 'Back') {
+            return;
+        }
+
+        event.stopPropagation();
+        event.preventDefault();
         this.destroy();
     };
 
@@ -150,7 +171,8 @@ export default class SubtitleSizer {
 
     /**
      * Tear down the overlay: end the preview on the player it was opened
-     * with and remove the DOM. Idempotent.
+     * with, remove the DOM, and tell the owner it is gone (the overlay can
+     * close itself, so the owner cannot infer this). Idempotent.
      * @returns {void}
      */
     destroy() {
@@ -159,10 +181,12 @@ export default class SubtitleSizer {
         }
 
         Events.off(this.player, 'subtitlerenderpathchange', this.onRenderPathChange);
+        document.removeEventListener('keydown', this.onKeyDown, true);
         this.slider.removeEventListener('input', this.onSliderInput);
         this.slider.removeEventListener('change', this.onSliderChange);
         this.player.clearSubtitleAppearancePreview();
         this.element.remove();
         this.element = null;
+        this.onClose?.();
     }
 }

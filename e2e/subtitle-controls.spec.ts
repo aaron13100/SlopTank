@@ -1,4 +1,4 @@
-import { expect, login, test } from './fixtures';
+import { expect, login, onScreenState, test } from './fixtures';
 
 test.setTimeout(180_000);
 
@@ -36,6 +36,32 @@ async function openSizeOverlay(page: import('@playwright/test').Page) {
     await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
     await page.getByText('Subtitle Size', { exact: true }).click();
     await expect(page.locator('.subtitleSizerContainer')).toBeVisible();
+    // toBeVisible() alone passed while the control was laid out below the fold
+    // and no user could reach it; every open must land it on screen.
+    expect(await onScreenState(page, '.subtitleSizerContainer')).toMatchObject({
+        found: true, insideViewport: true, reachable: true
+    });
+}
+
+/**
+ * Drag the size slider with a real mouse press, the way a user does, rather
+ * than dispatching input events at the element.
+ * @param page - Page under test.
+ * @param fraction - Target position along the slider track, 0 to 1.
+ */
+async function dragSizeSliderTo(page: import('@playwright/test').Page, fraction: number) {
+    const track = await page.locator('.subtitleSizerSlider').boundingBox();
+    if (!track) throw new Error('subtitle size slider has no box to drag'); // allow-raw-error: e2e setup fast-fail, not production code
+    const y = track.y + track.height / 2;
+    await page.mouse.move(track.x + track.width * 0.5, y);
+    await page.mouse.down();
+    await page.mouse.move(track.x + track.width * fraction, y, { steps: 10 });
+    await page.mouse.up();
+}
+
+function sampleLineFontSize(page: import('@playwright/test').Page) {
+    return page.locator('.videoSubtitlesPreviewLine').evaluate(
+        el => parseFloat(getComputedStyle(el).fontSize));
 }
 
 async function setSizeSlider(page: import('@playwright/test').Page, percent: number) {
@@ -50,6 +76,67 @@ function previewFontSize(page: import('@playwright/test').Page) {
     return page.locator('.videoSubtitlesPreviewLine').evaluate(
         el => parseFloat(getComputedStyle(el).fontSize));
 }
+
+// @covers subtitle_controls.track_menu.sizer_is_on_screen_and_draggable
+test('the size control lands on screen and a real drag resizes what is shown', async ({ page, config }) => {
+    await login(page, config.username, config.password);
+    await startPlayback(page, config);
+
+    await openSizeOverlay(page);
+
+    // The user must be able to press the slider itself, not just have it exist.
+    expect(await onScreenState(page, '.subtitleSizerSlider')).toMatchObject({
+        found: true, insideViewport: true, reachable: true
+    });
+
+    // The control must not sit on top of the sample it is there to preview.
+    const overlap = await page.evaluate(() => {
+        const panel = document.querySelector('.subtitleSizerContainer')?.getBoundingClientRect();
+        const sample = document.querySelector('.videoSubtitlesPreviewLine')?.getBoundingClientRect();
+        if (!panel || !sample) return null;
+        return !(panel.bottom <= sample.top || panel.top >= sample.bottom);
+    });
+    expect(overlap).toBe(false);
+
+    const before = await sampleLineFontSize(page);
+    await dragSizeSliderTo(page, 1);
+    await expect.poll(() => sampleLineFontSize(page)).toBeGreaterThan(before);
+
+    await dragSizeSliderTo(page, 0);
+    await expect.poll(() => sampleLineFontSize(page)).toBeLessThan(before);
+});
+
+// @covers subtitle_controls.track_menu.sizer_dismissal_clears_sample_line
+test('the sample line goes away however the user dismisses the size control', async ({ page, config }) => {
+    await login(page, config.username, config.password);
+    const video = await startPlayback(page, config);
+    const sampleLine = page.locator('.videoSubtitlesPreviewLine');
+
+    // 1. Escape closes it and takes the sample line with it.
+    await openSizeOverlay(page);
+    await expect(sampleLine).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(sampleLine).toHaveCount(0);
+    await expect(page.locator('.subtitleSizerContainer')).toHaveCount(0);
+
+    // 2. Pressing the video dismisses it -- and must not also pause the movie,
+    //    since dismissing was the whole point of the press.
+    await openSizeOverlay(page);
+    const viewport = page.viewportSize()!;
+    await page.mouse.click(viewport.width / 2, viewport.height * 0.3);
+    await expect(sampleLine).toHaveCount(0);
+    await page.waitForTimeout(500);
+    expect(await video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
+
+    // 3. The reported flow: open the size control, then turn subtitles off.
+    //    Nothing about subtitles may be left on screen afterwards.
+    await openSizeOverlay(page);
+    await openOsd(page);
+    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await page.locator('.actionSheetMenuItem', { hasText: 'Off' }).first().click();
+    await expect(sampleLine).toHaveCount(0);
+    await expect(page.locator('.videoSubtitlesInner')).toHaveCount(0);
+});
 
 // @covers subtitle_controls.track_menu.open_sizer.live_preview_persists
 test('subtitle size slider previews live at the subtitle position and persists', async ({ page, config }) => {
@@ -152,6 +239,11 @@ test('subtitle offset explains itself without a subtitle and shifts cues with on
     await page.locator('.videoOsdBottom-maincontrols .btnVideoOsdSettings').click();
     await offsetItem.click();
     await expect(page.locator('.subtitleSyncContainer')).toBeVisible();
+    // Same body-appended overlay shape as the size control: it must land on
+    // screen, not wherever page flow happens to put it.
+    expect(await onScreenState(page, '.subtitleSyncContainer')).toMatchObject({
+        found: true, insideViewport: true, reachable: true
+    });
 
     // Shifting by +8s must change which cue text is displayed at the paused
     // position (subtitles appear earlier), and 0 must restore it.

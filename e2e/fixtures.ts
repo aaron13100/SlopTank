@@ -32,6 +32,60 @@ export const test = base.extend<{ config: E2eConfig }>({
     }
 });
 
+export interface OnScreenState {
+    found: boolean;
+    insideViewport: boolean;
+    reachable: boolean;
+    rect: { x: number, y: number, width: number, height: number } | null;
+    viewport: { width: number, height: number };
+    topElementAtCenter: string | null;
+}
+
+/**
+ * Report whether an element is really on screen for a user: fully inside the
+ * viewport AND the element the browser actually hits at its own center.
+ *
+ * Playwright's toBeVisible() only requires a non-empty box, so it passes for an
+ * overlay rendered below the fold or buried under another layer. That gap
+ * shipped a subtitle-size slider the user could never see or click (it was laid
+ * out at y = viewport height). Assert with this for anything the user must be
+ * able to both see and press.
+ *
+ * @param page - Page under test.
+ * @param selector - CSS selector for the element the user must be able to use.
+ * @returns Placement facts, including diagnostics for a failure message.
+ */
+export async function onScreenState(page: import('@playwright/test').Page, selector: string): Promise<OnScreenState> {
+    return page.evaluate((sel: string) => {
+        const viewport = { width: window.innerWidth, height: window.innerHeight };
+        const el = document.querySelector(sel);
+        if (!el) {
+            return { found: false, insideViewport: false, reachable: false, rect: null, viewport, topElementAtCenter: null };
+        }
+
+        const box = el.getBoundingClientRect();
+        const rect = { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) };
+        const insideViewport = box.width > 0 && box.height > 0
+            && box.top >= 0 && box.left >= 0
+            && box.bottom <= viewport.height && box.right <= viewport.width;
+
+        const centerX = box.x + box.width / 2;
+        const centerY = box.y + box.height / 2;
+        const hit = insideViewport ? document.elementFromPoint(centerX, centerY) : null;
+        const hitClasses = hit ? (hit.className || '').toString().trim().replace(/\s+/g, '.') : '';
+        const topElementAtCenter = hit ? `${hit.tagName.toLowerCase()}.${hitClasses}` : null;
+
+        return {
+            found: true,
+            insideViewport,
+            reachable: !!hit && (hit === el || el.contains(hit)),
+            rect,
+            viewport,
+            topElementAtCenter
+        };
+    }, selector);
+}
+
 export async function login(page: import('@playwright/test').Page, username: string, password: string) {
     await page.goto('/web/#/login');
 

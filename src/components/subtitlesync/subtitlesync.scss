@@ -1,6 +1,7 @@
+@use '../../styles/mixins' as *;
+
 .subtitleSync {
-    position: absolute;
-    width: 100%;
+    @include player-overlay-slot;
 }
 
 .subtitleSyncContainer {

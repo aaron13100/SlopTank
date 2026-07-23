@@ -91,6 +91,7 @@ function createHarness({ selectedIds, textSize = '', playerKind = 'local' }) {
         }
     };
     const toasts = [];
+    const toggleSubtitleSyncActions = [];
     let resetIdleCount = 0;
     let toggleSubtitleSyncCount = 0;
     const options = {
@@ -103,8 +104,9 @@ function createHarness({ selectedIds, textSize = '', playerKind = 'local' }) {
         },
         settings,
         showToast: message => toasts.push(message),
-        toggleSubtitleSync: () => {
+        toggleSubtitleSync: action => {
             toggleSubtitleSyncCount++;
+            toggleSubtitleSyncActions.push(action);
         },
         translate: key => key
     };
@@ -118,7 +120,8 @@ function createHarness({ selectedIds, textSize = '', playerKind = 'local' }) {
         playback,
         player,
         settings,
-        toasts
+        toasts,
+        toggleSubtitleSyncActions
     };
 }
 
@@ -127,7 +130,9 @@ const sizerContainer = () => document.querySelector('.subtitleSizerContainer');
 describe('SubtitleTrackMenu', () => {
     afterEach(() => {
         cleanup();
-        document.querySelectorAll('.subtitleSizer').forEach(el => el.parentNode.remove());
+        document.querySelectorAll('.subtitleSizer').forEach(el => {
+            el.parentNode.remove();
+        });
     });
 
     // @covers subtitle_controls.track_menu.open_sizer.live_preview_persists
@@ -160,6 +165,47 @@ describe('SubtitleTrackMenu', () => {
         fireEvent.click(document.querySelector('.subtitleSizer-closeButton'));
         expect(harness.player.activePreview).toBeNull();
         expect(sizerContainer()).toBeNull();
+    });
+
+    // @covers subtitle_controls.track_menu.sizer_dismissal_clears_sample_line
+    it('dismisses on Escape, taking the live preview with it', async () => {
+        const harness = createHarness({ selectedIds: [ 'subtitlesize' ] });
+        render(<MenuHarness options={harness.options} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }));
+        await waitFor(() => expect(sizerContainer()).toBeTruthy());
+        expect(harness.player.activePreview).not.toBeNull();
+
+        fireEvent.keyDown(document, { key: 'Escape' });
+
+        expect(sizerContainer()).toBeNull();
+        expect(harness.player.activePreview).toBeNull();
+    });
+
+    it('reports an open overlay so the OSD can stay awake, and stops after dismissal', async () => {
+        let menu;
+        const harness = createHarness({ selectedIds: [ 'subtitlesize' ] });
+        harness.options.onMenu = m => {
+            menu = m;
+        };
+        render(<MenuHarness options={harness.options} />);
+
+        expect(menu.hasOpenOverlay()).toBe(false);
+        fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }));
+        await waitFor(() => expect(menu.hasOpenOverlay()).toBe(true));
+
+        fireEvent.keyDown(document, { key: 'Escape' });
+        expect(menu.hasOpenOverlay()).toBe(false);
+    });
+
+    it('hides the offset overlay when opening the size overlay so they cannot stack', async () => {
+        const harness = createHarness({ selectedIds: [ 'subtitlesize' ] });
+        render(<MenuHarness options={harness.options} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }));
+        await waitFor(() => expect(sizerContainer()).toBeTruthy());
+
+        expect(harness.toggleSubtitleSyncActions).toContain('forceToHide');
     });
 
     // @covers subtitle_controls.track_menu.reopen_replaces_overlay

@@ -12,6 +12,38 @@
 }
 
 /**
+ * Anchors an overlay that floats over the video player (subtitle size, subtitle
+ * offset) to a fixed slot below the OSD header.
+ *
+ * These overlays are appended to `document.body`, so `position: absolute` with
+ * no offsets laid them out at their static flow position -- the end of the
+ * page, past the bottom of the viewport -- where the user could neither see nor
+ * press them. Anchoring is the overlay's own responsibility, never a
+ * side effect of where in the document it happens to be appended.
+ *
+ * The slot is at the top so the subtitle line these controls preview, which
+ * renders against the bottom of the video, stays visible at every size.
+ */
+@mixin player-overlay-slot {
+    position: fixed;
+    top: 8em;
+    left: 0;
+    right: 0;
+
+    // Above the video, its subtitles and the OSD chrome, but below the app's
+    // dialog tier (999998+) so action sheets still open over it.
+    z-index: 1200;
+
+    // This band spans the full width, so only the panel itself may take
+    // presses; otherwise it becomes an invisible dead strip across the video.
+    pointer-events: none;
+
+    > * {
+        pointer-events: auto;
+    }
+}
+
+/**
  * Helper mixin to add properties using css variables with fallback values.
  */
 @mixin var($property, $variable, $default, $important: false) {

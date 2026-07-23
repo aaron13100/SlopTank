@@ -67,12 +67,32 @@ export default class SubtitleTrackMenu {
     };
 
     /**
+     * The overlay can close itself (its own button, Escape), so its owner
+     * learns about it here instead of holding a reference to a dead overlay.
+     * Resetting idle hands the OSD back its normal auto-hide behavior.
+     */
+    onSizerClosed = () => {
+        this.sizer = null;
+        this.resetIdle();
+    };
+
+    /**
      * Remove the DOM listener owned by this controller and close any overlay.
      * @returns {void}
      */
     destroy() {
         this.closeOverlays();
         this.button.removeEventListener('click', this.onClick);
+    }
+
+    /**
+     * Whether an in-player overlay owned by this menu is currently on screen.
+     * The OSD uses this to stay awake while the user is adjusting, and to route
+     * a press outside the overlay to a dismissal.
+     * @returns {boolean} True while the size overlay is open.
+     */
+    hasOpenOverlay() {
+        return !!this.sizer;
     }
 
     /**
@@ -235,10 +255,14 @@ export default class SubtitleTrackMenu {
         }
 
         this.closeOverlays();
+        // Both overlays occupy the same slot over the video; never stack them.
+        this.toggleSubtitleSync('forceToHide');
         this.sizer = new SubtitleSizer({
             player,
             settings: this.settings,
-            translate: this.translate
+            translate: this.translate,
+            onInteract: this.resetIdle,
+            onClose: this.onSizerClosed
         });
     }
 

@@ -1,6 +1,7 @@
+@use '../../styles/mixins' as *;
+
 .subtitleSizer {
-    position: absolute;
-    width: 100%;
+    @include player-overlay-slot;
 }
 
 .subtitleSizerContainer {

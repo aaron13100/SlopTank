@@ -382,12 +382,39 @@ export default function (view) {
 
     function resetIdle() {
         // Keep a recovery control visible while playback is paused (including
-        // when a browser blocks autoplay after loading a permalink).
+        // when a browser blocks autoplay after loading a permalink), and while
+        // an in-player overlay is open: its controls belong to the OSD, so
+        // hiding the OSD out from under the user mid-adjustment is wrong.
         if (currentVisibleMenu && !mouseIsDown && !getOpenedDialog()
+                && !subtitleTrackMenu.hasOpenOverlay()
                 && currentPlayer && !playbackManager.paused(currentPlayer)) {
             startOsdHideTimer();
         } else {
             stopOsdHideTimer();
+        }
+    }
+
+    /**
+     * Route a press outside an open in-player overlay to dismissing it, so the
+     * overlay (and the live subtitle preview it drives) can never be stranded
+     * on screen by any interaction other than its own close button.
+     * @param {PointerEvent} e - Press anywhere in the document.
+     * @returns {void}
+     */
+    function onOverlayDismissPointerDown(e) {
+        if (!subtitleTrackMenu.hasOpenOverlay()
+                || (e.target && dom.parentWithClass(e.target, 'subtitleSizer'))) {
+            return;
+        }
+
+        subtitleTrackMenu.closeOverlays();
+
+        // A press on the bare video would otherwise toggle playback, but
+        // dismissing the overlay was the entire intent of that press. Presses
+        // on the OSD chrome fall through, so its buttons still act on one press.
+        if (!dom.parentWithClass(e.target, ['videoOsdBottom', 'skinHeader', 'upNextContainer'])) {
+            e.stopPropagation();
+            showOsd();
         }
     }
 
@@ -1075,12 +1102,13 @@ export default function (view) {
 
             // Never a silent no-op: name the reason the current subtitle
             // cannot be shifted.
-            const renderPath = typeof player.getSubtitleRenderingInfo === 'function'
-                ? player.getSubtitleRenderingInfo().path
-                : null;
-            const messageKey = renderPath === 'burned' || (renderPath === null && (playbackManager.getSubtitleStreamIndex(player) ?? -1) !== -1)
-                ? 'SubtitleOffsetUnavailableBurnedIn'
-                : 'SubtitleOffsetEnableSubtitleFirst';
+            const renderPath = typeof player.getSubtitleRenderingInfo === 'function' ?
+                player.getSubtitleRenderingInfo().path :
+                null;
+            const hasSubtitleOn = (playbackManager.getSubtitleStreamIndex(player) ?? -1) !== -1;
+            const messageKey = renderPath === 'burned' || (renderPath === null && hasSubtitleOn) ?
+                'SubtitleOffsetUnavailableBurnedIn' :
+                'SubtitleOffsetEnableSubtitleFirst';
             import('../../../components/toast/toast').then(({ default: toast }) => {
                 toast(globalize.translate(messageKey));
             });
@@ -1151,9 +1179,10 @@ export default function (view) {
         const player = currentPlayer;
         if (subtitleSyncOverlay) {
             subtitleSyncOverlay.toggle(action);
-        } else if (player) {
+        } else if (player && !action) {
             // Construct AND toggle: the overlay is created hidden, so a
             // first click that only constructed it would be a silent no-op.
+            // A hide request never builds one; there is nothing to hide.
             subtitleSyncOverlay = new SubtitleSync(player);
             subtitleSyncOverlay.toggle(action);
         }
@@ -1682,6 +1711,10 @@ export default function (view) {
             });
             document.addEventListener('wheel', onWheel);
             /* eslint-disable-next-line compat/compat */
+            dom.addEventListener(document, window.PointerEvent ? 'pointerdown' : 'mousedown', onOverlayDismissPointerDown, {
+                capture: true
+            });
+            /* eslint-disable-next-line compat/compat */
             dom.addEventListener(window, window.PointerEvent ? 'pointerdown' : 'mousedown', onWindowMouseDown, {
                 capture: true,
                 passive: true
@@ -1727,6 +1760,10 @@ export default function (view) {
             passive: true
         });
         document.removeEventListener('wheel', onWheel);
+        /* eslint-disable-next-line compat/compat */
+        dom.removeEventListener(document, window.PointerEvent ? 'pointerdown' : 'mousedown', onOverlayDismissPointerDown, {
+            capture: true
+        });
         /* eslint-disable-next-line compat/compat */
         dom.removeEventListener(window, window.PointerEvent ? 'pointerdown' : 'mousedown', onWindowMouseDown, {
             capture: true,

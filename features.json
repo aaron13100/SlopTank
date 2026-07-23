@@ -172,6 +172,17 @@
           "type": "unhappy",
           "failureClass": "domain",
           "requiredAssertions": ["toast_shown", "no_settings_saved"]
+        },
+        {
+          "id": "subtitle_controls.track_menu.sizer_is_on_screen_and_draggable",
+          "type": "happy",
+          "requiredAssertions": ["overlay_on_screen_and_reachable", "real_drag_changes_rendered_size"]
+        },
+        {
+          "id": "subtitle_controls.track_menu.sizer_dismissal_clears_sample_line",
+          "type": "unhappy",
+          "failureClass": "domain",
+          "requiredAssertions": ["sample_line_removed_on_every_dismissal", "dismissal_does_not_pause_playback"]
         }
       ]
     },
