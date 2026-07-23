@@ -38,6 +38,7 @@ describe('appRouter video OSD navigation', () => {
         return new Promise((resolve) => setTimeout(resolve, 0));
     });
 
+    // @covers video.next_episode_back.enter_player.pushes_history_entry
     it('pushes a history entry when entering the player from another page', async () => {
         const { memoryHistory, appRouter } = createHarness(['/details?id=show1&serverId=s1']);
 
@@ -50,6 +51,7 @@ describe('appRouter video OSD navigation', () => {
         expect(fullPath(memoryHistory)).toBe('/details?id=show1&serverId=s1');
     });
 
+    // @covers video.next_episode_back.next_episode.replaces_history_entry
     it('replaces the player entry on an in-player item change so Back exits the player', async () => {
         const { memoryHistory, appRouter } = createHarness([
             '/details?id=show1&serverId=s1',
@@ -66,6 +68,7 @@ describe('appRouter video OSD navigation', () => {
         expect(fullPath(memoryHistory)).toBe('/details?id=show1&serverId=s1');
     });
 
+    // @covers video.next_episode_back.same_item_reshow.no_op
     it('does not navigate at all when the same item is shown again', async () => {
         const { memoryHistory, appRouter } = createHarness([
             '/details?id=show1&serverId=s1',
@@ -77,6 +80,7 @@ describe('appRouter video OSD navigation', () => {
         expect(memoryHistory.index).toBe(1);
     });
 
+    // @covers video.permalink.fresh_tab.no_history_falls_back_home
     it('back() routes home instead of hanging when there is no session history behind the page', async () => {
         const { memoryHistory, appRouter } = createHarness(['/video?id=ep1&serverId=s1']);
 
@@ -87,5 +91,42 @@ describe('appRouter video OSD navigation', () => {
 
         await settleNavigation(appRouter.back());
         expect(fullPath(memoryHistory)).toBe('/home');
+    });
+});
+
+describe('appRouter pretty permalink minting (opt-in only)', () => {
+    it('getRouteUrl ignores a mintable external id by default, for ordinary in-app navigation', () => {
+        const { appRouter } = createHarness(['/home']);
+        const item = { Id: 'item1', ServerId: 's1', Type: 'Movie', ProviderIds: { Imdb: 'tt0062622' } };
+
+        expect(appRouter.getRouteUrl(item)).toBe('#/details?id=item1&serverId=s1');
+    });
+
+    it('getRouteUrl mints a pretty info permalink when options.permalink is set and an external id is already loaded', () => {
+        const { appRouter } = createHarness(['/home']);
+        const item = { Id: 'item1', ServerId: 's1', Type: 'Movie', ProviderIds: { Imdb: 'tt0062622' } };
+
+        expect(appRouter.getRouteUrl(item, { permalink: true })).toBe('#/p/tt0062622');
+    });
+
+    it('getRouteUrl falls back to the GUID route when options.permalink is set but no external id is loaded', () => {
+        const { appRouter } = createHarness(['/home']);
+        const item = { Id: 'item1', ServerId: 's1', Type: 'Movie' };
+
+        expect(appRouter.getRouteUrl(item, { permalink: true })).toBe('#/details?id=item1&serverId=s1');
+    });
+
+    it('getPlaybackPermalinkUrl mints a pretty watch permalink for an eligible item', () => {
+        const { appRouter } = createHarness(['/home']);
+        const item = { Id: 'item1', ServerId: 's1', Type: 'Movie', ProviderIds: { Imdb: 'tt0062622' } };
+
+        expect(appRouter.getPlaybackPermalinkUrl(item)).toBe('#/w/tt0062622');
+    });
+
+    it('getPlaybackPermalinkUrl returns null for a local item or one with no external id', () => {
+        const { appRouter } = createHarness(['/home']);
+
+        expect(appRouter.getPlaybackPermalinkUrl({ Id: 'local123', Type: 'Movie', ProviderIds: { Imdb: 'tt1' } })).toBeNull();
+        expect(appRouter.getPlaybackPermalinkUrl({ Id: 'item1', ServerId: 's1', Type: 'Movie' })).toBeNull();
     });
 });

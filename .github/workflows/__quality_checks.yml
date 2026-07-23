@@ -19,10 +19,11 @@ jobs:
       matrix:
         command:
           - build:es-check
+          - features
           - lint
           - stylelint
           - build:check
-          - test
+          - test:coverage
 
     steps:
       - name: Checkout ⬇️
@@ -117,6 +118,26 @@ jobs:
             '1' '00:01:34,000 --> 00:01:38,000' 'First CI subtitle cue' '' \
             '2' '00:01:42,000 --> 00:01:46,000' 'Second CI subtitle cue' \
             > "$media_dir/ci-e2e-fixture.en.srt"
+          # Dual-audio, 3-chapter fixture for e2e/player-controls.spec.ts: the
+          # audio track menu needs a second real track to switch to, and the
+          # chapter buttons/seek-bar markers need real chapter boundaries.
+          printf '%s\n' \
+            ';FFMETADATA1' \
+            '[CHAPTER]' 'TIMEBASE=1/1000' 'START=0' 'END=30000' 'title=Chapter 1' \
+            '[CHAPTER]' 'TIMEBASE=1/1000' 'START=30000' 'END=60000' 'title=Chapter 2' \
+            '[CHAPTER]' 'TIMEBASE=1/1000' 'START=60000' 'END=120000' 'title=Chapter 3' \
+            > "$media_dir/ci-e2e-controls-chapters.txt"
+          ffmpeg -hide_banner -loglevel error \
+            -f lavfi -i "color=c=0x071018:size=160x90:rate=2:duration=120" \
+            -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=120" \
+            -f lavfi -i "sine=frequency=880:sample_rate=48000:duration=120" \
+            -i "$media_dir/ci-e2e-controls-chapters.txt" \
+            -map 0:v -map 1:a -map 2:a -map_metadata 3 \
+            -c:v libx264 -preset ultrafast -crf 35 -g 8 -pix_fmt yuv420p \
+            -c:a aac -b:a 96k -movflags +faststart -shortest \
+            -metadata:s:a:0 title="English" -metadata:s:a:0 language=eng \
+            -metadata:s:a:1 title="Japanese" -metadata:s:a:1 language=jpn \
+            "$media_dir/ci-e2e-controls.mp4"
           # A sibling of media_dir, not nested inside it: Jellyfin's movies
           # library recurses through media_dir, so a TV folder nested inside
           # it gets claimed as plain Movie items instead of Series/Episodes.
@@ -165,6 +186,7 @@ jobs:
             --password sloptank-ci-password \
             --item-name ci-e2e-fixture \
             --transcode-item-name ci-e2e-transcode \
+            --controls-item-name ci-e2e-controls \
             --series-name ci-e2e-show \
             --max-attempts 180 \
             --poll-interval-ms 1000 \

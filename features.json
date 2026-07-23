@@ -1,0 +1,319 @@
+{
+  "features": [
+    {
+      "id": "video.permalink",
+      "title": "Durable video permalink URL",
+      "description": "The video playback URL becomes a durable, shareable link that survives a reload and resumes playback instead of bouncing home.",
+      "owner": "web-client",
+      "kind": "user-action",
+      "files": ["src/components/router/appRouter.js", "src/controllers/playback/video/index.js"],
+      "added": "2026-07-23",
+      "paths": [
+        {
+          "id": "video.permalink.reload.resumes_playback",
+          "type": "happy",
+          "requiredAssertions": ["url_contains_item_id", "playback_resumes_after_reload"]
+        },
+        {
+          "id": "video.permalink.autoplay_blocked.recovers_to_paused_ready",
+          "type": "unhappy",
+          "failureClass": "permission",
+          "requiredAssertions": ["video_ready_paused", "play_button_visible"]
+        },
+        {
+          "id": "video.permalink.fresh_tab.no_history_falls_back_home",
+          "type": "unhappy",
+          "failureClass": "not_found",
+          "requiredAssertions": ["routes_home_instead_of_hanging"]
+        }
+      ]
+    },
+    {
+      "id": "video.next_episode_back",
+      "title": "Next episode then Back player navigation",
+      "description": "Advancing to the next episode in-player and pressing Back exits to the launching page instead of stepping back through played episodes.",
+      "owner": "web-client",
+      "kind": "user-action",
+      "files": ["src/components/router/appRouter.js"],
+      "added": "2026-07-23",
+      "paths": [
+        {
+          "id": "video.next_episode_back.enter_player.pushes_history_entry",
+          "type": "happy",
+          "requiredAssertions": ["history_entry_pushed"]
+        },
+        {
+          "id": "video.next_episode_back.next_episode.replaces_history_entry",
+          "type": "happy",
+          "requiredAssertions": ["history_index_unchanged", "back_exits_to_launch_page"]
+        },
+        {
+          "id": "video.next_episode_back.same_item_reshow.no_op",
+          "type": "unhappy",
+          "failureClass": "domain",
+          "requiredAssertions": ["no_duplicate_navigation"]
+        },
+        {
+          "id": "video.next_episode_back.playback_ends_no_next_item.exits_home",
+          "type": "unhappy",
+          "failureClass": "not_found",
+          "requiredAssertions": ["routes_home_on_playback_end"]
+        }
+      ]
+    },
+    {
+      "id": "playback.error_recovery",
+      "title": "Fatal HLS network error recovery during playback",
+      "description": "When HLS segment loading hits a fatal network error, the player retries with a bounded budget and surfaces an actionable error instead of freezing silently.",
+      "owner": "web-client",
+      "kind": "user-action",
+      "files": ["src/components/htmlMediaHelper.js"],
+      "added": "2026-07-23",
+      "paths": [
+        {
+          "id": "playback.error_recovery.transient_error.retries_and_recovers",
+          "type": "happy",
+          "requiredAssertions": ["no_reject_on_single_transient_error"]
+        },
+        {
+          "id": "playback.error_recovery.progress_resets_retry_budget",
+          "type": "happy",
+          "requiredAssertions": ["retry_budget_resets_on_frag_buffered"]
+        },
+        {
+          "id": "playback.error_recovery.hung_server_at_startup.gives_up_and_rejects",
+          "type": "unhappy",
+          "failureClass": "network",
+          "requiredAssertions": ["rejects_with_network_error_once"]
+        },
+        {
+          "id": "playback.error_recovery.hung_server_steady_state.surfaces_error",
+          "type": "unhappy",
+          "failureClass": "timeout",
+          "requiredAssertions": ["error_event_surfaced_once"]
+        }
+      ]
+    },
+    {
+      "id": "audio_transcode.resume",
+      "title": "Resume playback of an audio-transcode item",
+      "description": "Resuming an item whose audio requires transcoding from a mid-file position starts playback and keeps it advancing instead of freezing on one frame.",
+      "owner": "web-client",
+      "kind": "user-action",
+      "files": ["src/components/htmlMediaHelper.js", "e2e/audio-transcode-resume.spec.ts"],
+      "added": "2026-07-23",
+      "paths": [
+        {
+          "id": "audio_transcode.resume.mid_file_position.advances_without_freezing",
+          "type": "happy",
+          "requiredAssertions": ["current_time_advances"]
+        },
+        {
+          "id": "audio_transcode.resume.hung_segment_at_startup.retries_then_surfaces",
+          "type": "unhappy",
+          "failureClass": "network",
+          "requiredAssertions": ["rejects_with_network_error_once"]
+        },
+        {
+          "id": "audio_transcode.resume.steady_state_stall.surfaces_instead_of_freezing",
+          "type": "unhappy",
+          "failureClass": "timeout",
+          "requiredAssertions": ["error_event_surfaced_once"]
+        }
+      ]
+    },
+    {
+      "id": "subtitle_controls.track_menu",
+      "title": "Subtitle track menu: live size overlay and offset sync",
+      "description": "The subtitle track menu opens a live-preview size control and an offset sync control, with honest fallbacks for players that cannot support them directly.",
+      "owner": "web-client",
+      "kind": "user-action",
+      "files": [
+        "src/controllers/playback/video/SubtitleTrackMenu.js",
+        "src/components/subtitlesizer/subtitlesizer.js",
+        "src/components/subtitlesync/subtitlesync.js"
+      ],
+      "added": "2026-07-23",
+      "paths": [
+        {
+          "id": "subtitle_controls.track_menu.open_sizer.live_preview_persists",
+          "type": "happy",
+          "requiredAssertions": ["preview_applied_live", "choice_persisted"]
+        },
+        {
+          "id": "subtitle_controls.track_menu.reopen_replaces_overlay",
+          "type": "happy",
+          "requiredAssertions": ["previous_overlay_closed"]
+        },
+        {
+          "id": "subtitle_controls.track_menu.sizer_applies_to_rendered_cues",
+          "type": "happy",
+          "requiredAssertions": ["rendered_cue_font_size_changes"]
+        },
+        {
+          "id": "subtitle_controls.track_menu.offset_shifts_displayed_cue",
+          "type": "happy",
+          "requiredAssertions": ["displayed_cue_text_changes"]
+        },
+        {
+          "id": "subtitle_controls.track_menu.cast_player.presets_fallback",
+          "type": "unhappy",
+          "failureClass": "not_found",
+          "requiredAssertions": ["preset_list_shown", "toast_shown"]
+        },
+        {
+          "id": "subtitle_controls.track_menu.no_subtitle_enabled.offset_explains_itself",
+          "type": "unhappy",
+          "failureClass": "validation",
+          "requiredAssertions": ["toast_explains_precondition"]
+        },
+        {
+          "id": "subtitle_controls.track_menu.unsupported_player.explains_toast",
+          "type": "unhappy",
+          "failureClass": "domain",
+          "requiredAssertions": ["toast_shown", "no_settings_saved"]
+        }
+      ]
+    },
+    {
+      "id": "subtitle_controls.appearance_sizing",
+      "title": "Subtitle appearance sizing calculation",
+      "description": "Computes the rendered subtitle font size from a saved preset, a saved numeric multiplier, or the observed video height.",
+      "owner": "web-client",
+      "kind": "read-only",
+      "files": ["src/components/subtitlesettings/subtitleappearancehelper.js"],
+      "added": "2026-07-23",
+      "paths": [
+        {
+          "id": "subtitle_controls.appearance_sizing.proportional_default",
+          "type": "happy",
+          "requiredAssertions": ["defaults_to_1x_multiplier"]
+        },
+        {
+          "id": "subtitle_controls.appearance_sizing.preset_multiplier_map",
+          "type": "happy",
+          "requiredAssertions": ["preset_maps_to_multiplier"]
+        },
+        {
+          "id": "subtitle_controls.appearance_sizing.numeric_multiplier_parse",
+          "type": "happy",
+          "requiredAssertions": ["numeric_multiplier_used_directly"]
+        },
+        {
+          "id": "subtitle_controls.appearance_sizing.video_height_proportional_size",
+          "type": "happy",
+          "requiredAssertions": ["font_size_proportional_to_height"]
+        },
+        {
+          "id": "subtitle_controls.appearance_sizing.out_of_range_multiplier_clamped",
+          "type": "unhappy",
+          "failureClass": "validation",
+          "requiredAssertions": ["multiplier_clamped_25_to_200"]
+        },
+        {
+          "id": "subtitle_controls.appearance_sizing.non_finite_value_falls_back",
+          "type": "unhappy",
+          "failureClass": "validation",
+          "requiredAssertions": ["falls_back_to_1x"]
+        },
+        {
+          "id": "subtitle_controls.appearance_sizing.unusable_video_height_rejected",
+          "type": "unhappy",
+          "failureClass": "validation",
+          "requiredAssertions": ["returns_null"]
+        }
+      ]
+    },
+    {
+      "id": "media_segments.skip",
+      "title": "Find current media segment (intro/credits/recap/commercial) for skip",
+      "description": "Determines whether the current playback position falls inside a media segment (intro, credits, recap, commercial, preview) so the skip control can appear.",
+      "owner": "web-client",
+      "kind": "read-only",
+      "files": ["src/apps/stable/features/playback/utils/mediaSegments.ts"],
+      "added": "2026-07-23",
+      "paths": [
+        {
+          "id": "media_segments.skip.find_current_segment.in_segment",
+          "type": "happy",
+          "requiredAssertions": ["returns_matching_segment"]
+        },
+        {
+          "id": "media_segments.skip.find_current_segment.no_segment_at_position",
+          "type": "happy",
+          "requiredAssertions": ["returns_undefined"]
+        }
+      ]
+    },
+    {
+      "id": "remote_play_menu",
+      "title": "Remote play (cast) target menu",
+      "description": "The remote-play menu lists discovered cast targets, and explains itself instead of showing a blank menu when the cast plugin is unsupported or no devices are found.",
+      "owner": "web-client",
+      "kind": "user-action",
+      "files": [
+        "src/apps/experimental/components/AppToolbar/menus/RemotePlayMenu.tsx",
+        "src/apps/experimental/components/AppToolbar/menus/remotePlayMenuState.ts"
+      ],
+      "added": "2026-07-23",
+      "paths": [
+        {
+          "id": "remote_play_menu.discovery.lists_available_targets",
+          "type": "happy",
+          "requiredAssertions": ["target_names_visible"]
+        },
+        {
+          "id": "remote_play_menu.discovery_in_progress.no_premature_empty_menu",
+          "type": "happy",
+          "requiredAssertions": ["no_empty_menu_before_discovery_completes"]
+        },
+        {
+          "id": "remote_play_menu.plugin_unloaded.warns_unsupported",
+          "type": "unhappy",
+          "failureClass": "domain",
+          "requiredAssertions": ["unsupported_message_visible"]
+        },
+        {
+          "id": "remote_play_menu.discovery_empty.tells_user_no_devices",
+          "type": "unhappy",
+          "failureClass": "not_found",
+          "requiredAssertions": ["no_devices_message_visible"]
+        }
+      ]
+    },
+    {
+      "id": "e2e_ci_provisioning",
+      "title": "CI server provisioning for the Playwright e2e suite",
+      "description": "Bootstraps a disposable Jellyfin server for CI (admin user, libraries, fixtures) and emits the environment variables the Playwright suite needs, failing visibly instead of hanging when the server misbehaves.",
+      "owner": "web-client",
+      "kind": "non-interactive",
+      "files": ["e2e/ci/provision-server.mjs"],
+      "added": "2026-07-23",
+      "paths": [
+        {
+          "id": "e2e_ci_provisioning.bootstrap.emits_playwright_config",
+          "type": "happy",
+          "requiredAssertions": ["env_vars_emitted"]
+        },
+        {
+          "id": "e2e_ci_provisioning.startup_request_rejected.fails_visibly",
+          "type": "unhappy",
+          "failureClass": "network",
+          "requiredAssertions": ["nonzero_exit", "underlying_error_in_stderr"]
+        },
+        {
+          "id": "e2e_ci_provisioning.incomplete_auth_document.fails_closed",
+          "type": "unhappy",
+          "failureClass": "auth",
+          "requiredAssertions": ["nonzero_exit", "underlying_error_in_stderr"]
+        },
+        {
+          "id": "e2e_ci_provisioning.second_episode_never_indexed.fails_visibly",
+          "type": "unhappy",
+          "failureClass": "not_found",
+          "requiredAssertions": ["nonzero_exit", "underlying_error_in_stderr"]
+        }
+      ]
+    }
+  ]
+}

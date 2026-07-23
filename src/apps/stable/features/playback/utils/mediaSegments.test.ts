@@ -38,6 +38,7 @@ const TEST_SEGMENTS: MediaSegmentDto[] = [
 ];
 
 describe('findCurrentSegment()', () => {
+    // @covers media_segments.skip.find_current_segment.in_segment
     it('Should return the current segment', () => {
         let segmentDetails = findCurrentSegment(TEST_SEGMENTS, 23);
         expect(segmentDetails).toBeDefined();
@@ -55,6 +56,7 @@ describe('findCurrentSegment()', () => {
         expect(segmentDetails?.segment?.Id).toBe('commercial');
     });
 
+    // @covers media_segments.skip.find_current_segment.no_segment_at_position
     it('Should return undefined if not in a segment', () => {
         let segmentDetails = findCurrentSegment(TEST_SEGMENTS, 16);
         expect(segmentDetails).toBeUndefined();

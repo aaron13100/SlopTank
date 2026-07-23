@@ -38,6 +38,7 @@ async function expectPlaybackToAdvance(video: import('@playwright/test').Locator
 // an in-player item change (next episode) must replace the /video history
 // entry instead of pushing a new one, so Back exits to the page the player
 // was launched from instead of stepping back through played episodes.
+// @covers video.next_episode_back.next_episode.replaces_history_entry
 test('next episode then Back exits the player instead of resuming the previous episode', async ({ page, config }) => {
     const episodeId = requireEpisodeItemId();
 
@@ -95,6 +96,7 @@ test('next episode then Back exits the player instead of resuming the previous e
 // it, e.g. a permalink opened directly in a fresh tab. This exercises that
 // fallback through the natural end-of-playback path (onPlaybackStopped ->
 // appRouter.back()) instead of a manual Back press.
+// @covers video.next_episode_back.playback_ends_no_next_item.exits_home
 test('a fresh-tab permalink exits to home when playback ends with no next item', async ({ page, context, config }) => {
     await login(page, config.username, config.password);
 

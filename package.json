@@ -165,8 +165,10 @@
     "build:check": "tsc --noEmit",
     "build:es-check": "npm run build:production && npm run escheck",
     "escheck": "es-check",
+    "features": "node scripts/validate-features.mjs",
     "lint": "eslint",
     "test": "vitest --watch=false --config vite.config.ts",
+    "test:coverage": "vitest run --coverage --config vite.config.ts",
     "test:e2e": "playwright test; s=$?; rm -rf test-results playwright-report blob-report; exit $s",
     "test:watch": "vitest --config vite.config.ts",
     "stylelint": "stylelint \"src/**/*.{css,scss}\""

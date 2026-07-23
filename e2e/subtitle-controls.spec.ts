@@ -51,6 +51,7 @@ function previewFontSize(page: import('@playwright/test').Page) {
         el => parseFloat(getComputedStyle(el).fontSize));
 }
 
+// @covers subtitle_controls.track_menu.open_sizer.live_preview_persists
 test('subtitle size slider previews live at the subtitle position and persists', async ({ page, config }) => {
     await login(page, config.username, config.password);
     const video = await startPlayback(page, config);
@@ -82,6 +83,7 @@ test('subtitle size slider previews live at the subtitle position and persists',
     await page.locator('.subtitleSizer-closeButton').click();
 });
 
+// @covers subtitle_controls.track_menu.sizer_applies_to_rendered_cues
 test('subtitle size applies live to real rendered cues', async ({ page, config }) => {
     await login(page, config.username, config.password);
     const video = await startPlayback(page, config);
@@ -116,6 +118,7 @@ test('subtitle size applies live to real rendered cues', async ({ page, config }
     await page.locator('.subtitleSizer-closeButton').click();
 });
 
+// @covers subtitle_controls.track_menu.no_subtitle_enabled.offset_explains_itself
 test('subtitle offset explains itself without a subtitle and shifts cues with one', async ({ page, config }) => {
     await login(page, config.username, config.password);
     const video = await startPlayback(page, config);
@@ -144,6 +147,7 @@ test('subtitle offset explains itself without a subtitle and shifts cues with on
     expect(textBefore).toBeTruthy();
 
     // Now the offset entry opens the overlay.
+    // @covers subtitle_controls.track_menu.offset_shifts_displayed_cue
     await openOsd(page);
     await page.locator('.videoOsdBottom-maincontrols .btnVideoOsdSettings').click();
     await offsetItem.click();

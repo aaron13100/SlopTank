@@ -46,6 +46,7 @@ function requireTranscodeItemId(): string {
 
 interface PendingReq { url: string; start: number }
 
+// @covers audio_transcode.resume.mid_file_position.advances_without_freezing
 test('resume of an audio-transcode item starts playing and advances', async ({ page, config }) => {
     const itemId = requireTranscodeItemId();
 

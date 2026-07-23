@@ -7,11 +7,13 @@ function getFontSize(textSize) {
 }
 
 describe('subtitle appearance sizing', () => {
+    // @covers subtitle_controls.appearance_sizing.proportional_default
     it('uses the proportional video size as the comfortable 100% default', () => {
         expect(getFontSize('medium')).toBe('calc(var(--subtitle-font-size, 1em) * 1)');
         expect(getFontSize('')).toBe('calc(var(--subtitle-font-size, 1em) * 1)');
     });
 
+    // @covers subtitle_controls.appearance_sizing.preset_multiplier_map
     it.each([
         [ 'smaller', 0.75 ],
         [ 'small', 0.75 ],
@@ -23,6 +25,7 @@ describe('subtitle appearance sizing', () => {
         expect(getFontSize(textSize)).toBe(`calc(var(--subtitle-font-size, 1em) * ${multiplier})`);
     });
 
+    // @covers subtitle_controls.appearance_sizing.numeric_multiplier_parse
     it.each([
         [ '0.25', 0.25 ],
         [ '0.6', 0.6 ],
@@ -34,6 +37,7 @@ describe('subtitle appearance sizing', () => {
         expect(getFontSize(textSize)).toBe(`calc(var(--subtitle-font-size, 1em) * ${multiplier})`);
     });
 
+    // @covers subtitle_controls.appearance_sizing.out_of_range_multiplier_clamped
     it.each([
         [ '0.1', 0.25 ],
         [ '0', 0.25 ],
@@ -44,6 +48,7 @@ describe('subtitle appearance sizing', () => {
         expect(getFontSize(textSize)).toBe(`calc(var(--subtitle-font-size, 1em) * ${multiplier})`);
     });
 
+    // @covers subtitle_controls.appearance_sizing.non_finite_value_falls_back
     it.each([ 'NaN', 'Infinity', '-Infinity', '1.2.3px' ])(
         'fails a non-finite numeric-looking value (%s) safe to 100%%',
         textSize => {
@@ -51,6 +56,7 @@ describe('subtitle appearance sizing', () => {
         }
     );
 
+    // @covers subtitle_controls.appearance_sizing.video_height_proportional_size
     it.each([
         [ 360, 16.2 ],
         [ 720, 32.4 ],
@@ -59,6 +65,7 @@ describe('subtitle appearance sizing', () => {
         expect(getSubtitleFontSize(videoHeight)).toBe(expectedFontSize);
     });
 
+    // @covers subtitle_controls.appearance_sizing.unusable_video_height_rejected
     it.each([ 0, -1, Number.NaN, Number.POSITIVE_INFINITY, undefined, '720' ])(
         'rejects an unusable observed video height (%s)',
         videoHeight => {

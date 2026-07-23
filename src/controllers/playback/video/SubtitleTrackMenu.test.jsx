@@ -130,6 +130,7 @@ describe('SubtitleTrackMenu', () => {
         document.querySelectorAll('.subtitleSizer').forEach(el => el.parentNode.remove());
     });
 
+    // @covers subtitle_controls.track_menu.open_sizer.live_preview_persists
     it('opens the live sizer overlay, previews slider moves, and persists on release', async () => {
         const harness = createHarness({ selectedIds: [ 'subtitlesize' ], textSize: '1.5' });
         render(<MenuHarness options={harness.options} />);
@@ -161,6 +162,7 @@ describe('SubtitleTrackMenu', () => {
         expect(sizerContainer()).toBeNull();
     });
 
+    // @covers subtitle_controls.track_menu.reopen_replaces_overlay
     it('closes the previous sizer before opening another and on closeOverlays', async () => {
         let menu;
         const harness = createHarness({ selectedIds: [ 'subtitlesize', 'subtitlesize' ] });
@@ -180,6 +182,7 @@ describe('SubtitleTrackMenu', () => {
         expect(harness.player.activePreview).toBeNull();
     });
 
+    // @covers subtitle_controls.track_menu.cast_player.presets_fallback
     it('falls back to presets plus an honest toast for a cast player', async () => {
         const harness = createHarness({
             playerKind: 'cast',
@@ -217,6 +220,7 @@ describe('SubtitleTrackMenu', () => {
             [ '25%', '50%', '75%', '100%', '125%', '150%', '200%' ]);
     });
 
+    // @covers subtitle_controls.track_menu.unsupported_player.explains_toast
     it('explains instead of silently no-oping for a player with no appearance support', async () => {
         const harness = createHarness({
             playerKind: 'remote',

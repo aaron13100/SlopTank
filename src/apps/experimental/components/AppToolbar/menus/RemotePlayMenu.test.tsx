@@ -42,12 +42,14 @@ describe('RemotePlayMenu', () => {
     // document across tests.
     afterEach(cleanup);
 
+    // @covers remote_play_menu.plugin_unloaded.warns_unsupported
     it('warns that cast is unsupported when the plugin never loaded', async () => {
         renderMenu(false, []);
 
         expect(await screen.findByText(/GoogleCastUnsupported|Google Cast Unsupported/)).toBeDefined();
     });
 
+    // @covers remote_play_menu.discovery_empty.tells_user_no_devices
     it('tells the user no devices were found when discovery returns nothing', async () => {
         // Regression guard: this case previously rendered a menu containing no
         // items whatsoever, which the user saw as an empty grey square.
@@ -58,6 +60,7 @@ describe('RemotePlayMenu', () => {
         ).toBeDefined();
     });
 
+    // @covers remote_play_menu.discovery_in_progress.no_premature_empty_menu
     it('never renders an item-less menu once discovery has completed', async () => {
         const { baseElement } = renderMenu(true, []);
 
@@ -66,6 +69,7 @@ describe('RemotePlayMenu', () => {
         });
     });
 
+    // @covers remote_play_menu.discovery.lists_available_targets
     it('lists the available play targets', async () => {
         renderMenu(true, [ castTarget ]);
 

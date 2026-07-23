@@ -30,6 +30,8 @@ function fatalTimeoutErrorData() {
 }
 
 describe('htmlMediaHelper: bindEventsToHlsPlayer fatal network error recovery', () => {
+    // @covers playback.error_recovery.hung_server_at_startup.gives_up_and_rejects
+    // @covers audio_transcode.resume.hung_segment_at_startup.retries_then_surfaces
     it('gives up and rejects with NETWORK_ERROR instead of retrying forever on a hung server during startup', () => {
         const hls = new Hls({});
         const instance = {};
@@ -53,6 +55,8 @@ describe('htmlMediaHelper: bindEventsToHlsPlayer fatal network error recovery', 
         expect(rejectedWith).toBe(MediaError.NETWORK_ERROR);
     });
 
+    // @covers playback.error_recovery.hung_server_steady_state.surfaces_error
+    // @covers audio_transcode.resume.steady_state_stall.surfaces_instead_of_freezing
     it('gives up and surfaces an error event instead of freezing during steady-state playback', () => {
         const hls = new Hls({});
         const instance = {};
@@ -75,6 +79,7 @@ describe('htmlMediaHelper: bindEventsToHlsPlayer fatal network error recovery', 
         expect(errorEventDetail).toEqual({ type: MediaError.NETWORK_ERROR });
     });
 
+    // @covers playback.error_recovery.transient_error.retries_and_recovers
     it('still retries a single transient fatal network error instead of giving up immediately', () => {
         const hls = new Hls({});
         const instance = {};
@@ -90,6 +95,7 @@ describe('htmlMediaHelper: bindEventsToHlsPlayer fatal network error recovery', 
         expect(rejectCalls).toBe(0);
     });
 
+    // @covers playback.error_recovery.progress_resets_retry_budget
     it('resets the retry budget once a fragment buffers successfully again', () => {
         const hls = new Hls({});
         const instance = {};

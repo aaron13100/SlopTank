@@ -115,6 +115,7 @@ afterEach(async () => {
 });
 
 describe('CI Jellyfin provisioning command', () => {
+    // @covers e2e_ci_provisioning.bootstrap.emits_playwright_config
     it('bootstraps the server, scans the fixture, and emits Playwright configuration', async () => {
         const requests: RecordedRequest[] = [];
         let itemPolls = 0;
@@ -196,6 +197,7 @@ describe('CI Jellyfin provisioning command', () => {
         expect(episodePolls).toBe(3);
     });
 
+    // @covers e2e_ci_provisioning.startup_request_rejected.fails_visibly
     it('fails visibly when a startup API request is rejected', async () => {
         const baseUrl = await startApi((request, response) => {
             if (request.url === '/System/Info/Public') {
@@ -218,6 +220,7 @@ describe('CI Jellyfin provisioning command', () => {
         expect(result.stderr).toContain('user setup failed');
     });
 
+    // @covers e2e_ci_provisioning.incomplete_auth_document.fails_closed
     it('fails closed when authentication returns an incomplete document', async () => {
         const baseUrl = await startApi((request, response) => {
             if (request.url === '/System/Info/Public') {
@@ -237,6 +240,7 @@ describe('CI Jellyfin provisioning command', () => {
         expect(result.stderr).toContain('authentication response omitted AccessToken or ServerId');
     });
 
+    // @covers e2e_ci_provisioning.second_episode_never_indexed.fails_visibly
     it('fails visibly when the TV fixture never indexes a second episode', async () => {
         const baseUrl = await startApi((request, response) => {
             switch (`${request.method} ${request.url?.split('?')[0]}`) {

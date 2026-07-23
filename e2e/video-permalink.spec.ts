@@ -22,6 +22,7 @@ async function expectPlaybackToAdvance(video: import('@playwright/test').Locator
 //   - appRouter.showVideoOsd(item) must encode id/serverId in the /video url
 //     as soon as playback starts, with no user action required.
 //   - reloading that url must resume playback, not bounce to /home.
+// @covers video.permalink.reload.resumes_playback
 test('video url becomes a durable permalink that survives a reload', async ({ page, config }) => {
     const browserDiagnostics: string[] = [];
     page.on('console', (message) => {
@@ -116,6 +117,7 @@ test('video url becomes a durable permalink that survives a reload', async ({ pa
     // Exercise the browser-policy fallback as a second real navigation. When
     // autoplay is rejected, preparation ends once the media is seeked and
     // playable; the OSD must expose Play instead of retaining the message.
+    // @covers video.permalink.autoplay_blocked.recovers_to_paused_ready
     await page.addInitScript(() => {
         const nativePlay = HTMLMediaElement.prototype.play;
         HTMLMediaElement.prototype.play = function () {
