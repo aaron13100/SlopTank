@@ -1641,6 +1641,15 @@ export class PlaybackManager {
         };
 
         self.canHandleOffsetOnCurrentSubtitle = function (player) {
+            player = player || self._currentPlayer;
+            // The player knows what its installed rendering path can actually
+            // shift (embedded direct-play tracks are client-rendered and
+            // offsetable); the external-only stream-metadata heuristic stays
+            // as the fallback for players without the capability query.
+            if (player && typeof player.canHandleSubtitleOffset === 'function') {
+                return player.canHandleSubtitleOffset();
+            }
+
             const index = self.getSubtitleStreamIndex(player);
             return index !== -1 && self.isSubtitleStreamExternal(index, player);
         };

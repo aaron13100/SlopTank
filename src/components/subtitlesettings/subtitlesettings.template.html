@@ -88,14 +88,10 @@
             <div class="fieldDescription subtitleStylingNativeHelp subtitleStylingHelp hide">${NativeSubtitleStylingHelp}</div>
         </div>
 
-        <div class="selectContainer">
-            <select is="emby-select" id="selectTextSize" label="${LabelTextSize}">
-                <option value="smaller">75%</option>
-                <option value="">100% (${Normal})</option>
-                <option value="large">125%</option>
-                <option value="larger">150%</option>
-                <option value="extralarge">200%</option>
-            </select>
+        <div class="sliderContainer-settings">
+            <div class="sliderContainer">
+                <input is="emby-slider" id="sliderTextSize" label="${LabelTextSize}" type="range" min="25" max="200" step="5" />
+            </div>
         </div>
 
         <div class="selectContainer">

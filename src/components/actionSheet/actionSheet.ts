@@ -9,6 +9,21 @@ import 'material-design-icons-iconfont';
 import '../../styles/scrollstyles.scss';
 import '../../components/listview/listview.scss';
 
+/**
+ * Typed rejection for a sheet dismissed without a selection, so callers can
+ * distinguish a normal cancel (code ACTION_SHEET_CANCELED) from a real
+ * failure without string matching. Message kept identical to the historical
+ * untyped rejection.
+ */
+export class ActionSheetCanceledError extends Error {
+    code = 'ACTION_SHEET_CANCELED';
+
+    constructor() {
+        super('ActionSheet closed without resolving');
+        this.name = 'ActionSheetCanceledError';
+    }
+}
+
 interface OptionItem {
     asideText?: string;
     divider?: boolean;
@@ -366,7 +381,7 @@ export function show(options: Options) {
 
                     resolve(selectedId);
                 } else {
-                    reject(new Error('ActionSheet closed without resolving'));
+                    reject(new ActionSheetCanceledError());
                 }
             }
         });

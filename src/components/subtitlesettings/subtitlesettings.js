@@ -6,7 +6,7 @@ import appSettings from '../../scripts/settings/appSettings';
 import focusManager from '../focusManager';
 import layoutManager from '../layoutManager';
 import loading from '../loading/loading';
-import subtitleAppearanceHelper from './subtitleappearancehelper';
+import subtitleAppearanceHelper, { getTextSizeMultiplier } from './subtitleappearancehelper';
 import settingsHelper from '../settingshelper';
 import dom from '../../utils/dom';
 import Events from '../../utils/events.ts';
@@ -29,7 +29,7 @@ import template from './subtitlesettings.template.html';
 function getSubtitleAppearanceObject(context) {
     return {
         subtitleStyling: context.querySelector('#selectSubtitleStyling').value,
-        textSize: context.querySelector('#selectTextSize').value,
+        textSize: String(parseInt(context.querySelector('#sliderTextSize').value, 10) / 100),
         textWeight: context.querySelector('#selectTextWeight').value,
         dropShadow: context.querySelector('#selectDropShadow').value,
         font: context.querySelector('#selectFont').value,
@@ -56,7 +56,10 @@ function loadForm(context, user, userSettings, appearanceSettings, apiClient) {
 
         context.querySelector('#selectSubtitleStyling').value = appearanceSettings.subtitleStyling || 'Auto';
         context.querySelector('#selectSubtitleStyling').dispatchEvent(new CustomEvent('change', {}));
-        context.querySelector('#selectTextSize').value = appearanceSettings.textSize || '';
+        // The slider expresses any persisted format (numeric or legacy
+        // preset) as a percentage.
+        context.querySelector('#sliderTextSize').value = String(Math.round(
+            getTextSizeMultiplier(appearanceSettings.textSize) * 100));
         context.querySelector('#selectTextWeight').value = appearanceSettings.textWeight || 'normal';
         context.querySelector('#selectDropShadow').value = appearanceSettings.dropShadow || '';
         context.querySelector('#inputTextBackground').value = appearanceSettings.textBackground || 'transparent';
@@ -72,7 +75,7 @@ function loadForm(context, user, userSettings, appearanceSettings, apiClient) {
         context.querySelector('#chkAlwaysBurnInSubtitleWhenTranscoding').checked = appSettings.alwaysBurnInSubtitleWhenTranscoding();
 
         onAppearanceFieldChange({
-            target: context.querySelector('#selectTextSize')
+            target: context.querySelector('#sliderTextSize')
         });
 
         loading.hide();
@@ -197,7 +200,10 @@ function embed(options, self) {
     options.element.querySelector('#selectSubtitlePlaybackMode').addEventListener('change', onSubtitleModeChange);
     options.element.querySelector('#selectSubtitleStyling').addEventListener('change', onSubtitleStyleChange);
     options.element.querySelector('#selectSubtitleBurnIn').addEventListener('change', onSubtitleBurnInChange);
-    options.element.querySelector('#selectTextSize').addEventListener('change', onAppearanceFieldChange);
+    const sliderTextSize = options.element.querySelector('#sliderTextSize');
+    sliderTextSize.addEventListener('input', onAppearanceFieldChange);
+    sliderTextSize.addEventListener('change', onAppearanceFieldChange);
+    sliderTextSize.getBubbleHtml = (_, value) => '<h1 class="sliderBubbleText">' + Math.round(value) + '%</h1>';
     options.element.querySelector('#selectTextWeight').addEventListener('change', onAppearanceFieldChange);
     options.element.querySelector('#selectDropShadow').addEventListener('change', onAppearanceFieldChange);
     options.element.querySelector('#selectFont').addEventListener('change', onAppearanceFieldChange);

@@ -252,10 +252,6 @@ export class HtmlVideoPlayer {
      */
     #currentAssRenderer;
     /**
-     * @type {number}
-     */
-    #currentAssRendererRequestId = 0;
-    /**
      * @type {any | null | undefined}
      */
     #currentPgsRenderer;
@@ -307,6 +303,48 @@ export class HtmlVideoPlayer {
      * @type {ResizeObserver | null | undefined}
      */
     #subtitleResizeObserver;
+    /**
+     * Monotonic render generation per target text track (primary, secondary).
+     * Bumped when a track (re)selection or teardown starts; every async
+     * subtitle completion validates its captured generation before mutating
+     * player state, so stale fetches/imports are discarded instead of
+     * installing a superseded track or renderer. Per-track because primary
+     * and secondary selections start and complete independently.
+     * @type {number[]}
+     */
+    #subtitleRenderGenerations = [ 0, 0 ];
+    /**
+     * How the current primary subtitle is being rendered. 'pending' while an
+     * async determination (burn-in probe, subtitle fetch, renderer import) is
+     * in flight. Drives getSubtitleRenderingInfo() capability answers.
+     * @type {'custom'|'native'|'ass'|'pgs'|'burned'|'none'|'pending'}
+     */
+    #subtitleRenderPath = 'none';
+    /**
+     * Transient appearance override plus sample line shown while the
+     * in-player size overlay is open. Null when no preview is active.
+     * @type {{ textSize: string, sampleText: string } | null}
+     */
+    #subtitleAppearancePreview = null;
+    /**
+     * Preview-owned sample line element. Never the same element as
+     * #videoSubtitlesElem: the real renderer keeps sole ownership of its
+     * fields, the preview keeps sole ownership of this one.
+     * @type {HTMLElement | null | undefined}
+     */
+    #subtitlePreviewElem;
+    /**
+     * Interval keeping the preview line present/visible while previewing
+     * (covers the paused and no-track cases where no timeupdate fires).
+     * @type {ReturnType<typeof setInterval> | null | undefined}
+     */
+    #subtitlePreviewTimer;
+    /**
+     * Offset requested while no renderer/track/events existed to apply it
+     * to; applied by whichever async completion installs one.
+     * @type {number | null}
+     */
+    #pendingSubtitleOffset = null;
     /**
      * @type {number}
      */
@@ -450,6 +488,10 @@ export class HtmlVideoPlayer {
         this.#currentTime = null;
 
         if (options.resetSubtitleOffset !== false) this.resetSubtitleOffset();
+        // A same-player next-item transition (stop(false)) never fires
+        // playerchange or destroy(), so an open size preview would otherwise
+        // survive into the next item.
+        this.clearSubtitleAppearancePreview();
 
         const elem = await this.createMediaElement(options);
         this.#applyAspectRatio(options.aspectRatio || this.getAspectRatio());
@@ -614,6 +656,7 @@ export class HtmlVideoPlayer {
     resetSubtitleOffset() {
         this.#currentTrackOffset = 0;
         this.#secondaryTrackOffset = 0;
+        this.#pendingSubtitleOffset = null;
         this.#showTrackOffset = false;
     }
 
@@ -671,9 +714,40 @@ export class HtmlVideoPlayer {
                 this.#currentTrackEvents && this.setTrackEventsSubtitleOffset(this.#currentTrackEvents, offsetValue, PRIMARY_TEXT_TRACK_INDEX);
                 this.#currentSecondaryTrackEvents && this.setTrackEventsSubtitleOffset(this.#currentSecondaryTrackEvents, offsetValue, SECONDARY_TEXT_TRACK_INDEX);
             } else {
-                console.debug('No available track, cannot apply offset: ', offsetValue);
+                // Nothing applyable yet (subtitle still loading): retain the
+                // request and let the completing install apply it, so slider
+                // input during the loading window is not lost.
+                this.#pendingSubtitleOffset = offsetValue;
+                console.debug('No available track yet, retaining requested offset: ', offsetValue);
             }
         }
+    }
+
+    /**
+     * Apply an offset that was requested before any renderer/track/events
+     * existed. Called by every async completion that installs one.
+     * @private
+     */
+    applyPendingSubtitleOffset() {
+        if (this.#pendingSubtitleOffset === null) {
+            return;
+        }
+
+        const pending = this.#pendingSubtitleOffset;
+        this.#pendingSubtitleOffset = null;
+        this._setSubtitleOffset(pending);
+    }
+
+    /**
+     * Whether the CURRENT subtitle rendering state can actually apply a
+     * client-side timing offset. Truthful per rendering path, unlike the
+     * external-only stream-metadata heuristic (embedded direct-play tracks
+     * are client-rendered and offsetable).
+     * @returns {boolean} True when an offset request would be applied or
+     * retained for the loading subtitle.
+     */
+    canHandleSubtitleOffset() {
+        return this.getSubtitleRenderingInfo().canAdjustOffset;
     }
 
     /**
@@ -899,6 +973,7 @@ export class HtmlVideoPlayer {
 
     destroy() {
         this.setSubtitleOffset.cancel();
+        this.clearSubtitleAppearancePreview();
 
         if (this.#subtitleResizeObserver) {
             this.#subtitleResizeObserver.disconnect();
@@ -1311,10 +1386,80 @@ export class HtmlVideoPlayer {
     }
 
     /**
+     * Invalidate in-flight async subtitle work for a target track (or both).
+     * Returns the new generation an async completion must capture and later
+     * validate via isCurrentSubtitleRenderGeneration.
+     * @private
+     * @param {number} [targetTrackIndex] - Target track, or undefined for both.
+     * @returns {number} The new generation for the (primary-if-both) target.
+     */
+    bumpSubtitleRenderGeneration(targetTrackIndex) {
+        if (this.isSecondaryTrack(targetTrackIndex)) {
+            return ++this.#subtitleRenderGenerations[SECONDARY_TEXT_TRACK_INDEX];
+        }
+        if (this.isPrimaryTrack(targetTrackIndex)) {
+            return ++this.#subtitleRenderGenerations[PRIMARY_TEXT_TRACK_INDEX];
+        }
+        this.#subtitleRenderGenerations[SECONDARY_TEXT_TRACK_INDEX]++;
+        return ++this.#subtitleRenderGenerations[PRIMARY_TEXT_TRACK_INDEX];
+    }
+
+    /**
+     * @private
+     * @param {number} targetTrackIndex - Target track the work was started for.
+     * @param {number} generation - Generation captured when the work started.
+     * @returns {boolean} False when the work has been superseded.
+     */
+    isCurrentSubtitleRenderGeneration(targetTrackIndex, generation) {
+        const index = this.isSecondaryTrack(targetTrackIndex) ? SECONDARY_TEXT_TRACK_INDEX : PRIMARY_TEXT_TRACK_INDEX;
+        return this.#subtitleRenderGenerations[index] === generation;
+    }
+
+    /**
+     * Record how the primary subtitle is now being rendered and notify open
+     * overlays, whose capability messaging follows the installed path.
+     * @private
+     * @param {'custom'|'native'|'ass'|'pgs'|'burned'|'none'|'pending'} path - Installed rendering path.
+     */
+    setSubtitleRenderPath(path) {
+        if (this.#subtitleRenderPath === path) {
+            return;
+        }
+
+        this.#subtitleRenderPath = path;
+        Events.trigger(this, 'subtitlerenderpathchange', [ path ]);
+    }
+
+    /**
+     * Describe the current primary-subtitle rendering path and which
+     * client-side adjustments it actually supports. The single capability
+     * source of truth for menus/overlays -- they never re-derive this from
+     * stream metadata.
+     * @returns {{ path: string, canAdjustSize: boolean, canAdjustOffset: boolean }} Capability answer.
+     */
+    getSubtitleRenderingInfo() {
+        const path = this.#subtitleRenderPath;
+        return {
+            path,
+            // 'none' can adjust size: the preview line still renders and the
+            // choice persists for the next enabled subtitle. Native ::cue
+            // font-size is known broken on Firefox (the same knowledge that
+            // forces Firefox to custom rendering in useCustomSubtitles).
+            canAdjustSize: path === 'custom' || path === 'none' || path === 'pending'
+                || (path === 'native' && !browser.firefox),
+            canAdjustOffset: path === 'custom' || path === 'native' || path === 'ass'
+                || path === 'pgs' || path === 'pending'
+        };
+    }
+
+    /**
      * @private
      */
     destroyCustomTrack(videoElement, targetTrackIndex) {
-        this.#currentAssRendererRequestId++;
+        this.bumpSubtitleRenderGeneration(targetTrackIndex);
+        if (!this.isSecondaryTrack(targetTrackIndex)) {
+            this.setSubtitleRenderPath('none');
+        }
         this.destroyCustomRenderedTrackElements(targetTrackIndex);
         this.destroyNativeTracks(videoElement, targetTrackIndex);
         this.destroyStoredTrackInfo(targetTrackIndex);
@@ -1402,7 +1547,8 @@ export class HtmlVideoPlayer {
      * @private
      */
     renderSsaAss(videoElement, track, item) {
-        const requestId = ++this.#currentAssRendererRequestId;
+        const generation = this.#subtitleRenderGenerations[PRIMARY_TEXT_TRACK_INDEX];
+        this.setSubtitleRenderPath('pending');
         const supportedFonts = ['application/vnd.ms-opentype', 'application/x-truetype-font', 'font/otf', 'font/ttf', 'font/woff', 'font/woff2'];
         const availableFonts = [];
         const attachments = this._currentPlayOptions.mediaSource.MediaAttachments || [];
@@ -1418,7 +1564,7 @@ export class HtmlVideoPlayer {
             ApiKey: apiClient.accessToken()
         });
         const htmlVideoPlayer = this;
-        const isCurrentRequest = () => requestId === this.#currentAssRendererRequestId;
+        const isCurrentRequest = () => this.isCurrentSubtitleRenderGeneration(PRIMARY_TEXT_TRACK_INDEX, generation);
         import('@jellyfin/libass-wasm').then(({ default: SubtitlesOctopus }) => {
             if (!isCurrentRequest()) {
                 return;
@@ -1436,6 +1582,7 @@ export class HtmlVideoPlayer {
                 onError() {
                     // HACK: Clear JavascriptSubtitlesOctopus: it gets disposed when an error occurs
                     htmlVideoPlayer.#currentAssRenderer = null;
+                    htmlVideoPlayer.setSubtitleRenderPath('none');
 
                     // HACK: Give JavascriptSubtitlesOctopus time to dispose itself
                     setTimeout(() => {
@@ -1468,6 +1615,8 @@ export class HtmlVideoPlayer {
                 }
 
                 this.#currentAssRenderer = new SubtitlesOctopus(options);
+                this.setSubtitleRenderPath('ass');
+                this.applyPendingSubtitleOffset();
             };
 
             Promise.all([
@@ -1509,6 +1658,8 @@ export class HtmlVideoPlayer {
                 }
 
                 console.error('Failed to initialize ASS renderer', error);
+                this.setSubtitleRenderPath('none');
+                this.#pendingSubtitleOffset = null;
                 onErrorInternal(this, MediaError.ASS_RENDER_ERROR);
             });
         }).catch((error) => {
@@ -1517,6 +1668,8 @@ export class HtmlVideoPlayer {
             }
 
             console.error('Failed to load ASS renderer module', error);
+            this.setSubtitleRenderPath('none');
+            this.#pendingSubtitleOffset = null;
             onErrorInternal(this, MediaError.ASS_RENDER_ERROR);
         });
     }
@@ -1525,7 +1678,15 @@ export class HtmlVideoPlayer {
      * @private
      */
     renderPgs(videoElement, track, item) {
+        const generation = this.#subtitleRenderGenerations[PRIMARY_TEXT_TRACK_INDEX];
+        this.setSubtitleRenderPath('pending');
         import('libpgs').then((libpgs) => {
+            // A stale completion must not install a renderer over a
+            // superseded selection or a torn-down player.
+            if (!this.isCurrentSubtitleRenderGeneration(PRIMARY_TEXT_TRACK_INDEX, generation) || !this.#mediaElement) {
+                return;
+            }
+
             const aspectRatio = this.getAspectRatio() === 'auto' ? 'contain' : this.getAspectRatio();
             const options = {
                 video: videoElement,
@@ -1535,33 +1696,73 @@ export class HtmlVideoPlayer {
                 aspectRatio
             };
             this.#currentPgsRenderer = new libpgs.PgsRenderer(options);
+            this.setSubtitleRenderPath('pgs');
+            this.applyPendingSubtitleOffset();
+        }).catch((error) => {
+            if (!this.isCurrentSubtitleRenderGeneration(PRIMARY_TEXT_TRACK_INDEX, generation)) {
+                return;
+            }
+
+            console.error('Failed to load PGS renderer module', error);
+            this.setSubtitleRenderPath('none');
+            this.#pendingSubtitleOffset = null;
         });
+    }
+
+    /**
+     * Find or create the shared subtitle container that both the custom
+     * renderer and the appearance preview render into.
+     * @private
+     * @param {HTMLVideoElement} [videoElement] - Rendering target; the preview path omits it and falls back to the current media element.
+     * @returns {HTMLElement | null} The container, or null before playback owns a surface.
+     */
+    getOrCreateSubtitlesContainer(videoElement) {
+        let subtitlesContainer = document.querySelector('.videoSubtitles');
+        if (subtitlesContainer) {
+            return subtitlesContainer;
+        }
+
+        const parent = (videoElement || this.#mediaElement)?.parentNode;
+        if (!parent) {
+            return null;
+        }
+
+        subtitlesContainer = document.createElement('div');
+        subtitlesContainer.classList.add('videoSubtitles');
+        parent.appendChild(subtitlesContainer);
+        return subtitlesContainer;
     }
 
     /**
      * @private
      */
     renderSubtitlesWithCustomElement(videoElement, track, item, targetTextTrackIndex) {
+        const generation = this.#subtitleRenderGenerations[
+            this.isSecondaryTrack(targetTextTrackIndex) ? SECONDARY_TEXT_TRACK_INDEX : PRIMARY_TEXT_TRACK_INDEX
+        ];
+        if (!this.isSecondaryTrack(targetTextTrackIndex)) {
+            this.setSubtitleRenderPath('pending');
+        }
         this.fetchSubtitles(track, item).then((subtitleData) => {
-            // Exit if the video element was destroyed while fetching subtitles
-            if (!this.#mediaElement) return;
+            // Exit if the video element was destroyed while fetching, or the
+            // selection changed (a same-index next item still bumps the
+            // generation, so index comparison alone would accept stale data)
+            if (!this.#mediaElement || !this.isCurrentSubtitleRenderGeneration(targetTextTrackIndex, generation)) return;
 
             const subtitleAppearance = userSettings.getSubtitleAppearanceSettings();
             const subtitleVerticalPosition = parseInt(subtitleAppearance.verticalPosition, 10);
 
             if (!this.#videoSubtitlesElem && !this.isSecondaryTrack(targetTextTrackIndex)) {
-                let subtitlesContainer = document.querySelector('.videoSubtitles');
-                if (!subtitlesContainer) {
-                    subtitlesContainer = document.createElement('div');
-                    subtitlesContainer.classList.add('videoSubtitles');
-                }
+                const subtitlesContainer = this.getOrCreateSubtitlesContainer(videoElement);
+                if (!subtitlesContainer) return;
                 const subtitlesElement = document.createElement('div');
                 subtitlesElement.classList.add('videoSubtitlesInner');
                 subtitlesContainer.appendChild(subtitlesElement);
                 this.#videoSubtitlesElem = subtitlesElement;
                 this.setSubtitleAppearance(subtitlesContainer, this.#videoSubtitlesElem);
-                videoElement.parentNode.appendChild(subtitlesContainer);
                 this.#currentTrackEvents = subtitleData.TrackEvents;
+                this.setSubtitleRenderPath('custom');
+                this.applyPendingSubtitleOffset();
             } else if (!this.#videoSecondarySubtitlesElem && this.isSecondaryTrack(targetTextTrackIndex)) {
                 const subtitlesContainer = document.querySelector('.videoSubtitles');
                 if (!subtitlesContainer) return;
@@ -1576,8 +1777,34 @@ export class HtmlVideoPlayer {
                 this.#videoSecondarySubtitlesElem = secondarySubtitlesElement;
                 this.setSubtitleAppearance(subtitlesContainer, this.#videoSecondarySubtitlesElem);
                 this.#currentSecondaryTrackEvents = subtitleData.TrackEvents;
+                this.applyPendingSubtitleOffset();
+            }
+        }).catch((error) => {
+            if (!this.isCurrentSubtitleRenderGeneration(targetTextTrackIndex, generation)) {
+                return;
+            }
+
+            console.error(`Failed to fetch subtitles for custom rendering (track ${track.Index})`, error);
+            if (!this.isSecondaryTrack(targetTextTrackIndex)) {
+                this.setSubtitleRenderPath('none');
+                this.#pendingSubtitleOffset = null;
             }
         });
+    }
+
+    /**
+     * The persisted appearance settings with the transient in-player preview
+     * (if one is active) merged on top. Every appearance application flows
+     * through this single merge point.
+     * @private
+     * @returns {Object} Effective subtitle appearance settings.
+     */
+    getEffectiveAppearanceSettings() {
+        const settings = userSettings.getSubtitleAppearanceSettings();
+        if (this.#subtitleAppearancePreview) {
+            settings.textSize = this.#subtitleAppearancePreview.textSize;
+        }
+        return settings;
     }
 
     /**
@@ -1587,18 +1814,19 @@ export class HtmlVideoPlayer {
         subtitleAppearanceHelper.applyStyles({
             text: innerElem,
             window: elem
-        }, userSettings.getSubtitleAppearanceSettings());
+        }, this.getEffectiveAppearanceSettings());
     }
 
     /**
-     * Reapply the persisted subtitle appearance without restarting playback.
-     * Native cues and custom subtitle elements consume the same proportional
-     * font-size variable and multiplier mapping.
+     * Reapply the effective subtitle appearance without restarting playback.
+     * Native cues, custom subtitle elements, and the preview line consume the
+     * same proportional font-size variable and multiplier mapping.
      * @returns {void}
      */
     updateSubtitleAppearance() {
         const subtitlesContainer = this.#videoSubtitlesElem?.parentNode
-            || this.#videoSecondarySubtitlesElem?.parentNode;
+            || this.#videoSecondarySubtitlesElem?.parentNode
+            || this.#subtitlePreviewElem?.parentNode;
 
         if (subtitlesContainer && this.#videoSubtitlesElem) {
             this.setSubtitleAppearance(subtitlesContainer, this.#videoSubtitlesElem);
@@ -1606,8 +1834,107 @@ export class HtmlVideoPlayer {
         if (subtitlesContainer && this.#videoSecondarySubtitlesElem) {
             this.setSubtitleAppearance(subtitlesContainer, this.#videoSecondarySubtitlesElem);
         }
+        if (subtitlesContainer && this.#subtitlePreviewElem) {
+            this.setSubtitleAppearance(subtitlesContainer, this.#subtitlePreviewElem);
+        }
 
         this.setCueAppearance();
+    }
+
+    /**
+     * Enter or update the transient appearance preview: the given values
+     * override the persisted appearance until cleared, and a sample line is
+     * kept visible wherever real subtitles appear whenever no real cue is on
+     * screen. Nothing is persisted; pair every call with
+     * clearSubtitleAppearancePreview().
+     * @param {{ textSize: string|number, sampleText: string }} preview - Transient appearance override plus translated sample line.
+     * @returns {void}
+     */
+    setSubtitleAppearancePreview(preview) {
+        this.#subtitleAppearancePreview = {
+            textSize: preview.textSize,
+            sampleText: preview.sampleText
+        };
+
+        if (!this.#subtitlePreviewTimer) {
+            // The tick keeps the sample line present across the paused and
+            // no-track cases (no timeupdate events) and recreates it if a
+            // track teardown removed the shared container.
+            this.#subtitlePreviewTimer = setInterval(() => this.updateSubtitlePreviewLine(), 250);
+        }
+
+        this.updateSubtitlePreviewLine();
+        this.updateSubtitleAppearance();
+    }
+
+    /**
+     * Exit the transient appearance preview and restore the persisted
+     * appearance. Safe to call when no preview is active.
+     * @returns {void}
+     */
+    clearSubtitleAppearancePreview() {
+        if (this.#subtitlePreviewTimer) {
+            clearInterval(this.#subtitlePreviewTimer);
+            this.#subtitlePreviewTimer = null;
+        }
+
+        if (!this.#subtitleAppearancePreview) {
+            return;
+        }
+
+        this.#subtitleAppearancePreview = null;
+
+        const previewElem = this.#subtitlePreviewElem;
+        if (previewElem) {
+            const container = previewElem.parentNode;
+            tryRemoveElement(previewElem);
+            this.#subtitlePreviewElem = null;
+            // The container is shared with the real renderer; remove it only
+            // when the preview was its last remaining content.
+            if (container && container.childNodes.length === 0) {
+                tryRemoveElement(container);
+            }
+        }
+
+        this.updateSubtitleAppearance();
+    }
+
+    /**
+     * Keep the preview sample line present and correctly shown/hidden: shown
+     * while no real cue text (custom or native) is visible, hidden while one
+     * is, so the user always sees exactly one line at the chosen size.
+     * @private
+     * @returns {void}
+     */
+    updateSubtitlePreviewLine() {
+        const preview = this.#subtitleAppearancePreview;
+        if (!preview) {
+            return;
+        }
+
+        if (!this.#subtitlePreviewElem?.isConnected) {
+            const subtitlesContainer = this.getOrCreateSubtitlesContainer();
+            if (!subtitlesContainer) {
+                return;
+            }
+
+            const previewElement = document.createElement('div');
+            // videoSubtitlesInner so the sample inherits exactly the styling
+            // real custom cues get; the extra class only marks ownership.
+            previewElement.classList.add('videoSubtitlesInner', 'videoSubtitlesPreviewLine');
+            subtitlesContainer.appendChild(previewElement);
+            this.#subtitlePreviewElem = previewElement;
+            this.setSubtitleAppearance(subtitlesContainer, previewElement);
+        }
+
+        this.#subtitlePreviewElem.textContent = preview.sampleText;
+
+        const customCueVisible = !!this.#videoSubtitlesElem
+            && !this.#videoSubtitlesElem.classList.contains('hide')
+            && !!this.#videoSubtitlesElem.textContent;
+        const nativeCueVisible = (this.getTextTracks() || [])
+            .some(track => track.activeCues?.length > 0);
+        this.#subtitlePreviewElem.classList.toggle('hide', customCueVisible || nativeCueVisible);
     }
 
     /**
@@ -1662,7 +1989,7 @@ export class HtmlVideoPlayer {
             document.getElementsByTagName('head')[0].appendChild(styleElem);
         }
 
-        styleElem.innerHTML = this.getCueCss(subtitleAppearanceHelper.getStyles(userSettings.getSubtitleAppearanceSettings()), '.htmlvideoplayer');
+        styleElem.innerHTML = this.getCueCss(subtitleAppearanceHelper.getStyles(this.getEffectiveAppearanceSettings()), '.htmlvideoplayer');
     }
 
     /**
@@ -1709,9 +2036,17 @@ export class HtmlVideoPlayer {
         }
 
         // download the track json
+        const generation = this.#subtitleRenderGenerations[
+            this.isSecondaryTrack(targetTextTrackIndex) ? SECONDARY_TEXT_TRACK_INDEX : PRIMARY_TEXT_TRACK_INDEX
+        ];
+        if (!this.isSecondaryTrack(targetTextTrackIndex)) {
+            this.setSubtitleRenderPath('pending');
+        }
         this.fetchSubtitles(track, item).then(data => {
-            // Exit if the video element was destroyed while fetching subtitles
-            if (!this.#mediaElement) return;
+            // Exit if the video element was destroyed while fetching, or the
+            // selection changed: a stale completion would repopulate the
+            // shared TextTrack with a superseded track's cues.
+            if (!this.#mediaElement || !this.isCurrentSubtitleRenderGeneration(targetTextTrackIndex, generation)) return;
 
             console.debug(`downloaded ${data.TrackEvents.length} track events`);
 
@@ -1738,6 +2073,20 @@ export class HtmlVideoPlayer {
             }
 
             trackElement.mode = 'showing';
+            if (!this.isSecondaryTrack(targetTextTrackIndex)) {
+                this.setSubtitleRenderPath('native');
+            }
+            this.applyPendingSubtitleOffset();
+        }).catch((error) => {
+            if (!this.isCurrentSubtitleRenderGeneration(targetTextTrackIndex, generation)) {
+                return;
+            }
+
+            console.error(`Failed to fetch subtitles for native rendering (track ${track.Index})`, error);
+            if (!this.isSecondaryTrack(targetTextTrackIndex)) {
+                this.setSubtitleRenderPath('none');
+                this.#pendingSubtitleOffset = null;
+            }
         });
     }
 
@@ -1771,6 +2120,10 @@ export class HtmlVideoPlayer {
                 }
             }
         }
+
+        if (this.#subtitleAppearancePreview) {
+            this.updateSubtitlePreviewLine();
+        }
     }
 
     /**
@@ -1779,6 +2132,9 @@ export class HtmlVideoPlayer {
     setCurrentTrackElement(streamIndex, targetTextTrackIndex) {
         console.debug(`setting new text track index to: ${streamIndex}`);
 
+        // Bump at request initiation so whichever async completion belongs to
+        // the LATEST request wins, regardless of resolution order.
+        const generation = this.bumpSubtitleRenderGeneration(targetTextTrackIndex);
         const mediaStreamTextTracks = getMediaStreamTextTracks(this._currentPlayOptions.mediaSource);
 
         let track = streamIndex === -1 ? null : mediaStreamTextTracks.filter(function (t) {
@@ -1806,6 +2162,12 @@ export class HtmlVideoPlayer {
         const player = this;
 
         sessionPromise.then((s) => {
+            // A newer selection superseded this one while the session probe
+            // was in flight; acting now would install the wrong track.
+            if (!player.isCurrentSubtitleRenderGeneration(targetTextTrackIndex, generation)) {
+                return;
+            }
+
             if (!s.TranscodingInfo || s.TranscodingInfo.IsVideoDirect) {
                 // restore recorded delivery method if any
                 mediaStreamTextTracks.forEach((t) => {
@@ -1828,8 +2190,14 @@ export class HtmlVideoPlayer {
                     t.realDeliveryMethod = t.DeliveryMethod;
                     t.DeliveryMethod = 'Encode';
                 });
-                // unset stream when switching to transcode
+                // unset stream when switching to transcode: the server burns
+                // the subtitle into the picture, where client-side size and
+                // offset genuinely cannot apply.
                 player.setTrackForDisplay(player.#mediaElement, null, -1);
+                if (!player.isSecondaryTrack(targetTextTrackIndex) && streamIndex !== -1) {
+                    player.setSubtitleRenderPath('burned');
+                    player.#pendingSubtitleOffset = null;
+                }
             }
         });
     }

@@ -544,6 +544,9 @@ export default function (view) {
     }
 
     function onPlaybackStart(e, state) {
+        // A same-player next-item transition emits no playerchange; a size
+        // overlay left open would preview onto the new item.
+        subtitleTrackMenu.closeOverlays();
         console.debug('nowplaying event: ' + e.type);
         const player = this;
         onStateChanged.call(player, e, state);
@@ -677,6 +680,7 @@ export default function (view) {
     function releaseCurrentPlayer() {
         destroyStats();
         destroySubtitleSync();
+        subtitleTrackMenu.closeOverlays();
         resetUpNextDialog();
         const player = currentPlayer;
 
@@ -1030,9 +1034,12 @@ export default function (view) {
             if (player) {
                 const state = playbackManager.getPlayerState(player);
 
-                // show subtitle offset feature only if player and media support it
+                // Show the subtitle offset entry whenever the player
+                // supports offsets and the item has subtitle tracks;
+                // onSettingsOption explains the cases where the current
+                // subtitle cannot be shifted instead of hiding the entry.
                 const showSubOffset = playbackManager.supportSubtitleOffset(player)
-                        && playbackManager.canHandleOffsetOnCurrentSubtitle(player);
+                        && playbackManager.subtitleTracks(player).length > 0;
 
                 playerSettingsMenu.show({
                     mediaType: 'Video',
@@ -1056,10 +1063,27 @@ export default function (view) {
             toggleStats();
         } else if (selectedOption === 'suboffset') {
             const player = currentPlayer;
-            if (player) {
+            if (!player) {
+                return;
+            }
+
+            if (playbackManager.canHandleOffsetOnCurrentSubtitle(player)) {
                 playbackManager.enableShowingSubtitleOffset(player);
                 toggleSubtitleSync();
+                return;
             }
+
+            // Never a silent no-op: name the reason the current subtitle
+            // cannot be shifted.
+            const renderPath = typeof player.getSubtitleRenderingInfo === 'function'
+                ? player.getSubtitleRenderingInfo().path
+                : null;
+            const messageKey = renderPath === 'burned' || (renderPath === null && (playbackManager.getSubtitleStreamIndex(player) ?? -1) !== -1)
+                ? 'SubtitleOffsetUnavailableBurnedIn'
+                : 'SubtitleOffsetEnableSubtitleFirst';
+            import('../../../components/toast/toast').then(({ default: toast }) => {
+                toast(globalize.translate(messageKey));
+            });
         }
     }
 
@@ -1128,7 +1152,10 @@ export default function (view) {
         if (subtitleSyncOverlay) {
             subtitleSyncOverlay.toggle(action);
         } else if (player) {
+            // Construct AND toggle: the overlay is created hidden, so a
+            // first click that only constructed it would be a silent no-op.
             subtitleSyncOverlay = new SubtitleSync(player);
+            subtitleSyncOverlay.toggle(action);
         }
     }
 
@@ -1603,9 +1630,14 @@ export default function (view) {
         getPlayer: () => currentPlayer,
         loadActionSheet: () => import('../../../components/actionSheet/actionSheet')
             .then(({ default: actionSheet }) => actionSheet),
+        loadSizer: () => import('../../../components/subtitlesizer/subtitlesizer')
+            .then(({ default: SubtitleSizer }) => SubtitleSizer),
         playback: playbackManager,
         resetIdle,
         settings: userSettings,
+        showToast: message => {
+            import('../../../components/toast/toast').then(({ default: toast }) => toast(message));
+        },
         translate: globalize.translate,
         toggleSubtitleSync
     });

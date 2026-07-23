@@ -8,6 +8,7 @@ import { ServerConnections } from 'lib/jellyfin-apiclient';
 import { PluginType } from '../../types/plugin.ts';
 import Events from '../../utils/events.ts';
 import { getItems } from '../../utils/jellyfin-apiclient/getItems.ts';
+import { getTextSizeMultiplier } from '../../components/subtitlesettings/subtitleappearancehelper';
 
 // Based on https://github.com/googlecast/CastVideos-chrome/blob/master/CastVideos.js
 
@@ -375,7 +376,15 @@ class CastPlayer {
         }
 
         if (message.options?.items) {
-            message.subtitleAppearance = userSettings.getSubtitleAppearanceSettings();
+            // The receiver only understands the legacy named textSize
+            // presets; translate the locally persisted numeric multiplier to
+            // the nearest preset at this wire boundary (derived at send time,
+            // never stored, so there is no second source of truth).
+            const subtitleAppearance = userSettings.getSubtitleAppearanceSettings();
+            message.subtitleAppearance = {
+                ...subtitleAppearance,
+                textSize: getNearestLegacyTextSize(subtitleAppearance.textSize)
+            };
             message.subtitleBurnIn = appSettings.get('subtitleburnin') || '';
         }
 
@@ -608,6 +617,30 @@ function initializeChromecast() {
     });
 }
 
+/**
+ * Map any persisted textSize value (numeric multiplier or legacy preset) to
+ * the nearest legacy preset name the cast receiver understands.
+ * @param {string|number} textSize - Persisted subtitle text-size value.
+ * @returns {string} Legacy preset name ('' means 100%).
+ */
+function getNearestLegacyTextSize(textSize) {
+    const multiplier = getTextSizeMultiplier(textSize);
+    const presets = [
+        { name: 'smaller', multiplier: 0.75 },
+        { name: '', multiplier: 1 },
+        { name: 'large', multiplier: 1.25 },
+        { name: 'larger', multiplier: 1.5 },
+        { name: 'extralarge', multiplier: 2 }
+    ];
+    let nearest = presets[0];
+    for (const preset of presets) {
+        if (Math.abs(preset.multiplier - multiplier) < Math.abs(nearest.multiplier - multiplier)) {
+            nearest = preset;
+        }
+    }
+    return nearest.name;
+}
+
 class ChromecastPlayer {
     constructor() {
         // playbackManager needs this
@@ -615,6 +648,10 @@ class ChromecastPlayer {
         this.type = PluginType.MediaPlayer;
         this.id = 'chromecast';
         this.isLocalPlayer = false;
+        // Subtitle appearance is transmitted with each play message (see
+        // getNearestLegacyTextSize above); the in-player size menu keys its
+        // preset fallback off this flag.
+        this.supportsSubtitleAppearanceSettings = true;
         this.lastPlayerData = {};
 
         new CastSenderApi().load().then(() => {

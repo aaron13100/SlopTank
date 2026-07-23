@@ -1,8 +1,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PropTypes from 'prop-types';
 import React, { useEffect, useRef } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import SubtitleSizer from '../../../components/subtitlesizer/subtitlesizer';
 import SubtitleTrackMenu from './SubtitleTrackMenu';
 
 function MenuHarness({ options }) {
@@ -13,6 +14,7 @@ function MenuHarness({ options }) {
             ...options,
             button: buttonRef.current
         });
+        options.onMenu?.(menu);
 
         return () => menu.destroy();
     }, [ options ]);
@@ -24,19 +26,46 @@ MenuHarness.propTypes = {
     options: PropTypes.object.isRequired
 };
 
-function createHarness({ selectedIds, textSize = '', canApplyLive = true }) {
+/**
+ * Build the menu with real collaborators wherever the environment allows: the
+ * real SubtitleSizer overlay (rendered into jsdom's document) and a player
+ * object exercised through the same preview API contract the HTML video
+ * player implements, recording each call's effect on its own state.
+ */
+function createHarness({ selectedIds, textSize = '', playerKind = 'local' }) {
     let appearanceSettings = { textSize, verticalPosition: -3 };
     let liveApplyCount = 0;
-    const player = canApplyLive ? {
+    const player = {
+        previewLog: [],
         updateSubtitleAppearance: () => {
             liveApplyCount++;
         }
-    } : {};
+    };
+    if (playerKind === 'local') {
+        player.activePreview = null;
+        player.setSubtitleAppearancePreview = preview => {
+            player.activePreview = preview;
+            player.previewLog.push(preview);
+        };
+        player.clearSubtitleAppearancePreview = () => {
+            player.activePreview = null;
+            player.previewLog.push(null);
+        };
+        player.getSubtitleRenderingInfo = () => ({
+            path: 'custom', canAdjustSize: true, canAdjustOffset: true
+        });
+    } else if (playerKind === 'cast') {
+        player.supportsSubtitleAppearanceSettings = true;
+    }
     const actionSheet = {
         calls: [],
         show: options => {
             actionSheet.calls.push(options);
-            return Promise.resolve(selectedIds.shift());
+            const next = selectedIds.shift();
+            if (next instanceof Error) {
+                return Promise.reject(next);
+            }
+            return Promise.resolve(next);
         }
     };
 
@@ -61,16 +90,19 @@ function createHarness({ selectedIds, textSize = '', canApplyLive = true }) {
             settings.savedAppearances.push({ ...value });
         }
     };
+    const toasts = [];
     let resetIdleCount = 0;
     let toggleSubtitleSyncCount = 0;
     const options = {
         getPlayer: () => player,
         loadActionSheet: () => Promise.resolve(actionSheet),
+        loadSizer: () => Promise.resolve(SubtitleSizer),
         playback,
         resetIdle: () => {
             resetIdleCount++;
         },
         settings,
+        showToast: message => toasts.push(message),
         toggleSubtitleSync: () => {
             toggleSubtitleSyncCount++;
         },
@@ -85,16 +117,73 @@ function createHarness({ selectedIds, textSize = '', canApplyLive = true }) {
         options,
         playback,
         player,
-        settings
+        settings,
+        toasts
     };
 }
 
-describe('SubtitleTrackMenu', () => {
-    afterEach(cleanup);
+const sizerContainer = () => document.querySelector('.subtitleSizerContainer');
 
-    it('opens from the player button, applies 125% live, and shows it selected on replay', async () => {
+describe('SubtitleTrackMenu', () => {
+    afterEach(() => {
+        cleanup();
+        document.querySelectorAll('.subtitleSizer').forEach(el => el.parentNode.remove());
+    });
+
+    it('opens the live sizer overlay, previews slider moves, and persists on release', async () => {
+        const harness = createHarness({ selectedIds: [ 'subtitlesize' ], textSize: '1.5' });
+        render(<MenuHarness options={harness.options} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }));
+        await waitFor(() => expect(sizerContainer()).toBeTruthy());
+
+        // opening immediately begins a preview at the persisted size
+        expect(harness.player.activePreview).toEqual({
+            textSize: '1.5',
+            sampleText: 'SubtitleSizePreviewSample'
+        });
+
+        const slider = document.querySelector('.subtitleSizerSlider');
+        slider.value = '25';
+        fireEvent.input(slider);
+        expect(harness.player.activePreview.textSize).toBe('0.25');
+        expect(harness.settings.savedAppearances).toEqual([]);
+
+        fireEvent.change(slider);
+        expect(harness.settings.savedAppearances).toContainEqual({
+            textSize: '0.25',
+            verticalPosition: -3
+        });
+
+        // closing ends the preview and removes the overlay
+        fireEvent.click(document.querySelector('.subtitleSizer-closeButton'));
+        expect(harness.player.activePreview).toBeNull();
+        expect(sizerContainer()).toBeNull();
+    });
+
+    it('closes the previous sizer before opening another and on closeOverlays', async () => {
+        let menu;
+        const harness = createHarness({ selectedIds: [ 'subtitlesize', 'subtitlesize' ] });
+        harness.options.onMenu = m => {
+            menu = m;
+        };
+        render(<MenuHarness options={harness.options} />);
+
+        const button = screen.getByRole('button', { name: 'Subtitles' });
+        fireEvent.click(button);
+        await waitFor(() => expect(sizerContainer()).toBeTruthy());
+        fireEvent.click(button);
+        await waitFor(() => expect(document.querySelectorAll('.subtitleSizerContainer')).toHaveLength(1));
+
+        menu.closeOverlays();
+        expect(sizerContainer()).toBeNull();
+        expect(harness.player.activePreview).toBeNull();
+    });
+
+    it('falls back to presets plus an honest toast for a cast player', async () => {
         const harness = createHarness({
-            selectedIds: [ 'subtitlesize', 'subtitle-size-125', 'subtitlesize', undefined ]
+            playerKind: 'cast',
+            selectedIds: [ 'subtitlesize', 'subtitle-size-125' ]
         });
         render(<MenuHarness options={harness.options} />);
 
@@ -102,21 +191,46 @@ describe('SubtitleTrackMenu', () => {
 
         await waitFor(() => {
             expect(harness.settings.savedAppearances).toContainEqual({
-                textSize: 'large',
+                textSize: '1.25',
                 verticalPosition: -3
             });
         });
         expect(harness.getLiveApplyCount()).toBe(1);
+        expect(harness.toasts).toEqual([ 'SubtitleSizeAppliesOnCastStart' ]);
+        expect(sizerContainer()).toBeNull();
+    });
+
+    it('shows the preset selected from a persisted numeric multiplier', async () => {
+        const harness = createHarness({
+            playerKind: 'cast',
+            selectedIds: [ 'subtitlesize', undefined ],
+            textSize: '1.5'
+        });
+        render(<MenuHarness options={harness.options} />);
 
         fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }));
-        await waitFor(() => expect(harness.actionSheet.calls).toHaveLength(4));
+        await waitFor(() => expect(harness.actionSheet.calls).toHaveLength(2));
 
-        const replaySizeItems = harness.actionSheet.calls[3].items;
-        expect(replaySizeItems.find(item => item.id === 'subtitle-size-125')).toEqual({
-            id: 'subtitle-size-125',
-            name: '125%',
-            selected: true
+        const sizeItems = harness.actionSheet.calls[1].items;
+        expect(sizeItems.find(item => item.id === 'subtitle-size-150')?.selected).toBe(true);
+        expect(sizeItems.map(item => item.name)).toEqual(
+            [ '25%', '50%', '75%', '100%', '125%', '150%', '200%' ]);
+    });
+
+    it('explains instead of silently no-oping for a player with no appearance support', async () => {
+        const harness = createHarness({
+            playerKind: 'remote',
+            selectedIds: [ 'subtitlesize' ]
         });
+        render(<MenuHarness options={harness.options} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }));
+
+        await waitFor(() => {
+            expect(harness.toasts).toEqual([ 'SubtitleSizeUnavailableForDevice' ]);
+        });
+        expect(sizerContainer()).toBeNull();
+        expect(harness.settings.savedAppearances).toEqual([]);
     });
 
     it('leaves tracks and appearance unchanged when the action sheet is dismissed', async () => {
@@ -131,22 +245,16 @@ describe('SubtitleTrackMenu', () => {
         expect(harness.getResetIdleCount()).toBe(1);
     });
 
-    it('maps a legacy medium value to 100% and still persists when live apply is unavailable', async () => {
-        const harness = createHarness({
-            canApplyLive: false,
-            selectedIds: [ 'subtitlesize', 'subtitle-size-150' ],
-            textSize: 'medium'
-        });
+    it('treats a typed cancellation as a normal interaction, not an error', async () => {
+        const cancelError = new Error('ActionSheet closed without resolving'); // allow-raw-error: mirrors the exact untyped rejection shape legacy action sheets produce
+        cancelError.code = 'ACTION_SHEET_CANCELED';
+        const harness = createHarness({ selectedIds: [ cancelError ] });
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         render(<MenuHarness options={harness.options} />);
 
         fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }));
-        await waitFor(() => expect(harness.actionSheet.calls).toHaveLength(2));
+        await waitFor(() => expect(harness.getResetIdleCount()).toBe(1));
 
-        const sizeItems = harness.actionSheet.calls[1].items;
-        expect(sizeItems.find(item => item.id === 'subtitle-size-100')?.selected).toBe(true);
-        expect(harness.settings.savedAppearances).toContainEqual({
-            textSize: 'larger',
-            verticalPosition: -3
-        });
+        expect(consoleError).not.toHaveBeenCalled();
     });
 });

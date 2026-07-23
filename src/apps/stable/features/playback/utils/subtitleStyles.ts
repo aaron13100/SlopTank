@@ -15,29 +15,13 @@ export function useCustomSubtitles(userSettings: UserSettings) {
         case SubtitleStylingOption.Custom:
             return true;
         default:
-            // after a system update, ps4 isn't showing anything when creating a track element dynamically
-            // going to have to do it ourselves
-            if (browser.ps4) {
-                return true;
-            }
-
-            // Tizen 5 doesn't support displaying secondary subtitles
-            if ((browser.tizenVersion && browser.tizenVersion >= 5) || browser.web0s) {
-                return true;
-            }
-
-            if (browser.edge) {
-                return true;
-            }
-
-            // font-size styling does not seem to work natively in firefox. Switching to custom subtitles element for firefox.
-            if (browser.firefox) {
-                return true;
-            }
-
-            // iOS/macOS global caption settings are causing huge font-size and margins
-            if (browser.safari) return true;
-
-            return false;
+            // Default to the custom subtitle element everywhere: it is the
+            // one rendering pipeline whose styling (live size changes, the
+            // in-player size preview line) is fully controllable, and it is
+            // already the forced path for PS4, Tizen 5+, webOS, Edge,
+            // Firefox (native font-size styling broken), and iOS/macOS
+            // (global caption settings break size/margins). Native remains
+            // available as an explicit choice above.
+            return true;
     }
 }
