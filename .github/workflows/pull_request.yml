@@ -22,3 +22,12 @@ jobs:
       contents: read
     with:
       commit: ${{ github.event.pull_request.head.sha }}
+
+  product_identity:
+    name: Product identity 🪪
+    if: ${{ always() && !cancelled() }}
+    uses: ./.github/workflows/__product_identity.yml
+    permissions:
+      contents: read
+    with:
+      commit: ${{ github.event.pull_request.head.sha }}

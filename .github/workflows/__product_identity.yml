@@ -1,0 +1,33 @@
+name: Product identity 🪪
+
+on:
+  workflow_call:
+    inputs:
+      commit:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  debrand-guard:
+    name: Debrand regression guard 🪪
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout ⬇️
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ inputs.commit }}
+          show-progress: false
+          persist-credentials: false
+
+      # Upstream merges reintroduce Jellyfin product-identity branding (README
+      # heading and logo banner, tagline, donate link, localized strings, fin
+      # logo assets). The checker self-tests its manifest, then scans every
+      # tracked file; compatibility identifiers and GPL attribution are
+      # allowlisted so this check can never pressure anyone into breaking
+      # compat or stripping attribution.
+      - name: Enforce product identity 🪪
+        run: python3 scripts/check-product-identity.py --repo .
