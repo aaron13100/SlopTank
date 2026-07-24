@@ -378,6 +378,14 @@ export async function getCommands(options) {
         });
     }
 
+    if (!browser.tv && options.share === true && itemHelper.canCopyPlayLink(item)) {
+        commands.push({
+            name: globalize.translate('CopyPlayLink'),
+            id: 'copy-play-link',
+            icon: 'content_copy'
+        });
+    }
+
     if (options.openAlbum !== false && item.AlbumId && item.MediaType !== 'Photo') {
         commands.push({
             name: globalize.translate('ViewAlbum'),
@@ -626,9 +634,27 @@ function executeCommand(item, id, options) {
                 navigator.share({
                     title: item.Name,
                     text: item.Overview,
-                    url: `${apiClient.serverAddress()}/web/${appRouter.getRouteUrl(item)}`
+                    url: `${apiClient.serverAddress()}/web/${appRouter.getRouteUrl(item, { permalink: true })}`
                 });
                 break;
+            case 'copy-play-link': {
+                const permalinkPath = appRouter.getPlaybackPermalinkUrl(item);
+                const isPermalink = !!permalinkPath;
+                // No mintable external id yet: this fork has not built the
+                // sk- fallback identity capsule (docs/internal/permalink-url-design.md
+                // section 3.6), so fall back to the durable GUID watch link
+                // this app already treats as shareable (appRouter.js
+                // showVideoOsd / video/index.js resumeFromPermalink).
+                const playLinkPath = permalinkPath || `video?id=${item.Id}&serverId=${item.ServerId}`;
+                const playLinkUrl = `${apiClient.serverAddress()}/web/${playLinkPath}`;
+                copy(playLinkUrl).then(() => {
+                    toast(globalize.translate(isPermalink ? 'CopyPlayLinkSuccess' : 'CopyPlayLinkTemporarySuccess'));
+                }).catch(() => {
+                    prompt(globalize.translate('CopyPlayLink'), playLinkUrl);
+                });
+                getResolveFunction(resolve, id)();
+                break;
+            }
             case 'album':
                 appRouter.showItem(item.AlbumId, item.ServerId);
                 getResolveFunction(resolve, id)();

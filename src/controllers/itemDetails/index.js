@@ -1933,6 +1933,20 @@ export default function (view, params) {
 
         Promise.all([getPromise(apiClient, pageParams), apiClient.getCurrentUser()]).then(([item, user]) => {
             currentItem = item;
+
+            // #/details?id=&autoplay=1 previously triggered playback on load
+            // (removed by commit 634485a0de/1a4a330dcc once the video route
+            // itself became the durable, reloadable permalink). A link
+            // shared before that change now silently loads the info page
+            // instead of playing -- redirect to the watch route so a link
+            // someone already shared keeps doing what it always did
+            // (docs/internal/permalink-url-design.md section 5 point 2).
+            if (pageParams.autoplay && item.Id && item.ServerId) {
+                const watchPath = appRouter.getPlaybackPermalinkUrl(item) || ('video?id=' + item.Id + '&serverId=' + item.ServerId);
+                appRouter.replace(watchPath);
+                return;
+            }
+
             reloadFromItem(instance, page, pageParams, item, user);
         }).catch((error) => {
             console.error('failed to get item or current user: ', error);

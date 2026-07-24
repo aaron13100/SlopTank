@@ -34,6 +34,7 @@ import { setBackdropTransparency, TRANSPARENCY_LEVEL } from '../../../components
 import { pluginManager } from '../../../components/pluginManager';
 import { PluginType } from '../../../types/plugin.ts';
 import { getParameterByName } from '../../../utils/url.ts';
+import { permalinkStartSecondsToTicks } from '../../../components/router/permalinkId.ts';
 import SubtitleTrackMenu from './SubtitleTrackMenu';
 
 function getOpenedDialog() {
@@ -639,6 +640,12 @@ export default function (view) {
             return;
         }
 
+        // A permalink watch link (#/w/<id>?t=<seconds>, see
+        // permalinkId.permalinkStartSecondsToTicks) resolves to this same
+        // #/video route with a 't' query param appended; it always wins
+        // over the server-saved resume position when present and valid.
+        const requestedStartTicks = permalinkStartSecondsToTicks(getParameterByName('t'));
+
         const apiClient = ServerConnections.getApiClient(serverId);
         setPermalinkPreparing(true);
 
@@ -650,7 +657,7 @@ export default function (view) {
 
             return playbackManager.play({
                 items: [item],
-                startPositionTicks: item.UserData?.PlaybackPositionTicks || 0,
+                startPositionTicks: requestedStartTicks ?? (item.UserData?.PlaybackPositionTicks || 0),
                 fullscreen: true,
                 alreadyOnVideoOsd: true
             });

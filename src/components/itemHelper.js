@@ -220,7 +220,7 @@ export function canEditLyrics (user, item) {
     return user.Policy.IsAdministrator;
 }
 
-export function canShare (item, user) {
+function isShareableItemType (item) {
     if (item.Type === 'Program') {
         return false;
     }
@@ -233,10 +233,21 @@ export function canShare (item, user) {
     if (item.Type === 'SeriesTimer') {
         return false;
     }
-    if (item.Type === 'Recording' && item.Status !== 'Completed') {
-        return false;
-    }
-    return !isLocalItem(item) && user.Policy.EnablePublicSharing && appHost.supports(AppFeature.Sharing);
+    return item.Type !== 'Recording' || item.Status === 'Completed';
+}
+
+export function canShare (item, user) {
+    return isShareableItemType(item) && !isLocalItem(item) && user.Policy.EnablePublicSharing && appHost.supports(AppFeature.Sharing);
+}
+
+/**
+ * Whether "Copy Play Link" should be offered (docs/internal/permalink-url-design.md
+ * section 5): unlike canShare, this is never gated by EnablePublicSharing or
+ * native Share support -- it just copies a URL to the clipboard, which
+ * carries neither implication.
+ */
+export function canCopyPlayLink (item) {
+    return isShareableItemType(item) && !isLocalItem(item);
 }
 
 export function enableDateAddedDisplay (item) {
@@ -361,6 +372,7 @@ export default {
     canEditSubtitles,
     canEditLyrics,
     canShare: canShare,
+    canCopyPlayLink: canCopyPlayLink,
     enableDateAddedDisplay: enableDateAddedDisplay,
     canMarkPlayed: canMarkPlayed,
     canRate: canRate,
