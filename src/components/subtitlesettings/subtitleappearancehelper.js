@@ -138,14 +138,22 @@ function getTextStyles(settings, preview) {
     if (!preview) {
         const pos = parseInt(settings.verticalPosition, 10);
         const lineHeight = 1.35; // FIXME: It is better to read this value from element
+        // Distance from the anchored edge, measured in baseline lines against
+        // the SAME proportional baseline the font-size is built on -- never in
+        // `em`. `em` is the element's own font-size, which textSizeMultiplier
+        // scales, so an em offset makes the subtitle slide up the screen as the
+        // user enlarges it (out of the letterbox bar when small, into the
+        // middle of the picture when large). Position and size are independent
+        // axes: this keeps the offset tied to the video's size and nothing else.
+        const linesFromEdge = margin => `calc(var(--subtitle-font-size, 1em) * ${margin})`;
         if (pos < 0) {
             const margin = Math.abs(pos + 1) * lineHeight;
-            list.push({ name: 'margin-bottom', value: `${margin}em` });
+            list.push({ name: 'margin-bottom', value: linesFromEdge(margin) });
             list.push({ name: 'margin-top', value: '' });
         } else {
             const margin = pos * lineHeight;
             list.push({ name: 'margin-bottom', value: '' });
-            list.push({ name: 'margin-top', value: `${margin}em` });
+            list.push({ name: 'margin-top', value: linesFromEdge(margin) });
         }
     }
 

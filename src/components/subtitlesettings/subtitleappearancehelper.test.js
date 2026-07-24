@@ -73,3 +73,28 @@ describe('subtitle appearance sizing', () => {
         }
     );
 });
+
+function getMargin(settings, name) {
+    return getStyles(settings, false).text.find(style => style.name === name)?.value;
+}
+
+describe('subtitle vertical position', () => {
+    // @covers subtitle_controls.appearance_sizing.position_independent_of_text_size
+    it.each([ '0.25', '1', '2' ])(
+        'keeps the offset from the screen edge identical at text size %s',
+        textSize => {
+            // Anchored against the proportional baseline, never `em`: `em` is
+            // the element's own font-size, which textSize scales, so an em
+            // offset would slide the subtitle up the screen as it is enlarged.
+            expect(getMargin({ textSize, verticalPosition: -3 }, 'margin-bottom'))
+                .toBe('calc(var(--subtitle-font-size, 1em) * 2.7)');
+        }
+    );
+
+    // @covers subtitle_controls.appearance_sizing.position_anchors_to_chosen_edge
+    it('anchors to the top edge for a non-negative position', () => {
+        expect(getMargin({ verticalPosition: 2 }, 'margin-top'))
+            .toBe('calc(var(--subtitle-font-size, 1em) * 2.7)');
+        expect(getMargin({ verticalPosition: 2 }, 'margin-bottom')).toBe('');
+    });
+});

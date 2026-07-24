@@ -174,6 +174,11 @@
           "requiredAssertions": ["toast_shown", "no_settings_saved"]
         },
         {
+          "id": "subtitle_controls.track_menu.sizer_does_not_move_subtitle",
+          "type": "happy",
+          "requiredAssertions": ["rendered_cue_font_size_changes", "anchored_edge_unmoved"]
+        },
+        {
           "id": "subtitle_controls.track_menu.sizer_is_on_screen_and_draggable",
           "type": "happy",
           "requiredAssertions": ["overlay_on_screen_and_reachable", "real_drag_changes_rendered_size"]
@@ -214,6 +219,16 @@
           "id": "subtitle_controls.appearance_sizing.video_height_proportional_size",
           "type": "happy",
           "requiredAssertions": ["font_size_proportional_to_height"]
+        },
+        {
+          "id": "subtitle_controls.appearance_sizing.position_independent_of_text_size",
+          "type": "happy",
+          "requiredAssertions": ["edge_offset_identical_across_text_sizes"]
+        },
+        {
+          "id": "subtitle_controls.appearance_sizing.position_anchors_to_chosen_edge",
+          "type": "happy",
+          "requiredAssertions": ["offset_applied_to_chosen_edge_only"]
         },
         {
           "id": "subtitle_controls.appearance_sizing.out_of_range_multiplier_clamped",
