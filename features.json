@@ -148,7 +148,7 @@
         {
           "id": "subtitle_controls.track_menu.sizer_applies_to_rendered_cues",
           "type": "happy",
-          "requiredAssertions": ["rendered_cue_font_size_changes"]
+          "requiredAssertions": ["custom_cue_font_size_changes", "native_cue_raster_pixels_grow"]
         },
         {
           "id": "subtitle_controls.track_menu.offset_shifts_displayed_cue",
@@ -219,6 +219,11 @@
           "id": "subtitle_controls.appearance_sizing.video_height_proportional_size",
           "type": "happy",
           "requiredAssertions": ["font_size_proportional_to_height"]
+        },
+        {
+          "id": "subtitle_controls.appearance_sizing.native_cue_uses_concrete_size",
+          "type": "happy",
+          "requiredAssertions": ["native_cue_font_size_contains_no_css_variable"]
         },
         {
           "id": "subtitle_controls.appearance_sizing.position_independent_of_text_size",

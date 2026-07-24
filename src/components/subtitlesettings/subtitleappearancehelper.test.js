@@ -65,6 +65,17 @@ describe('subtitle appearance sizing', () => {
         expect(getSubtitleFontSize(videoHeight)).toBe(expectedFontSize);
     });
 
+    // @covers subtitle_controls.appearance_sizing.native_cue_uses_concrete_size
+    it('resolves a concrete pixel size for native cue compositors', () => {
+        const fontSize = getStyles({ textSize: '1.5' }, false, 32.4).text
+            .find(style => style.name === 'font-size')?.value;
+
+        // CSS custom properties inside ::cue are not resolved by every
+        // browser caption compositor, even when ordinary DOM previews support
+        // them. The native path must receive the final value directly.
+        expect(fontSize).toBe('48.6px');
+    });
+
     // @covers subtitle_controls.appearance_sizing.unusable_video_height_rejected
     it.each([ 0, -1, Number.NaN, Number.POSITIVE_INFINITY, undefined, '720' ])(
         'rejects an unusable observed video height (%s)',

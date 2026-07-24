@@ -304,6 +304,13 @@ export class HtmlVideoPlayer {
      */
     #subtitleResizeObserver;
     /**
+     * Last valid proportional subtitle baseline measured from the rendered
+     * video height. Native ::cue rules consume the concrete pixel value
+     * because not every browser caption compositor resolves CSS variables.
+     * @type {number | null}
+     */
+    #subtitleFontSize = null;
+    /**
      * Monotonic render generation per target text track (primary, secondary).
      * Bumped when a track (re)selection or teardown starts; every async
      * subtitle completion validates its captured generation before mutating
@@ -1953,7 +1960,11 @@ export class HtmlVideoPlayer {
         const applyVideoHeight = videoHeight => {
             const fontSize = subtitleAppearanceHelper.getSubtitleFontSize(videoHeight);
             if (fontSize !== null) {
+                this.#subtitleFontSize = fontSize;
                 this.#videoDialog?.style.setProperty('--subtitle-font-size', `${fontSize}px`);
+                // Native cues receive a concrete pixel value, so their rule
+                // must be regenerated when the rendered video height changes.
+                this.setCueAppearance();
             }
         };
 
@@ -1989,7 +2000,14 @@ export class HtmlVideoPlayer {
             document.getElementsByTagName('head')[0].appendChild(styleElem);
         }
 
-        styleElem.innerHTML = this.getCueCss(subtitleAppearanceHelper.getStyles(this.getEffectiveAppearanceSettings()), '.htmlvideoplayer');
+        styleElem.innerHTML = this.getCueCss(
+            subtitleAppearanceHelper.getStyles(
+                this.getEffectiveAppearanceSettings(),
+                false,
+                this.#subtitleFontSize
+            ),
+            '.htmlvideoplayer'
+        );
     }
 
     /**

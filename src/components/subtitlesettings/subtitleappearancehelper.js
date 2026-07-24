@@ -62,12 +62,21 @@ export function getSubtitleFontSize(videoHeight) {
     return Math.round(videoHeight * SUBTITLE_HEIGHT_RATIO * 100) / 100;
 }
 
-function getTextStyles(settings, preview) {
+function getTextStyles(settings, preview, subtitleFontSize) {
     const list = [];
     const textSizeMultiplier = getTextSizeMultiplier(settings.textSize);
+    const concreteFontSize = typeof subtitleFontSize === 'number'
+        && Number.isFinite(subtitleFontSize)
+        && subtitleFontSize > 0 ?
+        `${Math.round(subtitleFontSize * textSizeMultiplier * 100) / 100}px` :
+        null;
     list.push({
         name: 'font-size',
-        value: `calc(var(--subtitle-font-size, 1em) * ${textSizeMultiplier})`
+        // Native ::cue compositors do not consistently resolve CSS custom
+        // properties. Callers with a measured video baseline can provide it
+        // here; ordinary DOM subtitles retain the responsive CSS variable.
+        value: concreteFontSize
+            || `calc(var(--subtitle-font-size, 1em) * ${textSizeMultiplier})`
     });
 
     switch (settings.textWeight || '') {
@@ -183,9 +192,9 @@ function getWindowStyles(settings, preview) {
     return list;
 }
 
-export function getStyles(settings, preview) {
+export function getStyles(settings, preview, subtitleFontSize) {
     return {
-        text: getTextStyles(settings, preview),
+        text: getTextStyles(settings, preview, subtitleFontSize),
         window: getWindowStyles(settings, preview)
     };
 }
