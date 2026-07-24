@@ -20,6 +20,25 @@ test.setTimeout(180_000);
  *     which cue text is displayed.
  */
 
+test('the suite reaches the app and Jellyfin API through its configured origin', async ({ page }) => {
+    await page.goto('/web/#/login');
+
+    await expect(page).toHaveTitle('SlopTank');
+    await expect(page.locator('#loginPage')).toBeVisible({ timeout: 30_000 });
+
+    const publicInfo = await page.evaluate(async () => {
+        const response = await fetch('/System/Info/Public');
+        return {
+            status: response.status,
+            body: await response.json() as { ProductName?: string }
+        };
+    });
+    expect(publicInfo).toMatchObject({
+        status: 200,
+        body: { ProductName: 'Jellyfin Server' }
+    });
+});
+
 test('the browser harness removes a late webpack error overlay', async ({ page }) => {
     await page.goto('/web/');
     await page.evaluate(() => {

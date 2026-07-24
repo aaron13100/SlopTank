@@ -7,7 +7,8 @@ module.exports = merge(common, {
     // CleanWebpackPlugin runs when the dev server starts. Keep its output path
     // separate so `npm run serve` can never erase the deployed production build.
     output: {
-        path: path.resolve(__dirname, '.webpack-dev')
+        path: path.resolve(__dirname, '.webpack-dev'),
+        publicPath: '/web/'
     },
     // In order for live reload to work we must use "web" as the target not "browserslist"
     target: process.env.WEBPACK_SERVE ? 'web' : 'browserslist',
@@ -30,6 +31,17 @@ module.exports = merge(common, {
                 errors: true,
                 warnings: false
             }
-        }
+        },
+        devMiddleware: {
+            publicPath: '/web/'
+        },
+        proxy: [
+            {
+                context: pathname => !pathname.startsWith('/web/') && pathname !== '/ws',
+                target: 'http://127.0.0.1:8096',
+                changeOrigin: true,
+                ws: true
+            }
+        ]
     }
 });

@@ -15,4 +15,17 @@ describe('webpack output paths', () => {
         expect(productionConfig.output.path).toBe(path.join(projectRoot, 'dist'));
         expect(devConfig.output.path).not.toBe(productionConfig.output.path);
     });
+
+    it('serves the web app and Jellyfin API from the production-shaped dev origin', () => {
+        expect(devConfig.output.publicPath).toBe('/web/');
+        expect(devConfig.devServer.devMiddleware.publicPath).toBe('/web/');
+
+        const [ proxy ] = devConfig.devServer.proxy;
+        expect(proxy.target).toBe('http://127.0.0.1:8096');
+        expect(proxy.ws).toBe(true);
+        expect(proxy.context('/web/')).toBe(false);
+        expect(proxy.context('/ws')).toBe(false);
+        expect(proxy.context('/System/Info/Public')).toBe(true);
+        expect(proxy.context('/socket')).toBe(true);
+    });
 });
