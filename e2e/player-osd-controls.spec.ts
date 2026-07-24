@@ -3,6 +3,7 @@ import {
     expect,
     login,
     onScreenState,
+    requireControlsItemId,
     requireDirectPlayChapterItemId,
     requireTranscodeChapterItemId,
     test
@@ -187,9 +188,10 @@ for (const playbackCase of [
     });
 }
 
-test('seek bar hover preview renders and updates with the hovered position', async ({ page, config }) => {
+test('seek bar trickplay preview renders a real thumbnail and updates its tile', async ({ page, config }) => {
+    const itemId = requireControlsItemId();
     await login(page, config.username, config.password);
-    await startPlayback(page, config);
+    await startPlayback(page, { ...config, itemId });
 
     await openOsd(page);
     const slider = page.locator('.videoOsdBottom-maincontrols .osdPositionSlider');
@@ -199,13 +201,39 @@ test('seek bar hover preview renders and updates with the hovered position', asy
     }
 
     const bubble = slider.locator('xpath=..').locator('.sliderBubble');
+    const successfulThumbnail = page.waitForResponse(
+        response => response.url().includes('/Trickplay/')
+            && new URL(response.url()).pathname.endsWith('.jpg')
+            && response.ok()
+    );
     await page.mouse.move(box.x + box.width * 0.1, box.y + box.height / 2);
+    await successfulThumbnail;
     await expect(bubble).toBeVisible();
     await expect(bubble).not.toBeEmpty();
+    const thumbnail = bubble.locator('.chapterThumbWrapper');
+    await expect(thumbnail).toBeVisible();
+    await expect.poll(
+        () => thumbnail.evaluate(element => {
+            const style = getComputedStyle(element);
+            return `${style.backgroundImage} ${style.backgroundPosition}`;
+        }),
+        { message: 'expected the trickplay thumbnail to render its first sprite tile' }
+    ).toMatch(/^url\(".+"\) -?\d+px -?\d+px$/);
     const previewNear10Percent = await bubble.textContent();
+    const firstTile = await thumbnail.evaluate(element => {
+        const style = getComputedStyle(element);
+        return `${style.backgroundImage} ${style.backgroundPosition}`;
+    });
 
     await page.mouse.move(box.x + box.width * 0.6, box.y + box.height / 2);
     await expect.poll(() => bubble.textContent()).not.toBe(previewNear10Percent);
+    await expect.poll(
+        () => thumbnail.evaluate(element => {
+            const style = getComputedStyle(element);
+            return `${style.backgroundImage} ${style.backgroundPosition}`;
+        }),
+        { message: 'expected the trickplay thumbnail to advance to the hovered sprite tile' }
+    ).not.toBe(firstTile);
 });
 
 test('volume slider and mute button change the real video state', async ({ page, config }) => {
