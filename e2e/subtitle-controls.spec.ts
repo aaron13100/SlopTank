@@ -426,6 +426,22 @@ test('subtitle size applies live to real rendered cues', async ({ page, config }
 // @covers subtitle_controls.track_menu.native_preference_uses_controllable_renderer
 test('a saved Native preference still produces a resizable real cue', async ({ page, config }, testInfo) => {
     await login(page, config.username, config.password);
+    let legacyCueCount = 0;
+    await page.route('**/Subtitles/**/Stream.js?*', async route => {
+        const response = await route.fetch();
+        const payload = await response.json() as {
+            TrackEvents?: Array<{ Text?: string } & Record<string, unknown>>
+        };
+        const markedEvents = payload.TrackEvents?.map(event => {
+            if (!event.Text) return event;
+            legacyCueCount++;
+            return { ...event, Text: `<font size="24">${event.Text}</font>` };
+        });
+        await route.fulfill({
+            response,
+            json: { ...payload, TrackEvents: markedEvents }
+        });
+    });
     await page.evaluate(() => {
         const server = JSON.parse(localStorage.jellyfin_credentials).Servers[0];
         localStorage.setItem(`${server.UserId}-localplayersubtitleappearance3`, JSON.stringify({
@@ -445,8 +461,10 @@ test('a saved Native preference still produces a resizable real cue', async ({ p
     // the controllable element for the actual embedded subtitle track.
     const subtitleLine = page.locator('.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)');
     await parkOnCue(video, subtitleLine);
-    // This fixture contains the same legacy markup that exposed the user bug:
-    // the placeholder resized, while <font size="24"> kept the real cue fixed.
+    // Feed the same legacy markup that exposed the user bug through the real
+    // subtitle fetch and renderer: the placeholder resized, while
+    // <font size="24"> kept the real cue fixed.
+    expect(legacyCueCount).toBeGreaterThan(0);
     await expect(subtitleLine.locator('font[size]')).not.toHaveCount(0);
     await video.evaluate((el: HTMLVideoElement) => el.pause());
 
