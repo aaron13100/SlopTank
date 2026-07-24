@@ -1,6 +1,7 @@
 # npm
 dist
 web
+.webpack-dev
 node_modules
 
 # test coverage
