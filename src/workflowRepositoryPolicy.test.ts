@@ -24,6 +24,7 @@ const workflowText = Object.entries(workflows)
 
 const pullRequestWorkflow = workflows['../.github/workflows/pull_request.yml'];
 const qualityChecksWorkflow = workflows['../.github/workflows/__quality_checks.yml'];
+const publicWorkflowText = `${pullRequestWorkflow}\n${qualityChecksWorkflow}`;
 
 describe('SlopTank GitHub Actions repository policy', () => {
     it('does not silently gate jobs to the upstream Jellyfin repository', () => {
@@ -47,8 +48,14 @@ describe('SlopTank GitHub Actions repository policy', () => {
         expect(pullRequestWorkflow).not.toContain('pull_request_target');
         expect(pullRequestWorkflow).not.toContain('paths-ignore');
         expect(pullRequestWorkflow).toMatch(/^permissions:\n {2}contents: read$/m);
-        expect(pullRequestWorkflow.split('\n').some(line => line.trim().endsWith(': write'))).toBe(false);
-        expect(pullRequestWorkflow.split('\n').some(line => line.trimStart().startsWith('secrets:'))).toBe(false);
+        expect(publicWorkflowText.split('\n').some(line => line.trim().endsWith(': write'))).toBe(false);
+        expect(publicWorkflowText.split('\n').some(line => line.trimStart().startsWith('secrets:'))).toBe(false);
+    });
+
+    it('labels contributor-visible checks as the public tier', () => {
+        expect(pullRequestWorkflow).toMatch(/^name: Public pull request checks /m);
+        expect(qualityChecksWorkflow).toMatch(/^name: Public quality checks /m);
+        expect(qualityChecksWorkflow).toMatch(/^ {4}name: 'Public quality: Run [^']+'$/m);
     });
 
     it('exposes only the public quality job on pull requests', () => {
@@ -83,7 +90,14 @@ describe('SlopTank GitHub Actions repository policy', () => {
     });
 
     it('removes checkout credentials before contributor scripts execute', () => {
-        expect(qualityChecksWorkflow).toMatch(/persist-credentials:\s+false/);
+        const checkoutSteps = qualityChecksWorkflow
+            .split(/\n(?= {6}- name:)/)
+            .filter(step => step.includes('uses: actions/checkout@'));
+
+        expect(checkoutSteps).toHaveLength(3);
+        for (const checkoutStep of checkoutSteps) {
+            expect(checkoutStep).toMatch(/persist-credentials:\s+false/);
+        }
     });
 
     it('runs the Playwright suite against a real SlopTank server on pull requests', () => {

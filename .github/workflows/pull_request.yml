@@ -1,4 +1,4 @@
-name: Pull Request 📥
+name: Public pull request checks 📥
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   quality_checks:
-    name: Quality checks 👌🧪
+    name: Public quality checks 👌🧪
     if: ${{ always() && !cancelled() }}
     uses: ./.github/workflows/__quality_checks.yml
     permissions:
