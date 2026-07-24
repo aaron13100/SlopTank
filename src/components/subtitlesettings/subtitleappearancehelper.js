@@ -22,7 +22,12 @@ export function getTextSizeMultiplier(textSize) {
     // the empty string (legacy 100% default) must skip numeric parsing
     // because Number('') is 0.
     const isNonEmptyString = typeof textSize === 'string' && textSize.trim() !== '';
-    const numeric = typeof textSize === 'number' ? textSize : (isNonEmptyString ? Number(textSize) : NaN);
+    let numeric = NaN;
+    if (typeof textSize === 'number') {
+        numeric = textSize;
+    } else if (isNonEmptyString) {
+        numeric = Number(textSize);
+    }
     if (Number.isFinite(numeric)) {
         return Math.min(TEXT_SIZE_MAX_MULTIPLIER, Math.max(TEXT_SIZE_MIN_MULTIPLIER, numeric));
     }
@@ -137,7 +142,8 @@ function getTextStyles(settings, preview) {
 
     if (!preview) {
         const pos = parseInt(settings.verticalPosition, 10);
-        const lineHeight = 1.35; // FIXME: It is better to read this value from element
+        // Keep this in sync with the subtitle element's effective line height.
+        const lineHeight = 1.35;
         // Distance from the anchored edge, measured in baseline lines against
         // the SAME proportional baseline the font-size is built on -- never in
         // `em`. `em` is the element's own font-size, which textSizeMultiplier

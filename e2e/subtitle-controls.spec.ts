@@ -60,13 +60,13 @@ async function parkOnCue(
 ) {
     await expect
         .poll(async () => {
-            const position = await video.evaluate((el: HTMLVideoElement, [target, window]) => {
+            const position = await video.evaluate(async (el: HTMLVideoElement, [target, window]) => {
                 // Re-seek only when outside the window, so normal playback
                 // through the dialogue is not yanked back to the start of it.
                 if (el.currentTime < target - 1 || el.currentTime > target + window) {
                     el.currentTime = target;
                 }
-                if (el.paused) void el.play();
+                if (el.paused) await el.play();
                 return el.currentTime;
             }, [ DIALOGUE_TIME, DIALOGUE_WINDOW ]);
             const text = (await subtitleLine.textContent()) ?? '';
