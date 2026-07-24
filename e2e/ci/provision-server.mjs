@@ -28,6 +28,7 @@ const requiredOptions = [
     'password',
     'item-name',
     'transcode-item-name',
+    'controls-item-name',
     'series-name',
     'max-attempts',
     'poll-interval-ms'
@@ -366,6 +367,12 @@ async function provision(options) {
         'Movie',
         options['transcode-item-name']
     );
+    const controlsItemId = await waitForItemByName(
+        options,
+        authentication.AccessToken,
+        'Movie',
+        options['controls-item-name']
+    );
     const seriesId = await waitForItemByName(options, authentication.AccessToken, 'Series', options['series-name']);
     const episodeItemId = await waitForEpisodes(options, authentication.AccessToken, seriesId);
     return {
@@ -374,6 +381,9 @@ async function provision(options) {
         E2E_PASSWORD: options.password,
         E2E_ITEM_ID: itemId,
         E2E_TRANSCODE_ITEM_ID: transcodeItemId,
+        E2E_TRANSCODE_CHAPTER_ITEM_ID: transcodeItemId,
+        E2E_CONTROLS_ITEM_ID: controlsItemId,
+        E2E_DIRECT_PLAY_CHAPTER_ITEM_ID: controlsItemId,
         E2E_EPISODE_ITEM_ID: episodeItemId,
         E2E_SERVER_ID: authentication.ServerId
     };

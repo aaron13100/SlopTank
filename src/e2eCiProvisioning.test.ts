@@ -39,6 +39,9 @@ function itemsFixtureResponse(url: string | undefined, itemPolls: number) {
     if (url?.includes('SearchTerm=ci-e2e-transcode')) {
         return { Items: [ { Id: 'item-2', Name: 'ci-e2e-transcode' } ] };
     }
+    if (url?.includes('SearchTerm=ci-e2e-controls')) {
+        return { Items: [ { Id: 'item-3', Name: 'ci-e2e-controls' } ] };
+    }
     if (url?.includes('SearchTerm=ci-e2e-show')) {
         return { Items: [ { Id: 'series-1', Name: 'ci-e2e-show' } ] };
     }
@@ -92,6 +95,7 @@ function runProvisioner(baseUrl: string): Promise<CommandResult> {
         '--password', ciCredential,
         '--item-name', 'ci-e2e-fixture',
         '--transcode-item-name', 'ci-e2e-transcode',
+        '--controls-item-name', 'ci-e2e-controls',
         '--series-name', 'ci-e2e-show',
         '--max-attempts', '3',
         '--poll-interval-ms', '1'
@@ -177,6 +181,9 @@ describe('CI Jellyfin provisioning command', () => {
             `E2E_PASSWORD=${ciCredential}`,
             'E2E_ITEM_ID=item-1',
             'E2E_TRANSCODE_ITEM_ID=item-2',
+            'E2E_TRANSCODE_CHAPTER_ITEM_ID=item-2',
+            'E2E_CONTROLS_ITEM_ID=item-3',
+            'E2E_DIRECT_PLAY_CHAPTER_ITEM_ID=item-3',
             'E2E_EPISODE_ITEM_ID=episode-1',
             'E2E_SERVER_ID=server-1'
         ]);

@@ -20,6 +20,44 @@ function requireEnv(name: string): string {
     return value;
 }
 
+/**
+ * Read the dedicated dual-audio, chaptered player-controls fixture id.
+ *
+ * This stays opt-in instead of joining E2eConfig because unrelated specs must
+ * remain runnable against servers that only provide the baseline media item.
+ *
+ * @returns The configured library item id.
+ */
+export function requireControlsItemId(): string {
+    const value = process.env.E2E_CONTROLS_ITEM_ID; // allow-direct-env: this module is the e2e config adapter
+    if (!value) {
+        throw new Error( // allow-raw-error: test setup fast-fail, not user-facing production code
+            'Missing required env var E2E_CONTROLS_ITEM_ID. Set it to a library item with '
+            + 'at least two audio tracks and at least three chapters.'
+        );
+    }
+    return value;
+}
+
+/**
+ * Read the chaptered direct-play fixture id used by playback timeline specs.
+ *
+ * @returns The configured library item id.
+ */
+export function requireDirectPlayChapterItemId(): string {
+    return requireEnv('E2E_DIRECT_PLAY_CHAPTER_ITEM_ID');
+}
+
+/**
+ * Read the chaptered progressive-transcode fixture id used by playback
+ * timeline specs.
+ *
+ * @returns The configured library item id.
+ */
+export function requireTranscodeChapterItemId(): string {
+    return requireEnv('E2E_TRANSCODE_CHAPTER_ITEM_ID');
+}
+
 export const test = base.extend<{ config: E2eConfig }>({
     // eslint-disable-next-line no-empty-pattern
     config: async ({}, use) => {
