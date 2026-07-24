@@ -321,6 +321,89 @@ test('the size control lands on screen and a real drag resizes what is shown', a
     await expect.poll(() => sampleLineFontSize(page)).toBeLessThan(before);
 });
 
+// @covers subtitle_controls.track_menu.sizer_is_on_screen_and_draggable
+test('the TV remote can open, adjust, and close the size control', async ({ page, config }) => {
+    await page.addInitScript(() => localStorage.setItem('layout', 'tv'));
+    await login(page, config.username, config.password);
+    await startPlayback(page, config);
+
+    await expect(page.locator('html')).toHaveClass(/layout-tv/);
+    await expect.poll(() => page.evaluate(
+        () => document.activeElement?.classList.contains('btnPause')
+    )).toBe(true);
+
+    // A TV remote starts on the player's focused pause button. Navigate to
+    // Subtitles, then move from the selected track to Subtitle Size.
+    for (let press = 0; press < 3; press++) {
+        await page.keyboard.press('ArrowRight');
+    }
+    await expect.poll(() => page.evaluate(
+        () => document.activeElement?.classList.contains('btnSubtitles')
+    )).toBe(true);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.actionSheetMenuItem').first()).toBeVisible();
+    await expect.poll(() => page.evaluate(
+        () => document.activeElement?.classList.contains('actionSheetMenuItem')
+    )).toBe(true);
+
+    for (let press = 0; press < 10; press++) {
+        const focusedText = await page.evaluate(
+            () => document.activeElement?.textContent?.trim());
+        if (focusedText === 'Subtitle Size') break;
+        await page.keyboard.press('ArrowUp');
+    }
+    await expect.poll(() => page.evaluate(
+        () => document.activeElement?.textContent?.trim()
+    )).toBe('Subtitle Size');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.subtitleSizerContainer')).toBeVisible();
+    await expectOverlayReachable(page, '.subtitleSizerContainer');
+
+    // Only remote keys from here: focus the range control through the app's
+    // spatial navigation, adjust it, and observe the rendered preview grow.
+    for (let press = 0; press < 10; press++) {
+        const sliderFocused = await page.evaluate(
+            () => document.activeElement?.classList.contains('subtitleSizerSlider'));
+        if (sliderFocused) break;
+        await page.keyboard.press('ArrowUp');
+    }
+    await expect.poll(() => page.evaluate(
+        () => document.activeElement?.classList.contains('subtitleSizerSlider')
+    )).toBe(true);
+
+    const slider = page.locator('.subtitleSizerSlider');
+    const beforeValue = Number(await slider.inputValue());
+    const maxValue = Number(await slider.getAttribute('max'));
+    const beforeFontSize = await sampleLineFontSize(page);
+    const adjustKey = beforeValue < maxValue ? 'ArrowRight' : 'ArrowLeft';
+    const restoreKey = adjustKey === 'ArrowRight' ? 'ArrowLeft' : 'ArrowRight';
+    const adjustedValue = beforeValue + (adjustKey === 'ArrowRight' ? 5 : -5);
+    await page.keyboard.press(adjustKey);
+    await expect(slider).toHaveValue(String(adjustedValue));
+    if (adjustKey === 'ArrowRight') {
+        await expect.poll(() => sampleLineFontSize(page)).toBeGreaterThan(beforeFontSize);
+    } else {
+        await expect.poll(() => sampleLineFontSize(page)).toBeLessThan(beforeFontSize);
+    }
+    await page.keyboard.press(restoreKey);
+    await expect(slider).toHaveValue(String(beforeValue));
+    await page.keyboard.press('Enter');
+
+    // The close button is part of the same remote focus graph.
+    for (let press = 0; press < 10; press++) {
+        const closeFocused = await page.evaluate(
+            () => document.activeElement?.classList.contains('subtitleSizer-closeButton'));
+        if (closeFocused) break;
+        await page.keyboard.press('ArrowUp');
+    }
+    await expect.poll(() => page.evaluate(
+        () => document.activeElement?.classList.contains('subtitleSizer-closeButton')
+    )).toBe(true);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.subtitleSizerContainer')).toHaveCount(0);
+    await expect(page.locator('.videoSubtitlesPreviewLine')).toHaveCount(0);
+});
+
 // @covers subtitle_controls.track_menu.sizer_dismissal_clears_sample_line
 test('the sample line goes away however the user dismisses the size control', async ({ page, config }) => {
     await login(page, config.username, config.password);

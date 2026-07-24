@@ -131,6 +131,18 @@ export async function login(page: import('@playwright/test').Page, username: str
     // Manual Login earlier races loadUserList(), which switches back to the
     // visual form and leaves Playwright targeting a hidden submit button.
     const userButton = page.getByRole('button', { name: username, exact: true });
+    const selectServerHeading = page.getByRole('heading', { name: 'Select Server' });
+    await expect(userButton.or(selectServerHeading)).toBeVisible({ timeout: 30_000 });
+
+    // A clean production build has no server baked into config.json. Connect
+    // through the same UI a first-time user sees, using the origin under test.
+    if (await selectServerHeading.isVisible()) {
+        await page.getByText('Add Server', { exact: true }).click();
+        await page.getByLabel('Host').fill(new URL(page.url()).origin);
+        await page.getByText('Connect', { exact: true }).click();
+        await expect(userButton).toBeVisible({ timeout: 30_000 });
+    }
+
     await userButton.click();
 
     const manualForm = page.locator('.manualLoginForm:visible');

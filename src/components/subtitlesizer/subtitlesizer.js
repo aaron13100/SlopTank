@@ -12,6 +12,7 @@
 import { getTextSizeMultiplier } from '../subtitlesettings/subtitleappearancehelper';
 import Events from '../../utils/events.ts';
 import '../../elements/emby-slider/emby-slider';
+import layoutManager from '../layoutManager';
 import template from './subtitlesizer.template.html';
 import './subtitlesizer.scss';
 
@@ -50,6 +51,14 @@ export default class SubtitleSizer {
         this.valueLabel = parent.querySelector('.subtitleSizerValue');
         this.message = parent.querySelector('.subtitleSizerMessage');
         this.sliderContainer = parent.querySelector('.subtitleSizerSliderContainer');
+
+        if (layoutManager.tv) {
+            this.slider.classList.add('focusable');
+            // Defer until the registered element attaches in Firefox.
+            setTimeout(() => {
+                this.slider.enableKeyboardDragging();
+            }, 0);
+        }
 
         const initialMultiplier = getTextSizeMultiplier(
             this.settings.getSubtitleAppearanceSettings().textSize);
