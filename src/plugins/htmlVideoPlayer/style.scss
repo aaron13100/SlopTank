@@ -71,6 +71,16 @@ video[controls]::-webkit-media-controls {
     background-color: rgba(0, 0, 0, 0.8);
 }
 
+.videoSubtitlesInner font,
+.videoSecondarySubtitlesInner font {
+    // Embedded text tracks can contain legacy <font size="…"> markup. Those
+    // presentational attributes must not override the user's live appearance
+    // controls on the cue container.
+    color: inherit !important;
+    font-family: inherit !important;
+    font-size: inherit !important;
+}
+
 .videoSecondarySubtitlesInner {
     max-width: 70%;
     background-color: rgba(0, 0, 0, 0.8);

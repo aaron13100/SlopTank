@@ -2025,7 +2025,7 @@ export class HtmlVideoPlayer {
                 return;
             }
 
-            if (useCustomSubtitles(userSettings)) {
+            if (useCustomSubtitles()) {
                 this.renderSubtitlesWithCustomElement(videoElement, track, item, targetTextTrackIndex);
                 return;
             }

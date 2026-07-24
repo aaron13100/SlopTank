@@ -131,7 +131,8 @@
       "files": [
         "src/controllers/playback/video/SubtitleTrackMenu.js",
         "src/components/subtitlesizer/subtitlesizer.js",
-        "src/components/subtitlesync/subtitlesync.js"
+        "src/components/subtitlesync/subtitlesync.js",
+        "src/apps/stable/features/playback/utils/subtitleStyles.ts"
       ],
       "added": "2026-07-23",
       "paths": [
@@ -148,7 +149,12 @@
         {
           "id": "subtitle_controls.track_menu.sizer_applies_to_rendered_cues",
           "type": "happy",
-          "requiredAssertions": ["custom_cue_font_size_changes", "native_cue_raster_pixels_grow"]
+          "requiredAssertions": ["custom_cue_font_size_changes", "saved_native_preference_real_cue_grows"]
+        },
+        {
+          "id": "subtitle_controls.track_menu.native_preference_uses_controllable_renderer",
+          "type": "happy",
+          "requiredAssertions": ["native_preference_selects_custom_renderer", "embedded_font_size_inherits_user_size", "real_cue_raster_resizes"]
         },
         {
           "id": "subtitle_controls.track_menu.offset_shifts_displayed_cue",

@@ -143,12 +143,11 @@ function previewFontSize(page: import('@playwright/test').Page) {
 }
 
 /**
- * Compare a screenshot containing a native browser cue with the exact same
- * paused video frame after subtitles are disabled. This measures composited
- * pixels -- not CSS assigned to an element that may not be the layer the user
- * actually sees.
+ * Measure bright connected subtitle glyphs in a screenshot. This checks
+ * composited pixels -- not CSS assigned to an element that may not be the
+ * layer the user actually sees.
  * @param page - Page used to decode the screenshots in a browser canvas.
- * @param withSubtitle - PNG screenshot with the native cue visible.
+ * @param withSubtitle - PNG screenshot with the rendered cue visible.
  * @param withoutSubtitle - PNG screenshot of the same paused frame without it.
  */
 async function renderedSubtitlePixels(
@@ -399,12 +398,19 @@ test('subtitle size applies live to real rendered cues', async ({ page, config }
     // real cue to render, then park on it.
     const subtitleLine = page.locator('.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)');
     await parkOnCue(video, subtitleLine);
+    await video.evaluate((el: HTMLVideoElement) => el.pause());
 
     await openSizeOverlay(page);
+    const cueIsolation = await page.addStyleTag({
+        content: '.videoSubtitlesInner:not(.videoSubtitlesPreviewLine) { background: #000 !important; }'
+    });
     await dragSizeSliderTo(page, 0);
+    await expect(page.locator('.subtitleSizerSlider')).toHaveValue('25');
     const smallPng = await subtitleLine.screenshot();
     await dragSizeSliderTo(page, 1);
+    await expect(page.locator('.subtitleSizerSlider')).toHaveValue('200');
     const largePng = await subtitleLine.screenshot();
+    await cueIsolation.evaluate(element => element.remove());
     await testInfo.attach('custom-cue-25.png', { body: smallPng, contentType: 'image/png' });
     await testInfo.attach('custom-cue-200.png', { body: largePng, contentType: 'image/png' });
 
@@ -417,8 +423,8 @@ test('subtitle size applies live to real rendered cues', async ({ page, config }
     await page.locator('.subtitleSizer-closeButton').click();
 });
 
-// @covers subtitle_controls.track_menu.sizer_applies_to_rendered_cues
-test('subtitle size changes the pixels of a real native cue', async ({ page, config }, testInfo) => {
+// @covers subtitle_controls.track_menu.native_preference_uses_controllable_renderer
+test('a saved Native preference still produces a resizable real cue', async ({ page, config }, testInfo) => {
     await login(page, config.username, config.password);
     await page.evaluate(() => {
         const server = JSON.parse(localStorage.jellyfin_credentials).Servers[0];
@@ -434,75 +440,33 @@ test('subtitle size changes the pixels of a real native cue', async ({ page, con
     await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
     await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
 
-    await expect.poll(async () => video.evaluate(async (el: HTMLVideoElement, [target, window]) => {
-        if (el.currentTime < target - 1 || el.currentTime > target + window) {
-            el.currentTime = target;
-        }
-        if (el.paused) await el.play();
-        return Array.from(el.textTracks).some(track => (track.activeCues?.length ?? 0) > 0);
-    }, [ DIALOGUE_TIME, DIALOGUE_WINDOW ]), { timeout: 60_000 }).toBe(true);
+    // Browser-native caption compositors do not consistently honor live
+    // font-size changes. Prove that an old Native preference still selects
+    // the controllable element for the actual embedded subtitle track.
+    const subtitleLine = page.locator('.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)');
+    await parkOnCue(video, subtitleLine);
+    // This fixture contains the same legacy markup that exposed the user bug:
+    // the placeholder resized, while <font size="24"> kept the real cue fixed.
+    await expect(subtitleLine.locator('font[size]')).not.toHaveCount(0);
     await video.evaluate((el: HTMLVideoElement) => el.pause());
 
-    // Prove this is the missing native branch, not the custom element already
-    // covered above.
-    await expect(page.locator('.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)')).toHaveCount(0);
-
     await openSizeOverlay(page);
-    const videoBox = await video.boundingBox();
-    if (!videoBox) throw new Error('video has no screenshot bounds'); // allow-raw-error: e2e setup fast-fail
-
-    // Remove every player control from the captured pixels. The paused movie
-    // frame then stays bit-identical; only the browser-composited cue can
-    // differ between captures.
+    const cueIsolation = await page.addStyleTag({
+        content: '.videoSubtitlesInner:not(.videoSubtitlesPreviewLine) { background: #000 !important; }'
+    });
     await dragSizeSliderTo(page, 0);
-    const mask = await page.addStyleTag({
-        content: '.videoOsdBottom, .skinHeader, .subtitleSizer { visibility: hidden !important; }'
-    });
-    const smallPng = await page.screenshot({ clip: videoBox });
-    const cueMaskCss = `video.htmlvideoplayer::cue {
-        color: transparent !important;
-        background-color: transparent !important;
-        text-shadow: none !important;
-    }`;
-    const smallCueMask = await page.addStyleTag({ content: cueMaskCss });
-    const smallBaselinePng = await page.screenshot({ clip: videoBox });
-    await smallCueMask.evaluate(element => element.remove());
-    await mask.evaluate(element => element.remove());
+    await expect(page.locator('.subtitleSizerSlider')).toHaveValue('25');
+    const smallPng = await subtitleLine.screenshot();
     await dragSizeSliderTo(page, 1);
-    const largeMask = await page.addStyleTag({
-        content: '.videoOsdBottom, .skinHeader, .subtitleSizer { visibility: hidden !important; }'
-    });
-    const largePng = await page.screenshot({ clip: videoBox });
+    await expect(page.locator('.subtitleSizerSlider')).toHaveValue('200');
+    const largePng = await subtitleLine.screenshot();
+    await cueIsolation.evaluate(element => element.remove());
+    await testInfo.attach('saved-native-cue-25.png', { body: smallPng, contentType: 'image/png' });
+    await testInfo.attach('saved-native-cue-200.png', { body: largePng, contentType: 'image/png' });
 
-    // Do not turn the embedded track off for either baseline: that can
-    // reconfigure Direct Play and produce a different video frame. Hide only
-    // the native glyphs at the SAME size as each comparison capture, leaving
-    // the paused frame and the browser-sized cue backdrop untouched.
-    const largeCueMask = await page.addStyleTag({ content: cueMaskCss });
-    const largeBaselinePng = await page.screenshot({ clip: videoBox });
-    await largeCueMask.evaluate(element => element.remove());
-    await largeMask.evaluate(element => element.remove());
-    await page.locator('.subtitleSizer-closeButton').click();
-    await testInfo.attach('native-cue-25.png', { body: smallPng, contentType: 'image/png' });
-    await testInfo.attach('native-cue-200.png', { body: largePng, contentType: 'image/png' });
-    await testInfo.attach('native-cue-25-baseline.png', { body: smallBaselinePng, contentType: 'image/png' });
-    await testInfo.attach('native-cue-200-baseline.png', { body: largeBaselinePng, contentType: 'image/png' });
-
-    const small = await renderedSubtitlePixels(page, smallPng, smallBaselinePng);
-    const large = await renderedSubtitlePixels(page, largePng, largeBaselinePng);
-    await testInfo.attach('native-cue-raster-metrics.json', {
-        body: Buffer.from(JSON.stringify({ small, large }, null, 2)),
-        contentType: 'application/json'
-    });
-
-    // The assertion is deliberately on rasterized output. Reading
-    // getComputedStyle(video, '::cue') or the preview element would reproduce
-    // the false positive that allowed the user-visible bug through. Bright
-    // core pixels do not scale quadratically because font antialiasing changes
-    // across sizes, so combine a conservative area increase with a much
-    // stronger physical-height assertion.
-    expect(small.largestGlyphPixels).toBeGreaterThan(0);
-    expect(large.largestGlyphPixels).toBeGreaterThan(small.largestGlyphPixels * 1.5);
+    const small = await renderedSubtitlePixels(page, smallPng);
+    const large = await renderedSubtitlePixels(page, largePng);
+    expect(large.largestGlyphPixels).toBeGreaterThan(small.largestGlyphPixels * 2);
     expect(large.largestGlyphHeight).toBeGreaterThan(small.largestGlyphHeight * 2);
 });
 
