@@ -76,7 +76,10 @@ security finding, or postmortem), not theoretical risk.
   (`MAX_FATAL_NETWORK_ERROR_RETRIES = 3`), stop retrying and surface the
   error via the same `reject`/`onErrorInternal` path already used by the
   handler's other terminal branches (`bindEventsToHlsPlayer`,
-  `src/components/htmlMediaHelper.js`, t_260722_234509_771).
+  `src/components/htmlMediaHelper.js`, t_260722_234509_771). The binding
+  must also clear its startup-only reject callback when initial playback
+  resolves; otherwise a later steady-state failure rejects an already-settled
+  Promise and silently bypasses the active player's error event.
 - **Evidence:** `deliverables/audio-transcode-stall-three-lists.md` timeline
   (server-side segment kill-timer at 19:47:38, no client resume/error
   report until 19:54:52) matches hls.js exhausting its fragment-load retry
@@ -85,7 +88,10 @@ security finding, or postmortem), not theoretical risk.
   Reproduced directly: `src/components/htmlMediaHelper.test.js` drove the
   real hls.js event bus with repeated fatal `NETWORK_ERROR`/`fragLoadTimeOut`
   events and observed `hls.startLoad()` retry without bound, with no
-  `reject`/error event ever firing, before the fix.
+  `reject`/error event ever firing, before the fix. The focused Playwright
+  regression then exposed the stale startup-reject variant by observing all
+  bounded retries complete while the video page remained frozen with no
+  fallback or error dialog.
 - **Sibling search:** grepped `src` for `try to recover`, `startLoad()`,
   `recoverMediaError`, `reconnect`, `retryCount`, `retry(`, and all
   `Hls.Events.ERROR`/`hls.on(` registrations. The only other recovery path

@@ -26,6 +26,7 @@
  * direct-playable in Chromium (AC3/DTS), video h264. The Sword Art Online
  * Season 00 extras (BDRip 1080p AC3) qualify permanently on this server.
  */
+import type { Page } from '@playwright/test';
 import { expect, login, test } from './fixtures';
 
 test.setTimeout(180_000);
@@ -45,6 +46,92 @@ function requireTranscodeItemId(): string {
 }
 
 interface PendingReq { url: string; start: number }
+
+interface HlsTestInstance {
+    on(eventName: string, listener: () => void): void;
+    trigger(eventName: string, data: {
+        type: string;
+        fatal: boolean;
+        details: string;
+    }): void;
+}
+
+interface HlsTestConstructor {
+    prototype: {
+        attachMedia(media: HTMLMediaElement): unknown;
+    };
+    Events: {
+        ERROR: string;
+        FRAG_BUFFERED: string;
+    };
+    ErrorTypes: {
+        NETWORK_ERROR: string;
+    };
+}
+
+interface PlaybackTestWindow extends Window {
+    ApiClient: {
+        ajax(options: {
+            type: string;
+            url: string;
+            data: string;
+            contentType: string;
+        }): Promise<unknown>;
+        getUrl(path: string): string;
+    };
+    Hls?: HlsTestConstructor;
+    __fatalErrorTestHls?: HlsTestInstance;
+    __fatalErrorTestGeneration?: number;
+    __fatalErrorTestReadyGeneration?: number;
+}
+
+async function playCurrentDetailsWithHls(page: Page): Promise<void> {
+    await page.locator('.mainDetailButtons .btnPlay').click();
+    await page.waitForURL(/#\/video\?id=/, { timeout: 60_000 });
+    await expect(page.locator('video').first()).toBeVisible({ timeout: 20_000 });
+    await expect.poll(
+        () => page.evaluate(() => typeof (window as unknown as PlaybackTestWindow).Hls === 'function'),
+        { message: 'real HLS playback should load the production hls.js constructor' }
+    ).toBe(true);
+}
+
+async function captureNextHlsInstance(page: Page): Promise<void> {
+    await page.evaluate(() => {
+        const testWindow = window as unknown as PlaybackTestWindow;
+        const HlsConstructor = testWindow.Hls!;
+        const originalAttachMedia = HlsConstructor.prototype.attachMedia;
+        HlsConstructor.prototype.attachMedia = function(this: HlsTestInstance, media: HTMLMediaElement) {
+            testWindow.__fatalErrorTestHls = this;
+            const generation = (testWindow.__fatalErrorTestGeneration ?? 0) + 1;
+            testWindow.__fatalErrorTestGeneration = generation;
+            this.on(HlsConstructor.Events.FRAG_BUFFERED, () => {
+                if (testWindow.__fatalErrorTestHls === this) {
+                    testWindow.__fatalErrorTestReadyGeneration = generation;
+                }
+            });
+            return originalAttachMedia.call(this, media);
+        };
+    });
+}
+
+async function emitFatalHlsTimeoutSequence(page: Page): Promise<void> {
+    await page.evaluate(() => {
+        const testWindow = window as unknown as PlaybackTestWindow;
+        const HlsConstructor = testWindow.Hls!;
+        const hls = testWindow.__fatalErrorTestHls!;
+        const fatalTimeout = {
+            type: HlsConstructor.ErrorTypes.NETWORK_ERROR,
+            fatal: true,
+            details: 'fragLoadTimeOut'
+        };
+
+        // Three bounded recovery attempts are allowed. The next fatal timeout
+        // must leave the retry loop and reach playbackManager's visible error.
+        for (let attempt = 0; attempt < 4; attempt++) {
+            hls.trigger(HlsConstructor.Events.ERROR, fatalTimeout);
+        }
+    });
+}
 
 // @covers audio_transcode.resume.mid_file_position.advances_without_freezing
 test('resume of an audio-transcode item starts playing and advances', async ({ page, config }) => {
@@ -84,7 +171,7 @@ test('resume of an audio-transcode item starts playing and advances', async ({ p
     // Set the resume position through the app's own session-report endpoint,
     // exactly what a previous abandoned playback would have recorded.
     await page.evaluate(async ({ id, ticks }) => {
-        const api = (window as any).ApiClient;
+        const api = (window as unknown as PlaybackTestWindow).ApiClient;
         await api.ajax({
             type: 'POST',
             url: api.getUrl('Sessions/Playing/Stopped'),
@@ -149,4 +236,77 @@ test('resume of an audio-transcode item starts playing and advances', async ({ p
     }
 
     expect(advanced, 'video should start advancing after Resume of an audio-transcode item').toBe(true);
+});
+
+// @covers playback.error_recovery.hung_server_steady_state.surfaces_error
+test('fatal hls.js network errors surface a playback error instead of freezing the video page', async ({ page, config }) => {
+    const itemId = requireTranscodeItemId();
+
+    await login(page, config.username, config.password);
+
+    // First playback loads the same hls.js constructor used by the production
+    // player. The module exposes it on window for browser integrations.
+    await page.goto(`/web/#/details?id=${itemId}&serverId=${config.serverId}`);
+    await playCurrentDetailsWithHls(page);
+
+    // Leave playback, then capture the next real Hls instance at the public
+    // attachMedia boundary. This keeps the event injection at the platform
+    // boundary while the details-page Play button remains the entry point.
+    await page.goto(`/web/#/details?id=${itemId}&serverId=${config.serverId}`);
+    await captureNextHlsInstance(page);
+
+    await playCurrentDetailsWithHls(page);
+    await expect.poll(
+        () => page.evaluate(() => Boolean((window as unknown as PlaybackTestWindow).__fatalErrorTestHls)),
+        { message: 'the user-started playback should attach a real hls.js instance' }
+    ).toBe(true);
+
+    const errorHeading = page.getByRole('heading', { name: 'Playback Error' });
+    // playbackManager has two bounded fallbacks for a local item: disable
+    // video stream copy, then disable audio stream copy. Drive each real HLS
+    // generation to its terminal error; the third has both copy paths
+    // disabled and must surface the user-visible error instead of retrying.
+    const maxTerminalFailures = 3;
+    for (let terminalFailure = 0; terminalFailure < maxTerminalFailures; terminalFailure++) {
+        const currentGeneration = await page.evaluate(
+            () => (window as unknown as PlaybackTestWindow).__fatalErrorTestGeneration ?? 0
+        );
+        await expect.poll(
+            () => page.evaluate(
+                (generation) => (
+                    (window as unknown as PlaybackTestWindow).__fatalErrorTestReadyGeneration === generation
+                ),
+                currentGeneration
+            ),
+            {
+                message: `HLS generation ${currentGeneration} should buffer media before its steady-state failure`,
+                timeout: 60_000
+            }
+        ).toBe(true);
+        await emitFatalHlsTimeoutSequence(page);
+        if (await errorHeading.isVisible() || terminalFailure === maxTerminalFailures - 1) {
+            break;
+        }
+        await expect.poll(
+            async () => {
+                if (await errorHeading.isVisible()) {
+                    return true;
+                }
+                return page.evaluate(
+                    (generation) => (
+                        ((window as unknown as PlaybackTestWindow).__fatalErrorTestGeneration ?? 0) > generation
+                    ),
+                    currentGeneration
+                );
+            },
+            {
+                message: `terminal HLS failure ${terminalFailure + 1} should surface or enter playbackManager fallback`,
+                timeout: 60_000
+            }
+        ).toBe(true);
+    }
+
+    await expect(errorHeading).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText('Playback failed due to a network error.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Got It' })).toBeVisible();
 });

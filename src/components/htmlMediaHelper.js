@@ -269,16 +269,22 @@ export function bindEventsToHlsPlayer(instance, hls, elem, onErrorFn, resolve, r
     // just repeat the same hang forever: a real fragment never buffers, so
     // the retry count below only resets on genuine progress.
     let fatalNetworkErrorRetries = 0;
+    let rejectStartup = reject;
 
     hls.on(Hls.Events.FRAG_BUFFERED, function () {
         fatalNetworkErrorRetries = 0;
     });
 
     hls.on(Hls.Events.MANIFEST_PARSED, function () {
-        playWithPromise(elem, onErrorFn).then(resolve, function () {
-            if (reject) {
-                reject();
-                reject = null;
+        playWithPromise(elem, onErrorFn).then(function () {
+            // The startup promise is settled. Future HLS errors belong to the
+            // active player and must flow through its visible error event.
+            rejectStartup = null;
+            resolve();
+        }, function () {
+            if (rejectStartup) {
+                rejectStartup();
+                rejectStartup = null;
             }
         });
     });
@@ -295,9 +301,9 @@ export function bindEventsToHlsPlayer(instance, hls, elem, onErrorFn, resolve, r
             // Trigger failure differently depending on whether this is prior to start of playback, or after
             hls.destroy();
 
-            if (reject) {
-                reject(MediaError.SERVER_ERROR);
-                reject = null;
+            if (rejectStartup) {
+                rejectStartup(MediaError.SERVER_ERROR);
+                rejectStartup = null;
             } else {
                 onErrorInternal(instance, MediaError.SERVER_ERROR);
             }
@@ -317,9 +323,9 @@ export function bindEventsToHlsPlayer(instance, hls, elem, onErrorFn, resolve, r
                         // Trigger failure differently depending on whether this is prior to start of playback, or after
                         hls.destroy();
 
-                        if (reject) {
-                            reject(MediaError.NETWORK_ERROR);
-                            reject = null;
+                        if (rejectStartup) {
+                            rejectStartup(MediaError.NETWORK_ERROR);
+                            rejectStartup = null;
                         } else {
                             onErrorInternal(instance, MediaError.NETWORK_ERROR);
                         }
@@ -333,9 +339,9 @@ export function bindEventsToHlsPlayer(instance, hls, elem, onErrorFn, resolve, r
                         // Trigger failure differently depending on whether this is prior to start of playback, or after
                         hls.destroy();
 
-                        if (reject) {
-                            reject(MediaError.NETWORK_ERROR);
-                            reject = null;
+                        if (rejectStartup) {
+                            rejectStartup(MediaError.NETWORK_ERROR);
+                            rejectStartup = null;
                         } else {
                             onErrorInternal(instance, MediaError.NETWORK_ERROR);
                         }
@@ -344,8 +350,8 @@ export function bindEventsToHlsPlayer(instance, hls, elem, onErrorFn, resolve, r
                     break;
                 case Hls.ErrorTypes.MEDIA_ERROR:
                     console.debug('fatal media error encountered, try to recover');
-                    handleHlsJsMediaError(instance, reject);
-                    reject = null;
+                    handleHlsJsMediaError(instance, rejectStartup);
+                    rejectStartup = null;
                     break;
                 default:
 
@@ -354,9 +360,9 @@ export function bindEventsToHlsPlayer(instance, hls, elem, onErrorFn, resolve, r
                     // Trigger failure differently depending on whether this is prior to start of playback, or after
                     hls.destroy();
 
-                    if (reject) {
-                        reject();
-                        reject = null;
+                    if (rejectStartup) {
+                        rejectStartup();
+                        rejectStartup = null;
                     } else {
                         onErrorInternal(instance, MediaError.FATAL_HLS_ERROR);
                     }
