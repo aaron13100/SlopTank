@@ -58,7 +58,29 @@ export function requireTranscodeChapterItemId(): string {
     return requireEnv('E2E_TRANSCODE_CHAPTER_ITEM_ID');
 }
 
+/**
+ * Read the ASS-subtitled media fixture id used by subtitle offset specs.
+ *
+ * @returns The configured library item id.
+ */
+export function requireAssSubtitleItemId(): string {
+    return requireEnv('E2E_ASS_SUBTITLE_ITEM_ID');
+}
+
 export const test = base.extend<{ config: E2eConfig }>({
+    page: async ({ page }, use) => {
+        await page.addInitScript(() => {
+            const removeWebpackOverlay = () => {
+                document.querySelector('#webpack-dev-server-client-overlay')?.remove();
+            };
+            new MutationObserver(removeWebpackOverlay).observe(document, {
+                childList: true,
+                subtree: true
+            });
+            removeWebpackOverlay();
+        });
+        await use(page);
+    },
     // eslint-disable-next-line no-empty-pattern
     config: async ({}, use) => {
         await use({

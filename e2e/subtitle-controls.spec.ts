@@ -1,4 +1,10 @@
-import { expect, login, onScreenState, test } from './fixtures';
+import {
+    expect,
+    login,
+    onScreenState,
+    requireAssSubtitleItemId,
+    test
+} from './fixtures';
 
 test.setTimeout(180_000);
 
@@ -13,6 +19,18 @@ test.setTimeout(180_000);
  *   - with an enabled subtitle the offset overlay opens and actually shifts
  *     which cue text is displayed.
  */
+
+test('the browser harness removes a late webpack error overlay', async ({ page }) => {
+    await page.goto('/web/');
+    await page.evaluate(() => {
+        const overlay = document.createElement('iframe');
+        overlay.id = 'webpack-dev-server-client-overlay';
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647';
+        document.body.append(overlay);
+    });
+
+    await expect(page.locator('#webpack-dev-server-client-overlay')).toHaveCount(0);
+});
 
 async function startPlayback(page: import('@playwright/test').Page, config: { itemId: string, serverId: string }) {
     await page.goto(`/web/#/details?id=${config.itemId}&serverId=${config.serverId}`);
@@ -122,6 +140,52 @@ async function dragSizeSliderTo(page: import('@playwright/test').Page, fraction:
     await page.mouse.down();
     await page.mouse.move(track.x + track.width * fraction, y, { steps: 10 });
     await page.mouse.up();
+}
+
+/**
+ * Drag the offset slider through its real pointer interaction.
+ * @param page - Page under test.
+ * @param seconds - Target subtitle offset in seconds.
+ */
+async function dragOffsetSliderTo(page: import('@playwright/test').Page, seconds: number) {
+    const syncSlider = page.locator('.subtitleSyncSlider');
+    const track = await syncSlider.boundingBox();
+    if (!track) throw new Error('subtitle offset slider has no box to drag'); // allow-raw-error: e2e setup fast-fail
+    const min = -30;
+    const max = 30;
+    const fraction = (seconds - min) / (max - min);
+    const y = track.y + track.height / 2;
+    await page.mouse.move(track.x + track.width / 2, y);
+    await page.mouse.down();
+    await page.mouse.move(track.x + track.width * fraction, y, { steps: 10 });
+    await page.mouse.up();
+    const actual = await syncSlider.inputValue();
+    expect(Math.abs(parseFloat(actual) - seconds)).toBeLessThanOrEqual(0.5);
+}
+
+/**
+ * Measure the pixels the libass canvas actually presents to the user.
+ * @param page - Page containing the active libass renderer.
+ * @returns Sampled non-transparent pixel count and pixel hash.
+ */
+async function assCanvasSignature(page: import('@playwright/test').Page) {
+    return page.locator('.libassjs-canvas').evaluate((canvas: HTMLCanvasElement) => {
+        const context = canvas.getContext('2d');
+        if (!context) {
+            return { alphaPixels: 0, hash: 0 };
+        }
+
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        let alphaPixels = 0;
+        let hash = 2166136261;
+        for (let offset = 0; offset < pixels.length; offset += 64) {
+            const alpha = pixels[offset + 3];
+            if (alpha > 0) alphaPixels++;
+            hash ^= pixels[offset] + pixels[offset + 1] + pixels[offset + 2] + alpha;
+            hash = Math.imul(hash, 16777619);
+        }
+        return { alphaPixels, hash: hash >>> 0 };
+    });
 }
 
 function sampleLineFontSize(page: import('@playwright/test').Page) {
@@ -616,8 +680,15 @@ test('subtitle offset explains itself without a subtitle and shifts cues with on
     await login(page, config.username, config.password);
     const video = await startPlayback(page, config);
 
-    // Without an enabled subtitle the entry must exist and explain itself
-    // (it used to be silently hidden).
+    // Playback can restore the user's last subtitle choice. Establish the
+    // no-subtitle precondition through the same menu a user operates.
+    await openOsd(page);
+    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await page.locator('.actionSheetMenuItem', { hasText: 'Off' }).first().click();
+    await expect(page.locator('.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)')).toHaveCount(0);
+
+    // Without an enabled subtitle the entry must exist and explain itself (it
+    // used to be silently hidden).
     await openOsd(page);
     await page.locator('.videoOsdBottom-maincontrols .btnVideoOsdSettings').click();
     const offsetItem = page.locator('.actionSheetMenuItem', { hasText: 'Subtitle Offset' });
@@ -631,11 +702,7 @@ test('subtitle offset explains itself without a subtitle and shifts cues with on
     await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
     await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
     const subtitleLine = page.locator('.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)');
-    await video.evaluate((el: HTMLVideoElement) => {
-        el.currentTime = 95;
-        el.pause();
-    });
-    await expect(subtitleLine).toBeVisible({ timeout: 20_000 });
+    await parkOnCue(video, subtitleLine);
     const textBefore = await subtitleLine.textContent();
     expect(textBefore).toBeTruthy();
 
@@ -649,24 +716,98 @@ test('subtitle offset explains itself without a subtitle and shifts cues with on
     // screen, not wherever page flow happens to put it.
     await expectOverlayReachable(page, '.subtitleSyncContainer');
 
-    // Shifting by +8s must change which cue text is displayed at the paused
-    // position (subtitles appear earlier), and 0 must restore it.
-    const syncSlider = page.locator('.subtitleSyncSlider');
-    await syncSlider.evaluate((el: HTMLInputElement) => {
-        el.value = '8';
-        el.dispatchEvent(new Event('change', { bubbles: true }));
+    // Shifting by +8s with a real mouse drag must change which cue text is
+    // displayed at the paused position (subtitles appear earlier), and 0 must
+    // restore it. No timeupdate is allowed to hide the paused-refresh bug.
+    const timeUpdatesBeforeDrag = await video.evaluate((el: HTMLVideoElement) => {
+        const state = { count: 0 };
+        el.addEventListener('timeupdate', () => state.count++);
+        Object.assign(el, { subtitleOffsetTestState: state });
+        return state.count;
     });
+    expect(timeUpdatesBeforeDrag).toBe(0);
+
+    await dragOffsetSliderTo(page, 8);
     await expect.poll(async () => {
         const line = page.locator('.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)');
         if (await line.count() === 0) return null;
         return line.evaluate(el => el.classList.contains('hide') ? null : el.textContent);
     }, { timeout: 10_000 }).not.toBe(textBefore);
+    await expect.poll(() => video.evaluate(
+        (el: HTMLVideoElement & { subtitleOffsetTestState?: { count: number } }) =>
+            el.subtitleOffsetTestState?.count
+    )).toBe(0);
 
-    await syncSlider.evaluate((el: HTMLInputElement) => {
-        el.value = '0';
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    await dragOffsetSliderTo(page, 0);
     await expect.poll(async () => subtitleLine.evaluate(
         el => el.classList.contains('hide') ? null : el.textContent
     ), { timeout: 10_000 }).toBe(textBefore);
+});
+
+// @covers subtitle_controls.track_menu.offset_shifts_displayed_cue
+test('subtitle offset refreshes a paused ASS cue without a playback tick', async ({ page, config }) => {
+    await login(page, config.username, config.password);
+    const video = await startPlayback(page, {
+        itemId: requireAssSubtitleItemId(),
+        serverId: config.serverId
+    });
+
+    await openOsd(page);
+    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
+
+    await expect(page.locator('.libassjs-canvas')).toBeVisible({ timeout: 30_000 });
+    await expect.poll(async () => {
+        const position = await video.evaluate(async (el: HTMLVideoElement) => {
+            if (el.currentTime < 181.5 || el.currentTime > 184.5) {
+                el.currentTime = 182;
+            }
+            if (el.paused) await el.play();
+            return el.currentTime;
+        });
+        const signature = await assCanvasSignature(page);
+        if (position >= 181.5 && signature.alphaPixels > 50) {
+            await video.evaluate((el: HTMLVideoElement) => el.pause());
+        }
+        return position >= 181.5 && signature.alphaPixels;
+    }, { timeout: 60_000 }).toBeGreaterThan(50);
+
+    let lastSignature = await assCanvasSignature(page);
+    let stableObservations = 0;
+    await expect.poll(async () => {
+        const current = await assCanvasSignature(page);
+        if (current.alphaPixels === lastSignature.alphaPixels && current.hash === lastSignature.hash) {
+            stableObservations++;
+        } else {
+            stableObservations = 0;
+            lastSignature = current;
+        }
+        return stableObservations;
+    }).toBeGreaterThanOrEqual(3);
+    const before = lastSignature;
+    expect(before.alphaPixels).toBeGreaterThan(50);
+
+    await openOsd(page);
+    await page.locator('.videoOsdBottom-maincontrols .btnVideoOsdSettings').click();
+    await page.locator('.actionSheetMenuItem', { hasText: 'Subtitle Offset' }).click();
+    await expect(page.locator('.subtitleSyncContainer')).toBeVisible();
+    await expectOverlayReachable(page, '.subtitleSyncContainer');
+
+    const timeUpdatesBeforeDrag = await video.evaluate((el: HTMLVideoElement) => {
+        const state = { count: 0 };
+        el.addEventListener('timeupdate', () => state.count++);
+        Object.assign(el, { assOffsetTestState: state });
+        return state.count;
+    });
+    expect(timeUpdatesBeforeDrag).toBe(0);
+
+    await dragOffsetSliderTo(page, 30);
+    await expect.poll(() => assCanvasSignature(page), { timeout: 10_000 }).not.toEqual(before);
+    await expect.poll(() => video.evaluate(
+        (el: HTMLVideoElement & { assOffsetTestState?: { count: number } }) =>
+            el.assOffsetTestState?.count
+    )).toBe(0);
+
+    await dragOffsetSliderTo(page, 0);
+    await expect.poll(() => assCanvasSignature(page), { timeout: 10_000 }).toEqual(before);
 });

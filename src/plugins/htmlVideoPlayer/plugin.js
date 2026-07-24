@@ -720,6 +720,7 @@ export class HtmlVideoPlayer {
             } else if (this.#currentTrackEvents || this.#currentSecondaryTrackEvents) {
                 this.#currentTrackEvents && this.setTrackEventsSubtitleOffset(this.#currentTrackEvents, offsetValue, PRIMARY_TEXT_TRACK_INDEX);
                 this.#currentSecondaryTrackEvents && this.setTrackEventsSubtitleOffset(this.#currentSecondaryTrackEvents, offsetValue, SECONDARY_TEXT_TRACK_INDEX);
+                this.refreshSubtitleTextAtTime(this.#mediaElement?.currentTime);
             } else {
                 // Nothing applyable yet (subtitle still loading): retain the
                 // request and let the completing install apply it, so slider
@@ -1067,13 +1068,7 @@ export class HtmlVideoPlayer {
 
         this.#currentTime = time;
 
-        const currentPlayOptions = this._currentPlayOptions;
-        // Not sure yet how this is coming up null since we never null it out, but it is causing app crashes
-        if (currentPlayOptions) {
-            let timeMs = time * 1000;
-            timeMs += ((currentPlayOptions.transcodingOffsetTicks || 0) / 10000);
-            this.updateSubtitleText(timeMs);
-        }
+        this.refreshSubtitleTextAtTime(time);
 
         Events.trigger(this, 'timeupdate');
     };
@@ -2142,6 +2137,26 @@ export class HtmlVideoPlayer {
         if (this.#subtitleAppearancePreview) {
             this.updateSubtitlePreviewLine();
         }
+    }
+
+    /**
+     * Re-render custom subtitle cues at a media position. This is called both
+     * by playback time updates and by timeline mutations such as offset
+     * changes, which must refresh even while playback is paused.
+     * @private
+     * @param {number | undefined} timeSeconds - Current media position in seconds.
+     * @returns {void}
+     */
+    refreshSubtitleTextAtTime(timeSeconds) {
+        const currentPlayOptions = this._currentPlayOptions;
+        // Not sure yet how this is coming up null since we never null it out, but it is causing app crashes
+        if (!currentPlayOptions || typeof timeSeconds !== 'number') {
+            return;
+        }
+
+        let timeMs = timeSeconds * 1000;
+        timeMs += ((currentPlayOptions.transcodingOffsetTicks || 0) / 10000);
+        this.updateSubtitleText(timeMs);
     }
 
     /**
