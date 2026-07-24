@@ -2,6 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import {
     expect,
     login,
+    onScreenState,
     requireDirectPlayChapterItemId,
     requireTranscodeChapterItemId,
     test
@@ -48,13 +49,27 @@ async function startPlayback(
     return video;
 }
 
-async function openOsd(page: Page) {
+async function openOsd(
+    page: Page,
+    controlSelector = '.videoOsdBottom-maincontrols'
+) {
     await page.mouse.move(20, 20);
     await page.mouse.move(100, 100);
+    await expect.poll(
+        () => onScreenState(page, controlSelector),
+        {
+            message: `expected OSD control to be on screen and reachable: ${controlSelector}`,
+            timeout: 10_000
+        }
+    ).toMatchObject({
+        found: true,
+        insideViewport: true,
+        reachable: true
+    });
 }
 
 async function expectPlayMethod(page: Page, expected: 'Direct playing' | 'Transcoding') {
-    await openOsd(page);
+    await openOsd(page, '.videoOsdBottom-maincontrols .btnVideoOsdSettings');
     await page.locator('.videoOsdBottom-maincontrols .btnVideoOsdSettings').click();
     await page.locator('.actionSheetMenuItem[data-id="stats"]').click();
 
@@ -117,9 +132,11 @@ async function expectConsecutiveChapterNavigation(page: Page, item: ItemDetails)
     expect(item.RunTimeTicks).toBeGreaterThan(0);
     const runtimeTicks = item.RunTimeTicks || 0;
 
-    await openOsd(page);
-    const nextButton = page.locator('.videoOsdBottom-maincontrols .btnNextChapter');
-    const prevButton = page.locator('.videoOsdBottom-maincontrols .btnPreviousChapter');
+    const nextButtonSelector = '.videoOsdBottom-maincontrols .btnNextChapter';
+    const previousButtonSelector = '.videoOsdBottom-maincontrols .btnPreviousChapter';
+    await openOsd(page, nextButtonSelector);
+    const nextButton = page.locator(nextButtonSelector);
+    const prevButton = page.locator(previousButtonSelector);
     const positionSlider = page.locator('.videoOsdBottom-maincontrols .osdPositionSlider');
     await expect(nextButton).toBeVisible();
     await expect(prevButton).toBeVisible();
@@ -130,11 +147,11 @@ async function expectConsecutiveChapterNavigation(page: Page, item: ItemDetails)
     const toPercent = (ticks: number) => ticks / runtimeTicks * 100;
     const tolerance = 100_000_000 / runtimeTicks * 100 + 0.5;
 
-    await openOsd(page);
+    await openOsd(page, nextButtonSelector);
     await nextButton.click();
     await expectPositionPercent(positionSlider, toPercent(chapters[1].StartPositionTicks), tolerance);
 
-    await openOsd(page);
+    await openOsd(page, nextButtonSelector);
     await nextButton.click();
     await expectPositionPercent(positionSlider, toPercent(chapters[2].StartPositionTicks), tolerance);
 
@@ -142,7 +159,7 @@ async function expectConsecutiveChapterNavigation(page: Page, item: ItemDetails)
     const expectedChapter = [ ...chapters ].reverse()
         .find(chapter => chapter.StartPositionTicks <= adjustedTicks) || chapters[0];
 
-    await openOsd(page);
+    await openOsd(page, previousButtonSelector);
     await prevButton.click();
     await expectPositionPercent(positionSlider, toPercent(expectedChapter.StartPositionTicks), tolerance);
 }
