@@ -90,6 +90,50 @@ export function getSubtitleFontSize(videoHeight) {
     return Math.round(videoHeight * SUBTITLE_HEIGHT_RATIO * 100) / 100;
 }
 
+/**
+ * Find the smallest visible vertical move that places a secondary subtitle
+ * lane clear of the primary one. Prefer moving upward (the conventional
+ * secondary-subtitle lane), but use the space below when the authored cue is
+ * already near the top of the picture.
+ * @param {{ top: number, right: number, bottom: number, left: number }} primary - Visible primary cue bounds.
+ * @param {{ top: number, right: number, bottom: number, left: number }} secondary - Visible secondary cue bounds.
+ * @param {{ top: number, bottom: number }} viewport - Visible video bounds.
+ * @param {number} gap - Desired gap between lanes in CSS pixels.
+ * @returns {number} Additional secondary translateY in CSS pixels.
+ */
+export function getSecondarySubtitleOffset(primary, secondary, viewport, gap) {
+    const horizontallySeparate = secondary.right <= primary.left
+        || secondary.left >= primary.right;
+    const verticallySeparate = secondary.bottom + gap <= primary.top
+        || secondary.top - gap >= primary.bottom;
+    if (horizontallySeparate || verticallySeparate) {
+        return 0;
+    }
+
+    const moveAbove = primary.top - gap - secondary.bottom;
+    const moveBelow = primary.bottom + gap - secondary.top;
+    const availableAbove = viewport.top - secondary.top;
+    const availableBelow = viewport.bottom - secondary.bottom;
+    const canMoveAbove = moveAbove >= availableAbove;
+    const canMoveBelow = moveBelow <= availableBelow;
+
+    if (canMoveAbove && canMoveBelow) {
+        return Math.abs(moveAbove) <= Math.abs(moveBelow) ? moveAbove : moveBelow;
+    }
+    if (canMoveAbove) {
+        return moveAbove;
+    }
+    if (canMoveBelow) {
+        return moveBelow;
+    }
+
+    // Extremely tall authored compositions can leave no completely clear
+    // lane. Keep the secondary cue visible and maximize the separation.
+    return Math.abs(availableAbove) >= Math.abs(availableBelow) ?
+        availableAbove :
+        availableBelow;
+}
+
 function getTextStyles(settings, preview, subtitleFontSize) {
     const list = [];
     const textSizeMultiplier = getTextSizeMultiplier(settings.textSize);
@@ -238,5 +282,6 @@ export default {
     applyStyles: applyStyles,
     getSubtitleFontSize: getSubtitleFontSize,
     getTextSizeMultiplier: getTextSizeMultiplier,
-    getSubtitleVerticalPosition: getSubtitleVerticalPosition
+    getSubtitleVerticalPosition: getSubtitleVerticalPosition,
+    getSecondarySubtitleOffset: getSecondarySubtitleOffset
 };

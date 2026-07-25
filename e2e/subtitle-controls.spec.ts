@@ -250,6 +250,41 @@ async function assRenderedVerticalBounds(page: import('@playwright/test').Page) 
     };
 }
 
+/**
+ * Measure the visible screen bounds of one libass canvas.
+ */
+async function renderedAssCanvasBounds(canvas: import('@playwright/test').Locator) {
+    return canvas.evaluate((element: HTMLCanvasElement) => {
+        const context = element.getContext('2d');
+        const screen = element.getBoundingClientRect();
+        if (!context || !element.width || !element.height) return null;
+        const pixels = context.getImageData(0, 0, element.width, element.height).data;
+        let minX = element.width;
+        let minY = element.height;
+        let maxX = -1;
+        let maxY = -1;
+        for (let offset = 3; offset < pixels.length; offset += 4) {
+            if (pixels[offset] === 0) continue;
+            const pixel = (offset - 3) / 4;
+            const x = pixel % element.width;
+            const y = Math.floor(pixel / element.width);
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+        }
+        if (maxY < 0) return null;
+        const scaleX = screen.width / element.width;
+        const scaleY = screen.height / element.height;
+        return {
+            top: screen.top + minY * scaleY,
+            right: screen.left + (maxX + 1) * scaleX,
+            bottom: screen.top + (maxY + 1) * scaleY,
+            left: screen.left + minX * scaleX
+        };
+    });
+}
+
 async function seekAndPauseAssCue(
     video: import('@playwright/test').Locator,
     page: import('@playwright/test').Page,
@@ -685,12 +720,20 @@ test('Document PiP keeps custom subtitles and live appearance controls', async (
     const pipSecondaryLine = pipPage.locator('.videoSecondarySubtitlesInner');
     await expect(pipSecondaryLine).toBeVisible();
     await expect(pipSecondaryLine).toHaveText(cueText || '');
+    await expect.poll(async () => {
+        const primary = await pipSubtitleLine.boundingBox();
+        const secondary = await pipSecondaryLine.boundingBox();
+        return !!primary && !!secondary
+            && (primary.y + primary.height <= secondary.y
+                || secondary.y + secondary.height <= primary.y);
+    }).toBe(true);
 
     const initialFontSize = await pipSubtitleLine.evaluate(
         el => parseFloat(getComputedStyle(el).fontSize));
     await pipPage.locator('.documentPipSubtitleAppearanceButton').click();
     await expect(pipPage.locator('.subtitleSizerContainer')).toBeVisible();
     await expectOverlayReachable(pipPage, '.subtitleSizerContainer');
+    await expect(pipPage.locator('.videoSubtitlesPreviewLine')).toBeHidden();
 
     await setSizeSlider(pipPage, 200);
     await expect.poll(() => pipSubtitleLine.evaluate(
@@ -977,7 +1020,9 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
     await expect(page.locator('.subtitleSizerMessage')).toBeHidden();
     await expect(page.locator('.videoSubtitlesPreviewLine'))
         .toHaveText('This is how subtitles will look');
-    await expect(page.locator('.videoSubtitlesPreviewLine')).toBeVisible();
+    // The controls still create a sample for cue gaps/no-track playback, but
+    // it must not compete with real subtitles that are already on screen.
+    await expect(page.locator('.videoSubtitlesPreviewLine')).toBeHidden();
 
     // Positioned cues use the same real font files and weight override as
     // ordinary dialogue. Assert each control separately: the old combined
@@ -1064,6 +1109,22 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
             })
         );
         return alphaCounts.every(count => count > 50);
+    }, { timeout: 30_000 }).toBe(true);
+    const primaryCanvas = page.locator(
+        '.libassjs-canvas-parent:not(.libassjs-canvas-parent-secondary) .libassjs-canvas'
+    );
+    const secondaryCanvas = page.locator(
+        '.libassjs-canvas-parent-secondary .libassjs-canvas'
+    );
+    await expect.poll(async () => {
+        const primary = await renderedAssCanvasBounds(primaryCanvas);
+        const secondary = await renderedAssCanvasBounds(secondaryCanvas);
+        if (!primary || !secondary) return false;
+        const horizontallySeparate = secondary.right <= primary.left
+            || secondary.left >= primary.right;
+        const verticallySeparate = secondary.bottom <= primary.top
+            || secondary.top >= primary.bottom;
+        return horizontallySeparate || verticallySeparate;
     }, { timeout: 30_000 }).toBe(true);
 
     await openOsd(page);

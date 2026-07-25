@@ -538,6 +538,12 @@ export class HtmlVideoPlayer {
      */
     #subtitlePreviewTimer;
     /**
+     * Keeps independently rendered primary and secondary subtitle lanes from
+     * colliding as their active cues change.
+     * @type {ReturnType<typeof setInterval> | null | undefined}
+     */
+    #subtitleLayoutTimer;
+    /**
      * Offset requested while no renderer/track/events existed to apply it
      * to; applied by whichever async completion installs one.
      * @type {number | null}
@@ -1280,6 +1286,7 @@ export class HtmlVideoPlayer {
         this.#currentTime = time;
 
         this.refreshSubtitleTextAtTime(time);
+        this.updateSecondarySubtitleLayout();
 
         Events.trigger(this, 'timeupdate');
     };
@@ -1706,6 +1713,12 @@ export class HtmlVideoPlayer {
             }
             this.#currentPgsRenderer = null;
         }
+
+        if (typeof targetTrackIndex !== 'number' || this.isSecondaryTrack(targetTrackIndex)) {
+            this.stopSecondarySubtitleLayoutTimer();
+        } else {
+            this.updateSecondarySubtitleLayout();
+        }
     }
 
     /**
@@ -1885,6 +1898,9 @@ export class HtmlVideoPlayer {
                 );
                 if (this.isPrimaryTrack(rendererIndex)) {
                     this.setSubtitleRenderPath('ass');
+                    this.updateSecondarySubtitleLayout();
+                } else {
+                    this.startSecondarySubtitleLayoutTimer();
                 }
                 this.applyPendingSubtitleOffset();
             };
@@ -2006,8 +2022,22 @@ export class HtmlVideoPlayer {
             renderer.setTrack(getAssContentWithAppearance(state.content, appearance));
         }
 
+        this.setAssRendererVerticalPosition(renderer);
+
+        renderer.setCurrentTime((this.#mediaElement?.currentTime || 0) + renderer.timeOffset);
+        this.updateSecondarySubtitleLayout();
+    }
+
+    /**
+     * Apply the authored-composition nudge plus an optional collision offset.
+     * @private
+     * @param {Object} renderer - Active libass renderer.
+     * @param {number} [additionalOffset=0] - Secondary-lane collision offset in CSS pixels.
+     * @returns {void}
+     */
+    setAssRendererVerticalPosition(renderer, additionalOffset = 0) {
         const position = subtitleAppearanceHelper.getSubtitleVerticalPosition(
-            appearance.verticalPosition);
+            this.getEffectiveAppearanceSettings().verticalPosition);
         const bottom = subtitleAppearanceHelper.getSubtitleVerticalPosition(
             VERTICAL_POSITION_BOTTOM);
         const renderedHeight = renderer.canvasParent?.getBoundingClientRect().height
@@ -2018,12 +2048,140 @@ export class HtmlVideoPlayer {
         // every cue's relative authored alignment and position.
         const authoredPositionOffset =
             (position.percentage - bottom.percentage) * renderedHeight / 100;
+        const totalOffset = authoredPositionOffset + additionalOffset;
         if (renderer.canvasParent) {
             renderer.canvasParent.style.transform =
-                authoredPositionOffset === 0 ? '' : `translateY(${authoredPositionOffset}px)`;
+                totalOffset === 0 ? '' : `translateY(${totalOffset}px)`;
+        }
+    }
+
+    /**
+     * Return the screen bounds of the libass event that is actually visible
+     * at the playhead. libass's render-ahead state provides the cue bitmaps,
+     * avoiding an expensive full-canvas pixel scan four times per second.
+     * @private
+     * @param {Object} renderer - Active libass renderer.
+     * @returns {{ top: number, right: number, bottom: number, left: number } | null} Active cue bounds.
+     */
+    getActiveAssCueBounds(renderer) {
+        const event = renderer?.oneshotState?.displayedEvent;
+        const currentTime = (this.#mediaElement?.currentTime || 0) + (renderer?.timeOffset || 0);
+        if (!event?.items?.length
+            || currentTime < event.eventStart
+            || currentTime >= event.eventFinish) {
+            return null;
         }
 
-        renderer.setCurrentTime((this.#mediaElement?.currentTime || 0) + renderer.timeOffset);
+        const canvas = renderer.canvas;
+        const canvasBounds = canvas?.getBoundingClientRect();
+        if (!canvasBounds?.width || !canvasBounds.height || !canvas.width || !canvas.height) {
+            return null;
+        }
+
+        const scaleX = canvasBounds.width / canvas.width;
+        const scaleY = canvasBounds.height / canvas.height;
+        const bounds = {
+            top: Number.POSITIVE_INFINITY,
+            right: Number.NEGATIVE_INFINITY,
+            bottom: Number.NEGATIVE_INFINITY,
+            left: Number.POSITIVE_INFINITY
+        };
+        event.items.forEach(item => {
+            bounds.top = Math.min(bounds.top, canvasBounds.top + item.y * scaleY);
+            bounds.right = Math.max(bounds.right, canvasBounds.left + (item.x + item.w) * scaleX);
+            bounds.bottom = Math.max(bounds.bottom, canvasBounds.top + (item.y + item.h) * scaleY);
+            bounds.left = Math.min(bounds.left, canvasBounds.left + item.x * scaleX);
+        });
+        return bounds;
+    }
+
+    /**
+     * Keep the secondary cue in a separate visible lane whenever independently
+     * rendered tracks would otherwise paint over one another.
+     * @private
+     * @returns {void}
+     */
+    updateSecondarySubtitleLayout() {
+        const videoBounds = this.#mediaElement?.getBoundingClientRect();
+        if (!videoBounds?.width || !videoBounds.height) {
+            return;
+        }
+
+        const primaryAssRenderer = this.#currentAssRenderers[PRIMARY_TEXT_TRACK_INDEX];
+        const secondaryAssRenderer = this.#currentAssRenderers[SECONDARY_TEXT_TRACK_INDEX];
+        if (primaryAssRenderer) {
+            this.setAssRendererVerticalPosition(primaryAssRenderer);
+        }
+        if (secondaryAssRenderer) {
+            this.setAssRendererVerticalPosition(secondaryAssRenderer);
+        }
+        if (this.#videoSecondarySubtitlesElem) {
+            this.#videoSecondarySubtitlesElem.style.transform = '';
+        }
+
+        const getVisibleElementBounds = element => {
+            if (!element
+                || element.classList.contains('hide')
+                || !element.textContent?.trim()) {
+                return null;
+            }
+            return element.getBoundingClientRect();
+        };
+        const primaryBounds = primaryAssRenderer ?
+            this.getActiveAssCueBounds(primaryAssRenderer) :
+            getVisibleElementBounds(this.#videoSubtitlesElem);
+        const secondaryBounds = secondaryAssRenderer ?
+            this.getActiveAssCueBounds(secondaryAssRenderer) :
+            getVisibleElementBounds(this.#videoSecondarySubtitlesElem);
+        if (!primaryBounds || !secondaryBounds) {
+            return;
+        }
+
+        const gap = Math.max(6, (this.#subtitleFontSize || videoBounds.height * 0.045) * 0.3);
+        const offset = subtitleAppearanceHelper.getSecondarySubtitleOffset(
+            primaryBounds,
+            secondaryBounds,
+            videoBounds,
+            gap
+        );
+        if (secondaryAssRenderer) {
+            this.setAssRendererVerticalPosition(secondaryAssRenderer, offset);
+        } else if (this.#videoSecondarySubtitlesElem) {
+            this.#videoSecondarySubtitlesElem.style.transform =
+                offset === 0 ? '' : `translateY(${offset}px)`;
+        }
+    }
+
+    /**
+     * @private
+     * @returns {void}
+     */
+    startSecondarySubtitleLayoutTimer() {
+        if (!this.#subtitleLayoutTimer) {
+            this.#subtitleLayoutTimer = setInterval(
+                () => this.updateSecondarySubtitleLayout(),
+                250
+            );
+        }
+        this.updateSecondarySubtitleLayout();
+    }
+
+    /**
+     * @private
+     * @returns {void}
+     */
+    stopSecondarySubtitleLayoutTimer() {
+        if (this.#subtitleLayoutTimer) {
+            clearInterval(this.#subtitleLayoutTimer);
+            this.#subtitleLayoutTimer = null;
+        }
+        if (this.#videoSecondarySubtitlesElem) {
+            this.#videoSecondarySubtitlesElem.style.transform = '';
+        }
+        const secondaryAssRenderer = this.#currentAssRenderers[SECONDARY_TEXT_TRACK_INDEX];
+        if (secondaryAssRenderer) {
+            this.setAssRendererVerticalPosition(secondaryAssRenderer);
+        }
     }
 
     /**
@@ -2138,6 +2296,7 @@ export class HtmlVideoPlayer {
                 this.setSubtitleAppearance(subtitlesContainer, this.#videoSecondarySubtitlesElem);
                 this.#currentSecondaryTrackEvents = subtitleData.TrackEvents;
                 this.applyPendingSubtitleOffset();
+                this.startSecondarySubtitleLayoutTimer();
             }
             // Track selection can finish while playback is paused (including
             // inside Document PiP). Paint the cue at the parked playhead now
@@ -2320,9 +2479,8 @@ export class HtmlVideoPlayer {
 
     /**
      * Keep the preview sample line present and correctly shown/hidden: shown
-     * while no real DOM/native cue text is visible, hidden while one is. ASS
-     * remains on its independent canvas, so its appearance panel deliberately
-     * retains the sample line for a direct before/after reference.
+     * while no real cue text is visible, hidden while one is. This includes
+     * primary and secondary DOM, native, and ASS rendering paths.
      * @private
      * @returns {void}
      */
@@ -2349,17 +2507,21 @@ export class HtmlVideoPlayer {
 
         this.#subtitlePreviewElem.textContent = preview.sampleText;
 
-        const customCueVisible = !!this.#videoSubtitlesElem
-            && !this.#videoSubtitlesElem.classList.contains('hide')
-            && !!this.#videoSubtitlesElem.textContent;
-        // libass can leave a TextTrack with active cues even though those cues
-        // are not what the user sees. Only let a genuinely native rendering
-        // path suppress the DOM sample; ASS needs the sample while its canvas
-        // remains independently visible.
+        const customCueVisible = [
+            this.#videoSubtitlesElem,
+            this.#videoSecondarySubtitlesElem
+        ].some(element => element
+            && !element.classList.contains('hide')
+            && !!element.textContent?.trim());
         const nativeCueVisible = this.#subtitleRenderPath === 'native'
             && (this.getTextTracks() || [])
                 .some(track => track.activeCues?.length > 0);
-        this.#subtitlePreviewElem.classList.toggle('hide', customCueVisible || nativeCueVisible);
+        const assCueVisible = this.#currentAssRenderers
+            .some(renderer => this.getActiveAssCueBounds(renderer));
+        this.#subtitlePreviewElem.classList.toggle(
+            'hide',
+            customCueVisible || nativeCueVisible || assCueVisible
+        );
     }
 
     /**

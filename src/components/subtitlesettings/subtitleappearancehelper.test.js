@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    getSecondarySubtitleOffset,
     getStyles,
     getSubtitleFontSize,
     getSubtitleVerticalPosition
@@ -134,5 +135,39 @@ describe('subtitle vertical position', () => {
         expect(getWindowStyle({ verticalPosition: -4 }, 'bottom')).toBe('auto');
         expect(getWindowStyle({ verticalPosition: -4 }, 'transform'))
             .toBe('translateY(-100%)');
+    });
+});
+
+describe('secondary subtitle separation', () => {
+    const viewport = { top: 0, bottom: 720 };
+
+    // @covers subtitle_controls.track_menu.ass_authored_layout_live_appearance_secondary_and_offset
+    it('moves an overlapping bottom cue into a separate lane above the primary', () => {
+        expect(getSecondarySubtitleOffset(
+            { top: 620, right: 900, bottom: 680, left: 300 },
+            { top: 620, right: 900, bottom: 680, left: 300 },
+            viewport,
+            10
+        )).toBe(-70);
+    });
+
+    // @covers subtitle_controls.track_menu.ass_authored_layout_live_appearance_secondary_and_offset
+    it('moves down when an authored top cue has no room above', () => {
+        expect(getSecondarySubtitleOffset(
+            { top: 20, right: 900, bottom: 80, left: 300 },
+            { top: 20, right: 900, bottom: 80, left: 300 },
+            viewport,
+            10
+        )).toBe(70);
+    });
+
+    // @covers subtitle_controls.track_menu.ass_authored_layout_live_appearance_secondary_and_offset
+    it('does not disturb cues that already occupy separate regions', () => {
+        expect(getSecondarySubtitleOffset(
+            { top: 620, right: 900, bottom: 680, left: 300 },
+            { top: 20, right: 900, bottom: 80, left: 300 },
+            viewport,
+            10
+        )).toBe(0);
     });
 });
