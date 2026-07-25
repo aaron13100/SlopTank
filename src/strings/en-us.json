@@ -1619,7 +1619,7 @@
     "SubtitleSizeUnavailableSelfStyled": "This subtitle format carries its own styling and can't be resized.",
     "SubtitleRed": "Red",
     "Subtitles": "Subtitles",
-    "SubtitleVerticalPositionHelp": "Line number where text appears. Positive numbers indicate top down. Negative numbers indicate bottom up.",
+    "SubtitleVerticalPositionHelp": "Move subtitles smoothly between the visible top and bottom edges of the video.",
     "SubtitleWhite": "White",
     "SubtitleYellow": "Yellow",
     "Success": "Success",

@@ -7,6 +7,34 @@ const SUBTITLE_HEIGHT_RATIO = 0.045;
 
 export const TEXT_SIZE_MIN_MULTIPLIER = 0.25;
 export const TEXT_SIZE_MAX_MULTIPLIER = 2;
+export const VERTICAL_POSITION_TOP = -20;
+export const VERTICAL_POSITION_BOTTOM = -4;
+export const VERTICAL_POSITION_DEFAULT = VERTICAL_POSITION_BOTTOM;
+export const VERTICAL_POSITION_STEP = 0.25;
+
+const VERTICAL_POSITION_TOP_PERCENT = 5;
+const VERTICAL_POSITION_BOTTOM_PERCENT = 94;
+
+/**
+ * Map the persisted line-style setting onto a bounded position in the visible
+ * video. Keeping the persisted range negative remains compatible with cast
+ * clients and older settings, while the rendered result is a smooth,
+ * predictable top-to-bottom track whose endpoints remain visible.
+ * @param {string|number} position - Persisted vertical-position setting.
+ * @returns {{ value: number, fraction: number, percentage: number }} Clamped setting and visible placement.
+ */
+export function getSubtitleVerticalPosition(position) {
+    const numeric = typeof position === 'number' ? position : Number(position);
+    const value = Number.isFinite(numeric) ?
+        Math.min(VERTICAL_POSITION_BOTTOM, Math.max(VERTICAL_POSITION_TOP, numeric)) :
+        VERTICAL_POSITION_DEFAULT;
+    const fraction = (value - VERTICAL_POSITION_TOP)
+        / (VERTICAL_POSITION_BOTTOM - VERTICAL_POSITION_TOP);
+    const percentage = VERTICAL_POSITION_TOP_PERCENT
+        + fraction * (VERTICAL_POSITION_BOTTOM_PERCENT - VERTICAL_POSITION_TOP_PERCENT);
+
+    return { value, fraction, percentage };
+}
 
 /**
  * Resolve a persisted subtitle text-size choice to a multiplier around the
@@ -150,26 +178,8 @@ function getTextStyles(settings, preview, subtitleFontSize) {
     }
 
     if (!preview) {
-        const pos = parseInt(settings.verticalPosition, 10);
-        // Keep this in sync with the subtitle element's effective line height.
-        const lineHeight = 1.35;
-        // Distance from the anchored edge, measured in baseline lines against
-        // the SAME proportional baseline the font-size is built on -- never in
-        // `em`. `em` is the element's own font-size, which textSizeMultiplier
-        // scales, so an em offset makes the subtitle slide up the screen as the
-        // user enlarges it (out of the letterbox bar when small, into the
-        // middle of the picture when large). Position and size are independent
-        // axes: this keeps the offset tied to the video's size and nothing else.
-        const linesFromEdge = margin => `calc(var(--subtitle-font-size, 1em) * ${margin})`;
-        if (pos < 0) {
-            const margin = Math.abs(pos + 1) * lineHeight;
-            list.push({ name: 'margin-bottom', value: linesFromEdge(margin) });
-            list.push({ name: 'margin-top', value: '' });
-        } else {
-            const margin = pos * lineHeight;
-            list.push({ name: 'margin-bottom', value: '' });
-            list.push({ name: 'margin-top', value: linesFromEdge(margin) });
-        }
+        list.push({ name: 'margin-bottom', value: '' });
+        list.push({ name: 'margin-top', value: '' });
     }
 
     return list;
@@ -179,14 +189,20 @@ function getWindowStyles(settings, preview) {
     const list = [];
 
     if (!preview) {
-        const pos = parseInt(settings.verticalPosition, 10);
-        if (pos < 0) {
-            list.push({ name: 'top', value: '' });
-            list.push({ name: 'bottom', value: '0' });
-        } else {
-            list.push({ name: 'top', value: '0' });
-            list.push({ name: 'bottom', value: '' });
-        }
+        const position = getSubtitleVerticalPosition(settings.verticalPosition);
+        list.push({ name: 'top', value: `${position.percentage}%` });
+        // Explicitly override the stylesheet's legacy `bottom: 0`. Clearing
+        // the inline declaration would merely reveal that rule, stretching
+        // the container from `top` to the bottom and making translateY()
+        // resolve against a fixed strip instead of the rendered text height.
+        list.push({ name: 'bottom', value: 'auto' });
+        // At the top, the subtitle's top edge sits on the safe bound; at the
+        // bottom, its bottom edge does. Intermediate values interpolate
+        // smoothly and remain independent of the selected text size.
+        list.push({
+            name: 'transform',
+            value: `translateY(${position.fraction === 0 ? 0 : -position.fraction * 100}%)`
+        });
     }
 
     return list;
@@ -221,5 +237,6 @@ export default {
     getStyles: getStyles,
     applyStyles: applyStyles,
     getSubtitleFontSize: getSubtitleFontSize,
-    getTextSizeMultiplier: getTextSizeMultiplier
+    getTextSizeMultiplier: getTextSizeMultiplier,
+    getSubtitleVerticalPosition: getSubtitleVerticalPosition
 };

@@ -2,9 +2,23 @@ import DOMPurify from 'dompurify';
 import debounce from 'lodash-es/debounce';
 import ResizeObserver from 'resize-observer-polyfill';
 import Screenfull from 'screenfull';
+import caveatFontUrl from '@fontsource/caveat/files/caveat-latin-400-normal.woff2';
+import caveatBoldFontUrl from '@fontsource/caveat/files/caveat-latin-700-normal.woff2';
+import cinzelFontUrl from '@fontsource/cinzel/files/cinzel-latin-400-normal.woff2';
+import cinzelBoldFontUrl from '@fontsource/cinzel/files/cinzel-latin-700-normal.woff2';
+import comicNeueFontUrl from '@fontsource/comic-neue/files/comic-neue-latin-400-normal.woff2';
+import comicNeueBoldFontUrl from '@fontsource/comic-neue/files/comic-neue-latin-700-normal.woff2';
+import courierPrimeFontUrl from '@fontsource/courier-prime/files/courier-prime-latin-400-normal.woff2';
+import courierPrimeBoldFontUrl from '@fontsource/courier-prime/files/courier-prime-latin-700-normal.woff2';
+import notoSerifFontUrl from '@fontsource/noto-serif/files/noto-serif-latin-400-normal.woff2';
+import notoSerifBoldFontUrl from '@fontsource/noto-serif/files/noto-serif-latin-700-normal.woff2';
+import robotoMonoFontUrl from '@fontsource/roboto-mono/files/roboto-mono-latin-400-normal.woff2';
+import robotoMonoBoldFontUrl from '@fontsource/roboto-mono/files/roboto-mono-latin-700-normal.woff2';
 
 import { useCustomSubtitles } from 'apps/stable/features/playback/utils/subtitleStyles';
-import subtitleAppearanceHelper from 'components/subtitlesettings/subtitleappearancehelper';
+import subtitleAppearanceHelper, {
+    VERTICAL_POSITION_BOTTOM
+} from 'components/subtitlesettings/subtitleappearancehelper';
 import { AppFeature } from 'constants/appFeature';
 import { ServerConnections } from 'lib/jellyfin-apiclient';
 import { currentSettings as userSettings } from 'scripts/settings/userSettings';
@@ -189,13 +203,28 @@ function normalizeTrackEventText(text, useHtml) {
 }
 
 const ASS_FONT_FAMILIES = {
-    typewriter: 'Courier New',
-    print: 'Georgia',
-    console: 'Consolas',
-    cursive: 'Segoe Script',
-    casual: 'Comic Sans MS',
-    smallcaps: 'Copperplate'
+    typewriter: 'Courier Prime',
+    print: 'Noto Serif',
+    console: 'Roboto Mono',
+    cursive: 'Caveat',
+    casual: 'Comic Neue',
+    smallcaps: 'Cinzel'
 };
+
+const ASS_USER_FONT_URLS = [
+    caveatFontUrl,
+    caveatBoldFontUrl,
+    cinzelFontUrl,
+    cinzelBoldFontUrl,
+    comicNeueFontUrl,
+    comicNeueBoldFontUrl,
+    courierPrimeFontUrl,
+    courierPrimeBoldFontUrl,
+    notoSerifFontUrl,
+    notoSerifBoldFontUrl,
+    robotoMonoFontUrl,
+    robotoMonoBoldFontUrl
+];
 
 /**
  * Apply user text overrides to an ASS event without touching any positioning,
@@ -1757,6 +1786,10 @@ export class HtmlVideoPlayer {
             this.setSubtitleRenderPath('pending');
         }
         const supportedFonts = ['application/vnd.ms-opentype', 'application/x-truetype-font', 'font/otf', 'font/ttf', 'font/woff', 'font/woff2'];
+        // libass runs in a worker and cannot use browser/system font-family
+        // names by itself. Supply the actual files behind every appearance
+        // menu option so \fn overrides render instead of silently falling
+        // back to the authored font.
         const availableFonts = [];
         const attachments = this._currentPlayOptions.mediaSource.MediaAttachments || [];
         const apiClient = ServerConnections.getApiClient(item);
@@ -1860,14 +1893,20 @@ export class HtmlVideoPlayer {
                 apiClient.getNamedConfiguration('encoding'),
                 // Worker in Tizen 5 doesn't resolve relative path with async request
                 resolveUrl(options.workerUrl),
-                resolveUrl(options.legacyWorkerUrl)
-            ]).then(([config, workerUrl, legacyWorkerUrl]) => {
+                resolveUrl(options.legacyWorkerUrl),
+                // Asset modules emit relative URLs in production. Resolve
+                // them in the main document before handing them to the
+                // worker, otherwise it treats them as /web/libraries/* and
+                // tears down the renderer on the first 404.
+                Promise.all(ASS_USER_FONT_URLS.map(resolveUrl))
+            ]).then(([config, workerUrl, legacyWorkerUrl, bundledFontUrls]) => {
                 if (!isCurrentRequest()) {
                     return;
                 }
 
                 options.workerUrl = workerUrl;
                 options.legacyWorkerUrl = legacyWorkerUrl;
+                availableFonts.push(...bundledFontUrls);
 
                 if (config.EnableFallbackFont) {
                     apiClient.getJSON(fallbackFontList).then((fontFiles = []) => {
@@ -1967,11 +2006,18 @@ export class HtmlVideoPlayer {
             renderer.setTrack(getAssContentWithAppearance(state.content, appearance));
         }
 
-        const position = Number.parseInt(appearance.verticalPosition, 10);
-        const baseline = this.#subtitleFontSize || 20;
-        const authoredPositionOffset = Number.isFinite(position) ?
-            (position + 3) * baseline * 1.35 :
-            0;
+        const position = subtitleAppearanceHelper.getSubtitleVerticalPosition(
+            appearance.verticalPosition);
+        const bottom = subtitleAppearanceHelper.getSubtitleVerticalPosition(
+            VERTICAL_POSITION_BOTTOM);
+        const renderedHeight = renderer.canvasParent?.getBoundingClientRect().height
+            || this.#mediaElement?.getBoundingClientRect().height
+            || 0;
+        // The bottom endpoint is the authored composition (no translation).
+        // Moving toward the top translates the complete ASS canvas, retaining
+        // every cue's relative authored alignment and position.
+        const authoredPositionOffset =
+            (position.percentage - bottom.percentage) * renderedHeight / 100;
         if (renderer.canvasParent) {
             renderer.canvasParent.style.transform =
                 authoredPositionOffset === 0 ? '' : `translateY(${authoredPositionOffset}px)`;
@@ -2163,7 +2209,33 @@ export class HtmlVideoPlayer {
                 this.applyAssRendererAppearance(renderer);
             }
         });
+        this.updateNativeCuePositions();
         this.setCueAppearance();
+    }
+
+    /**
+     * Apply the same bounded top-to-bottom position to browser-native cues.
+     * Percentage positioning with centered line alignment keeps both
+     * endpoints visible even for multiline cues, and can be changed while
+     * playback is paused.
+     * @private
+     */
+    updateNativeCuePositions() {
+        const position = subtitleAppearanceHelper.getSubtitleVerticalPosition(
+            this.getEffectiveAppearanceSettings().verticalPosition);
+        for (const track of this.getTextTracks() || []) {
+            for (const cue of track.cues || []) {
+                if ('snapToLines' in cue) {
+                    cue.snapToLines = false;
+                }
+                if ('line' in cue) {
+                    cue.line = position.percentage;
+                }
+                if ('lineAlign' in cue) {
+                    cue.lineAlign = 'center';
+                }
+            }
+        }
     }
 
     /**
@@ -2248,22 +2320,15 @@ export class HtmlVideoPlayer {
 
     /**
      * Keep the preview sample line present and correctly shown/hidden: shown
-     * while no real cue text (custom or native) is visible, hidden while one
-     * is, so the user always sees exactly one line at the chosen size.
+     * while no real DOM/native cue text is visible, hidden while one is. ASS
+     * remains on its independent canvas, so its appearance panel deliberately
+     * retains the sample line for a direct before/after reference.
      * @private
      * @returns {void}
      */
     updateSubtitlePreviewLine() {
         const preview = this.#subtitleAppearancePreview;
         if (!preview) {
-            return;
-        }
-
-        // libass itself is updated live. Its canvas does not expose whether a
-        // cue is active, so a DOM sample would sometimes duplicate a real ASS
-        // cue and obscure the authored composition.
-        if (this.#subtitleRenderPath === 'ass') {
-            this.#subtitlePreviewElem?.classList.add('hide');
             return;
         }
 
@@ -2287,8 +2352,13 @@ export class HtmlVideoPlayer {
         const customCueVisible = !!this.#videoSubtitlesElem
             && !this.#videoSubtitlesElem.classList.contains('hide')
             && !!this.#videoSubtitlesElem.textContent;
-        const nativeCueVisible = (this.getTextTracks() || [])
-            .some(track => track.activeCues?.length > 0);
+        // libass can leave a TextTrack with active cues even though those cues
+        // are not what the user sees. Only let a genuinely native rendering
+        // path suppress the DOM sample; ASS needs the sample while its canvas
+        // remains independently visible.
+        const nativeCueVisible = this.#subtitleRenderPath === 'native'
+            && (this.getTextTracks() || [])
+                .some(track => track.activeCues?.length > 0);
         this.#subtitlePreviewElem.classList.toggle('hide', customCueVisible || nativeCueVisible);
     }
 
@@ -2422,7 +2492,8 @@ export class HtmlVideoPlayer {
             console.debug(`downloaded ${data.TrackEvents.length} track events`);
 
             const subtitleAppearance = userSettings.getSubtitleAppearanceSettings();
-            const cueLine = parseInt(subtitleAppearance.verticalPosition, 10);
+            const cuePosition = subtitleAppearanceHelper.getSubtitleVerticalPosition(
+                subtitleAppearance.verticalPosition);
 
             // add some cues to show the text
             // in safari, the cues need to be added before setting the track mode to showing
@@ -2431,14 +2502,9 @@ export class HtmlVideoPlayer {
                 const text = normalizeTrackEventText(trackEvent.Text, false);
                 const cue = new TrackCue(trackEvent.StartPositionTicks / 10000000, trackEvent.EndPositionTicks / 10000000, text);
 
-                if (cue.line === 'auto') {
-                    if (cueLine < 0) {
-                        const lineCount = (text.match(/\n/g) || []).length;
-                        cue.line = cueLine - lineCount;
-                    } else {
-                        cue.line = cueLine;
-                    }
-                }
+                cue.snapToLines = false;
+                cue.line = cuePosition.percentage;
+                cue.lineAlign = 'center';
 
                 trackElement.addCue(cue);
             }

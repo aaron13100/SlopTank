@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { getStyles, getSubtitleFontSize } from './subtitleappearancehelper';
+import {
+    getStyles,
+    getSubtitleFontSize,
+    getSubtitleVerticalPosition
+} from './subtitleappearancehelper';
 
 function getFontSize(textSize) {
     return getStyles({ textSize }, false).text.find(style => style.name === 'font-size')?.value;
@@ -85,27 +89,50 @@ describe('subtitle appearance sizing', () => {
     );
 });
 
-function getMargin(settings, name) {
-    return getStyles(settings, false).text.find(style => style.name === name)?.value;
+function getWindowStyle(settings, name) {
+    return getStyles(settings, false).window.find(style => style.name === name)?.value;
 }
 
 describe('subtitle vertical position', () => {
     // @covers subtitle_controls.appearance_sizing.position_independent_of_text_size
     it.each([ '0.25', '1', '2' ])(
-        'keeps the offset from the screen edge identical at text size %s',
+        'keeps the visible placement identical at text size %s',
         textSize => {
-            // Anchored against the proportional baseline, never `em`: `em` is
-            // the element's own font-size, which textSize scales, so an em
-            // offset would slide the subtitle up the screen as it is enlarged.
-            expect(getMargin({ textSize, verticalPosition: -3 }, 'margin-bottom'))
-                .toBe('calc(var(--subtitle-font-size, 1em) * 2.7)');
+            expect(getWindowStyle(
+                { textSize, verticalPosition: -12 },
+                'top'
+            )).toBe('49.5%');
+            expect(getWindowStyle(
+                { textSize, verticalPosition: -12 },
+                'transform'
+            )).toBe('translateY(-50%)');
         }
     );
 
     // @covers subtitle_controls.appearance_sizing.position_anchors_to_chosen_edge
-    it('anchors to the top edge for a non-negative position', () => {
-        expect(getMargin({ verticalPosition: 2 }, 'margin-top'))
-            .toBe('calc(var(--subtitle-font-size, 1em) * 2.7)');
-        expect(getMargin({ verticalPosition: 2 }, 'margin-bottom')).toBe('');
+    it('keeps both endpoints visible and clamps legacy out-of-range values', () => {
+        expect(getSubtitleVerticalPosition(-20)).toEqual({
+            value: -20,
+            fraction: 0,
+            percentage: 5
+        });
+        expect(getSubtitleVerticalPosition(-4)).toEqual({
+            value: -4,
+            fraction: 1,
+            percentage: 94
+        });
+        expect(getSubtitleVerticalPosition(2)).toEqual({
+            value: -4,
+            fraction: 1,
+            percentage: 94
+        });
+        expect(getWindowStyle({ verticalPosition: -20 }, 'top')).toBe('5%');
+        expect(getWindowStyle({ verticalPosition: -20 }, 'bottom')).toBe('auto');
+        expect(getWindowStyle({ verticalPosition: -20 }, 'transform'))
+            .toBe('translateY(0%)');
+        expect(getWindowStyle({ verticalPosition: -4 }, 'top')).toBe('94%');
+        expect(getWindowStyle({ verticalPosition: -4 }, 'bottom')).toBe('auto');
+        expect(getWindowStyle({ verticalPosition: -4 }, 'transform'))
+            .toBe('translateY(-100%)');
     });
 });

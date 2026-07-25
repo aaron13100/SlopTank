@@ -7,7 +7,13 @@
  * @module components/subtitlesizer/subtitlesizer
  */
 
-import { getTextSizeMultiplier } from '../subtitlesettings/subtitleappearancehelper';
+import {
+    getTextSizeMultiplier,
+    VERTICAL_POSITION_BOTTOM,
+    VERTICAL_POSITION_DEFAULT,
+    VERTICAL_POSITION_STEP,
+    VERTICAL_POSITION_TOP
+} from '../subtitlesettings/subtitleappearancehelper';
 import Events from '../../utils/events.ts';
 import '../../elements/emby-slider/emby-slider';
 import '../../elements/emby-select/emby-select';
@@ -76,7 +82,11 @@ export default class SubtitleSizer {
         const initialMultiplier = getTextSizeMultiplier(
             appearanceSettings.textSize);
         this.slider.value = String(Math.round(initialMultiplier * 100));
-        this.positionSlider.value = String(appearanceSettings.verticalPosition ?? -3);
+        this.positionSlider.min = String(VERTICAL_POSITION_TOP);
+        this.positionSlider.max = String(VERTICAL_POSITION_BOTTOM);
+        this.positionSlider.step = String(VERTICAL_POSITION_STEP);
+        this.positionSlider.value = String(
+            appearanceSettings.verticalPosition ?? VERTICAL_POSITION_DEFAULT);
         this.fontSelect.value = appearanceSettings.font || '';
         this.weightSelect.value = appearanceSettings.textWeight || 'normal';
         this.updateValueLabel();
@@ -85,7 +95,7 @@ export default class SubtitleSizer {
         this.slider.getBubbleHtml = (_, value) =>
             `<h1 class="sliderBubbleText">${Math.round(value)}%</h1>`;
         this.positionSlider.getBubbleHtml = (_, value) =>
-            `<h1 class="sliderBubbleText">${Math.round(value)}</h1>`;
+            `<h1 class="sliderBubbleText">${this.formatPosition(value)}</h1>`;
 
         this.slider.addEventListener('input', this.onSliderInput);
         this.slider.addEventListener('change', this.onSliderChange);
@@ -194,7 +204,12 @@ export default class SubtitleSizer {
     }
 
     updatePositionValueLabel() {
-        this.positionValueLabel.textContent = this.positionSlider.value;
+        this.positionValueLabel.textContent = this.formatPosition(
+            this.positionSlider.value);
+    }
+
+    formatPosition(value) {
+        return String(Math.round(Number(value) * 100) / 100);
     }
 
     /**

@@ -230,6 +230,26 @@ async function assCanvasSignature(page: import('@playwright/test').Page) {
     });
 }
 
+/**
+ * Convert libass's non-transparent canvas rows into screen coordinates after
+ * the player has applied its live CSS translation.
+ */
+async function assRenderedVerticalBounds(page: import('@playwright/test').Page) {
+    const canvas = page.locator(
+        '.libassjs-canvas-parent:not(.libassjs-canvas-parent-secondary) .libassjs-canvas'
+    );
+    const signature = await assCanvasSignature(page);
+    const box = await canvas.boundingBox();
+    if (!box || signature.minY < 0) {
+        throw new Error('ASS subtitle has no rendered screen bounds'); // allow-raw-error: e2e assertion setup
+    }
+    const scale = box.height / signature.height;
+    return {
+        top: box.y + signature.minY * scale,
+        bottom: box.y + (signature.maxY + 1) * scale
+    };
+}
+
 async function seekAndPauseAssCue(
     video: import('@playwright/test').Locator,
     page: import('@playwright/test').Page,
@@ -620,7 +640,7 @@ test('subtitle appearance controls preview live and persist without weakening si
     await expect(page.locator('.subtitleFontSelect')).toHaveValue('console');
     await expect(page.locator('.subtitleWeightSelect')).toHaveValue('bold');
     await setSizeSlider(page, 100);
-    await setPositionSlider(page, -3);
+    await setPositionSlider(page, -4);
     await page.locator('.subtitleFontSelect').selectOption('');
     await page.locator('.subtitleWeightSelect').selectOption('normal');
     await page.locator('.subtitleSizer-closeButton').click();
@@ -762,7 +782,7 @@ test('a saved Native preference still produces a resizable real cue', async ({ p
         localStorage.setItem(`${server.UserId}-localplayersubtitleappearance3`, JSON.stringify({
             subtitleStyling: 'Native',
             textSize: '1',
-            verticalPosition: -3
+            verticalPosition: -4
         }));
     });
     const video = await startPlayback(page, config);
@@ -915,6 +935,18 @@ test('subtitle offset explains itself without a subtitle and shifts cues with on
 // @covers subtitle_controls.track_menu.ass_authored_layout_live_appearance_secondary_and_offset
 test('ASS preserves authored layout while appearance, secondary, and paused offset remain controllable', async ({ page, config }) => {
     await login(page, config.username, config.password);
+    const bundledFontResponses: Array<{ url: string, status: number }> = [];
+    page.on('response', response => {
+        if (
+            response.request().method() === 'GET'
+            && /(caveat|cinzel|comic-neue|courier-prime|noto-serif|roboto-mono)-latin-(400|700)-normal/.test(response.url())
+        ) {
+            bundledFontResponses.push({
+                url: response.url(),
+                status: response.status()
+            });
+        }
+    });
     const video = await startPlayback(page, {
         itemId: requireAssSubtitleItemId(),
         serverId: config.serverId
@@ -925,6 +957,12 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
     await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
 
     await expect(page.locator('.libassjs-canvas')).toBeVisible({ timeout: 30_000 });
+    await expect.poll(() => bundledFontResponses.length, { timeout: 30_000 })
+        .toBe(12);
+    expect(bundledFontResponses.every(response =>
+        response.status === 200
+        && !new URL(response.url).pathname.includes('/web/libraries/')
+    )).toBe(true);
 
     // This fixture intentionally has a DefaultTop cue and a normal bottom cue
     // active together here. Keeping pixels in both halves proves that the
@@ -934,11 +972,31 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
     expect(authoredLayout.minY).toBeLessThan(authoredLayout.height * 0.4);
     expect(authoredLayout.maxY).toBeGreaterThan(authoredLayout.height * 0.6);
 
-    // A single long dialogue cue makes rendered-pixel comparisons stable.
-    await seekAndPauseAssCue(video, page, 185.5);
     await openSizeOverlay(page);
     await expect(page.locator('.subtitleSizerControls')).toBeVisible();
     await expect(page.locator('.subtitleSizerMessage')).toBeHidden();
+    await expect(page.locator('.videoSubtitlesPreviewLine'))
+        .toHaveText('This is how subtitles will look');
+    await expect(page.locator('.videoSubtitlesPreviewLine')).toBeVisible();
+
+    // Positioned cues use the same real font files and weight override as
+    // ordinary dialogue. Assert each control separately: the old combined
+    // assertion passed when only weight worked and font silently fell back.
+    await page.locator('.subtitleFontSelect').selectOption('console');
+    await expect.poll(async () => (await assCanvasSignature(page)).hash, {
+        timeout: 30_000
+    }).not.toBe(authoredLayout.hash);
+    const positionedWithFont = await assCanvasSignature(page);
+    await page.locator('.subtitleWeightSelect').selectOption('bold');
+    await expect.poll(async () => (await assCanvasSignature(page)).hash, {
+        timeout: 30_000
+    }).not.toBe(positionedWithFont.hash);
+    await page.locator('.subtitleFontSelect').selectOption('');
+    await page.locator('.subtitleWeightSelect').selectOption('normal');
+
+    // A single long bottom-centre dialogue cue makes rendered-pixel
+    // comparisons and visible endpoint checks stable.
+    await seekAndPauseAssCue(video, page, 185.5);
 
     await setSizeSlider(page, 25);
     await expect.poll(async () => (await assCanvasSignature(page)).alphaPixels, {
@@ -953,21 +1011,35 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
     const large = await assCanvasSignature(page);
 
     await page.locator('.subtitleFontSelect').selectOption('console');
-    await page.locator('.subtitleWeightSelect').selectOption('bold');
     await expect.poll(async () => (await assCanvasSignature(page)).hash, {
         timeout: 30_000
     }).not.toBe(large.hash);
-
-    const canvasBeforeNudge = await page.locator('.libassjs-canvas').boundingBox();
-    if (!canvasBeforeNudge) throw new Error('ASS canvas has no box'); // allow-raw-error: e2e setup fast-fail
-    await setPositionSlider(page, -8);
-    await expect.poll(async () => (await page.locator('.libassjs-canvas').boundingBox())?.y)
-        .toBeLessThan(canvasBeforeNudge.y);
+    const bottomWithFont = await assCanvasSignature(page);
+    await page.locator('.subtitleWeightSelect').selectOption('bold');
+    await expect.poll(async () => (await assCanvasSignature(page)).hash, {
+        timeout: 30_000
+    }).not.toBe(bottomWithFont.hash);
 
     await setSizeSlider(page, 100);
-    await setPositionSlider(page, -3);
     await page.locator('.subtitleFontSelect').selectOption('');
     await page.locator('.subtitleWeightSelect').selectOption('normal');
+
+    const videoBox = await video.boundingBox();
+    if (!videoBox) throw new Error('video has no box'); // allow-raw-error: e2e setup fast-fail
+    await setPositionSlider(page, -20);
+    await expect.poll(async () => (await assRenderedVerticalBounds(page)).top)
+        .toBeGreaterThanOrEqual(videoBox.y);
+    const topBounds = await assRenderedVerticalBounds(page);
+    expect(topBounds.top).toBeLessThan(videoBox.y + videoBox.height * 0.12);
+    expect(topBounds.bottom).toBeLessThanOrEqual(videoBox.y + videoBox.height);
+
+    await setPositionSlider(page, -4);
+    await expect.poll(async () => (await assRenderedVerticalBounds(page)).bottom)
+        .toBeLessThanOrEqual(videoBox.y + videoBox.height);
+    const bottomBounds = await assRenderedVerticalBounds(page);
+    expect(bottomBounds.bottom).toBeGreaterThan(videoBox.y + videoBox.height * 0.8);
+    expect(bottomBounds.top).toBeGreaterThanOrEqual(videoBox.y);
+
     await page.locator('.subtitleSizer-closeButton').click();
 
     // ASS is also independently selectable as a secondary subtitle. The
