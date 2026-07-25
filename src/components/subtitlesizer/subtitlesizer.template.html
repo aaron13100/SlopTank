@@ -1,10 +1,42 @@
 <div class="subtitleSizer">
     <div class="subtitleSizerContainer">
         <button type="button" is="paper-icon-button-light" class="subtitleSizer-closeButton" title="${Close}"><span class="material-icons close" aria-hidden="true"></span></button>
-        <div class="subtitleSizerValue">100%</div>
+        <h2 class="subtitleSizerTitle">${Title}</h2>
         <div class="subtitleSizerMessage hide"></div>
-        <div class="sliderContainer subtitleSizerSliderContainer">
-            <input is="emby-slider" type="range" step="5" min="25" max="200" value="100" class="subtitleSizerSlider" data-slider-keep-progress="true" />
+        <div class="subtitleSizerControls">
+            <div class="subtitleSizerField subtitleSizerSizeField">
+                <div class="subtitleSizerFieldHeader">
+                    <label for="subtitleSizerSlider">${TextSize}</label>
+                    <output class="subtitleSizerValue" for="subtitleSizerSlider">100%</output>
+                </div>
+                <div class="sliderContainer subtitleSizerSliderContainer">
+                    <input is="emby-slider" id="subtitleSizerSlider" type="range" step="5" min="25" max="200" value="100" class="subtitleSizerSlider" data-slider-keep-progress="true" />
+                </div>
+            </div>
+            <div class="subtitleSizerField subtitleSizerPositionField">
+                <div class="subtitleSizerFieldHeader">
+                    <label for="subtitlePositionSlider">${VerticalPosition}</label>
+                    <output class="subtitlePositionValue" for="subtitlePositionSlider">-3</output>
+                </div>
+                <div class="sliderContainer subtitlePositionSliderContainer">
+                    <input is="emby-slider" id="subtitlePositionSlider" type="range" step="1" min="-16" max="16" value="-3" class="subtitlePositionSlider" data-slider-keep-progress="true" />
+                </div>
+            </div>
+            <div class="subtitleSizerSelectGrid">
+                <select is="emby-select" class="subtitleFontSelect" label="${Font}">
+                    <option value="">${Default}</option>
+                    <option value="typewriter">${Typewriter}</option>
+                    <option value="print">${Print}</option>
+                    <option value="console">${Console}</option>
+                    <option value="cursive">${Cursive}</option>
+                    <option value="casual">${Casual}</option>
+                    <option value="smallcaps">${SmallCaps}</option>
+                </select>
+                <select is="emby-select" class="subtitleWeightSelect" label="${TextWeight}">
+                    <option value="normal">${Normal}</option>
+                    <option value="bold">${Bold}</option>
+                </select>
+            </div>
         </div>
     </div>
 </div>

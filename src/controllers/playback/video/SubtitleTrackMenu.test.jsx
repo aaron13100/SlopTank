@@ -32,7 +32,12 @@ MenuHarness.propTypes = {
  * object exercised through the same preview API contract the HTML video
  * player implements, recording each call's effect on its own state.
  */
-function createHarness({ selectedIds, textSize = '', playerKind = 'local' }) {
+function createHarness({
+    selectedIds,
+    textSize = '',
+    playerKind = 'local',
+    withSecondary = false
+}) {
     let appearanceSettings = { textSize, verticalPosition: -3 };
     let liveApplyCount = 0;
     const player = {
@@ -72,15 +77,22 @@ function createHarness({ selectedIds, textSize = '', playerKind = 'local' }) {
     const playback = {
         secondarySelections: [],
         subtitleSelections: [],
-        getSubtitleStream: () => undefined,
+        getSubtitleStream: (_, index) => [
+            { Codec: 'srt', DeliveryMethod: 'External', DisplayTitle: 'English', Index: 3 },
+            { Codec: 'srt', DeliveryMethod: 'External', DisplayTitle: 'French', Index: 4 }
+        ].find(stream => stream.Index === index),
         getSubtitleStreamIndex: () => 3,
         getSecondarySubtitleStreamIndex: () => -1,
-        playerHasSecondarySubtitleSupport: () => false,
-        secondarySubtitleTracks: () => [],
+        playerHasSecondarySubtitleSupport: () => withSecondary,
+        secondarySubtitleTracks: () => withSecondary ?
+            [ { Codec: 'srt', DeliveryMethod: 'External', DisplayTitle: 'French', Index: 4 } ] :
+            [],
         setSecondarySubtitleStreamIndex: index => playback.secondarySelections.push(index),
         setSubtitleStreamIndex: index => playback.subtitleSelections.push(index),
-        subtitleTracks: () => [ { DisplayTitle: 'English', Index: 3 } ],
-        trackHasSecondarySubtitleSupport: () => false
+        subtitleTracks: () => [
+            { Codec: 'srt', DeliveryMethod: 'External', DisplayTitle: 'English', Index: 3 }
+        ],
+        trackHasSecondarySubtitleSupport: () => withSecondary
     };
     const settings = {
         savedAppearances: [],
@@ -146,6 +158,9 @@ describe('SubtitleTrackMenu', () => {
         // opening immediately begins a preview at the persisted size
         expect(harness.player.activePreview).toEqual({
             textSize: '1.5',
+            verticalPosition: '-3',
+            font: '',
+            textWeight: 'normal',
             sampleText: 'SubtitleSizePreviewSample'
         });
 
@@ -165,6 +180,45 @@ describe('SubtitleTrackMenu', () => {
         fireEvent.click(document.querySelector('.subtitleSizer-closeButton'));
         expect(harness.player.activePreview).toBeNull();
         expect(sizerContainer()).toBeNull();
+    });
+
+    it('previews and persists vertical position, font family, and font weight', async () => {
+        const harness = createHarness({ selectedIds: [ 'subtitlesize' ], textSize: '1' });
+        render(<MenuHarness options={harness.options} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }));
+        await waitFor(() => expect(sizerContainer()).toBeTruthy());
+
+        const position = document.querySelector('.subtitlePositionSlider');
+        position.value = '-8';
+        fireEvent.input(position);
+        expect(harness.player.activePreview.verticalPosition).toBe('-8');
+        expect(harness.settings.savedAppearances).toEqual([]);
+
+        fireEvent.change(position);
+        expect(harness.settings.savedAppearances.at(-1)).toMatchObject({
+            textSize: '1',
+            verticalPosition: '-8'
+        });
+
+        const font = document.querySelector('.subtitleFontSelect');
+        font.value = 'console';
+        fireEvent.change(font);
+        expect(harness.player.activePreview.font).toBe('console');
+        expect(harness.settings.savedAppearances.at(-1)).toMatchObject({
+            font: 'console',
+            verticalPosition: '-8'
+        });
+
+        const weight = document.querySelector('.subtitleWeightSelect');
+        weight.value = 'bold';
+        fireEvent.change(weight);
+        expect(harness.player.activePreview.textWeight).toBe('bold');
+        expect(harness.settings.savedAppearances.at(-1)).toMatchObject({
+            font: 'console',
+            textWeight: 'bold',
+            verticalPosition: '-8'
+        });
     });
 
     // @covers subtitle_controls.track_menu.sizer_dismissal_clears_sample_line
@@ -206,6 +260,26 @@ describe('SubtitleTrackMenu', () => {
         await waitFor(() => expect(sizerContainer()).toBeTruthy());
 
         expect(harness.toggleSubtitleSyncActions).toContain('forceToHide');
+    });
+
+    it('keeps the secondary subtitle entry and selection flow alongside appearance', async () => {
+        const harness = createHarness({
+            selectedIds: [ 'secondarysubtitle', '4' ],
+            withSecondary: true
+        });
+        render(<MenuHarness options={harness.options} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }));
+        await waitFor(() => expect(harness.actionSheet.calls).toHaveLength(2));
+
+        expect(harness.actionSheet.calls[0].items.map(item => item.name)).toEqual([
+            'HeaderSubtitleAppearance',
+            'SecondarySubtitles',
+            'Off',
+            'English'
+        ]);
+        expect(harness.actionSheet.calls[1].title).toBe('SecondarySubtitles');
+        expect(harness.playback.secondarySelections).toEqual([ 4 ]);
     });
 
     // @covers subtitle_controls.track_menu.reopen_replaces_overlay

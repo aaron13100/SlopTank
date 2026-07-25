@@ -1,17 +1,16 @@
 /**
- * In-player subtitle size overlay: a 25%-200% slider that live-applies the
- * size through the player's appearance-preview API (so the change, or a
- * sample line when no cue is on screen, is always visible) and persists the
- * chosen multiplier on release. When the current subtitle's rendering path
- * cannot be resized client-side (ASS/PGS self-styled formats, server
- * burn-in, broken native styling), the overlay explains why instead of
- * silently doing nothing.
+ * In-player subtitle appearance overlay. Size and vertical position are
+ * adjusted with live sliders; font family and weight are adjusted with
+ * selects. Every change flows through the player's appearance-preview API
+ * so a real cue, or a sample line when no cue is active, visibly updates
+ * before the setting is persisted.
  * @module components/subtitlesizer/subtitlesizer
  */
 
 import { getTextSizeMultiplier } from '../subtitlesettings/subtitleappearancehelper';
 import Events from '../../utils/events.ts';
 import '../../elements/emby-slider/emby-slider';
+import '../../elements/emby-select/emby-select';
 import layoutManager from '../layoutManager';
 import template from './subtitlesizer.template.html';
 import './subtitlesizer.scss';
@@ -42,43 +41,92 @@ export default class SubtitleSizer {
         this.onInteract = options.onInteract;
         this.onClose = options.onClose;
 
-        const parent = document.createElement('div');
-        document.body.appendChild(parent);
-        parent.innerHTML = template.replace('${Close}', this.translate('ButtonClose'));
+        // The local HTML player exposes its video container as the host. It
+        // moves into Document PiP with the video and subtitle layer, allowing
+        // this panel to follow it. Remote/test players fall back to the body.
+        const host = this.player.getSubtitleAppearanceOverlayHost?.() || document.body;
+        this.ownerDocument = host.ownerDocument || document;
+        const parent = this.ownerDocument.createElement('div');
+        host.appendChild(parent);
+        parent.innerHTML = this.renderTemplate();
         this.element = parent;
 
         this.slider = parent.querySelector('.subtitleSizerSlider');
+        this.positionSlider = parent.querySelector('.subtitlePositionSlider');
+        this.fontSelect = parent.querySelector('.subtitleFontSelect');
+        this.weightSelect = parent.querySelector('.subtitleWeightSelect');
         this.valueLabel = parent.querySelector('.subtitleSizerValue');
+        this.positionValueLabel = parent.querySelector('.subtitlePositionValue');
         this.message = parent.querySelector('.subtitleSizerMessage');
-        this.sliderContainer = parent.querySelector('.subtitleSizerSliderContainer');
+        this.controls = parent.querySelector('.subtitleSizerControls');
 
         if (layoutManager.tv) {
-            this.slider.classList.add('focusable');
+            [ this.slider, this.positionSlider, this.fontSelect, this.weightSelect ]
+                .forEach(control => {
+                    control.classList.add('focusable');
+                });
             // Defer until the registered element attaches in Firefox.
             setTimeout(() => {
-                this.slider.enableKeyboardDragging();
+                this.slider.enableKeyboardDragging?.();
+                this.positionSlider.enableKeyboardDragging?.();
             }, 0);
         }
 
+        const appearanceSettings = this.settings.getSubtitleAppearanceSettings();
         const initialMultiplier = getTextSizeMultiplier(
-            this.settings.getSubtitleAppearanceSettings().textSize);
+            appearanceSettings.textSize);
         this.slider.value = String(Math.round(initialMultiplier * 100));
+        this.positionSlider.value = String(appearanceSettings.verticalPosition ?? -3);
+        this.fontSelect.value = appearanceSettings.font || '';
+        this.weightSelect.value = appearanceSettings.textWeight || 'normal';
         this.updateValueLabel();
+        this.updatePositionValueLabel();
 
         this.slider.getBubbleHtml = (_, value) =>
             `<h1 class="sliderBubbleText">${Math.round(value)}%</h1>`;
+        this.positionSlider.getBubbleHtml = (_, value) =>
+            `<h1 class="sliderBubbleText">${Math.round(value)}</h1>`;
 
         this.slider.addEventListener('input', this.onSliderInput);
         this.slider.addEventListener('change', this.onSliderChange);
+        this.positionSlider.addEventListener('input', this.onPositionInput);
+        this.positionSlider.addEventListener('change', this.onPositionChange);
+        this.fontSelect.addEventListener('change', this.onAppearanceSelectChange);
+        this.weightSelect.addEventListener('change', this.onAppearanceSelectChange);
         parent.querySelector('.subtitleSizer-closeButton')
             .addEventListener('click', this.onCloseClick);
         // Capture phase: dismissing this overlay is what Escape means while it
         // is open, so the key must not also reach the player's own handler.
-        document.addEventListener('keydown', this.onKeyDown, true);
+        this.ownerDocument.addEventListener('keydown', this.onKeyDown, true);
         Events.on(this.player, 'subtitlerenderpathchange', this.onRenderPathChange);
 
         this.applyCapability();
         this.beginPreview();
+    }
+
+    renderTemplate() {
+        const translations = {
+            Close: 'ButtonClose',
+            Title: 'HeaderSubtitleAppearance',
+            TextSize: 'LabelTextSize',
+            VerticalPosition: 'LabelSubtitleVerticalPosition',
+            Font: 'LabelFont',
+            TextWeight: 'LabelTextWeight',
+            Default: 'Default',
+            Typewriter: 'Typewriter',
+            Print: 'Print',
+            Console: 'Console',
+            Cursive: 'Cursive',
+            Casual: 'Casual',
+            SmallCaps: 'SmallCaps',
+            Normal: 'Normal',
+            Bold: 'Bold'
+        };
+
+        return Object.entries(translations).reduce(
+            (html, [ token, key ]) => html.split(`\${${token}}`).join(this.translate(key)),
+            template
+        );
     }
 
     onSliderInput = () => {
@@ -91,6 +139,26 @@ export default class SubtitleSizer {
         this.updateValueLabel();
         this.beginPreview();
         this.persist();
+        this.onInteract?.();
+    };
+
+    onPositionInput = () => {
+        this.updatePositionValueLabel();
+        this.beginPreview();
+        this.onInteract?.();
+    };
+
+    onPositionChange = () => {
+        this.updatePositionValueLabel();
+        this.beginPreview();
+        this.persist({ verticalPosition: this.positionSlider.value });
+        this.onInteract?.();
+    };
+
+    onAppearanceSelectChange = event => {
+        this.beginPreview();
+        const field = event.target === this.fontSelect ? 'font' : 'textWeight';
+        this.persist({ [field]: event.target.value });
         this.onInteract?.();
     };
 
@@ -125,6 +193,10 @@ export default class SubtitleSizer {
         this.valueLabel.textContent = `${parseInt(this.slider.value, 10)}%`;
     }
 
+    updatePositionValueLabel() {
+        this.positionValueLabel.textContent = this.positionSlider.value;
+    }
+
     /**
      * Live-apply the slider position through the player preview so the user
      * SEES the size: real cues resize immediately and a sample line renders
@@ -134,6 +206,9 @@ export default class SubtitleSizer {
     beginPreview() {
         this.player.setSubtitleAppearancePreview({
             textSize: this.currentMultiplier(),
+            verticalPosition: this.positionSlider.value,
+            font: this.fontSelect.value,
+            textWeight: this.weightSelect.value,
             sampleText: this.translate('SubtitleSizePreviewSample')
         });
     }
@@ -143,11 +218,11 @@ export default class SubtitleSizer {
      * write can never clobber other appearance fields saved elsewhere.
      * @private
      */
-    persist() {
+    persist(changes = { textSize: this.currentMultiplier() }) {
         const appearanceSettings = this.settings.getSubtitleAppearanceSettings();
         this.settings.setSubtitleAppearanceSettings({
             ...appearanceSettings,
-            textSize: this.currentMultiplier()
+            ...changes
         });
     }
 
@@ -165,7 +240,7 @@ export default class SubtitleSizer {
         if (!info.canAdjustSize) {
             if (info.path === 'burned') {
                 messageText = this.translate('SubtitleSizeUnavailableBurnedIn');
-            } else if (info.path === 'ass' || info.path === 'pgs') {
+            } else if (info.path === 'pgs') {
                 messageText = this.translate('SubtitleSizeUnavailableSelfStyled');
             } else {
                 messageText = this.translate('SubtitleSizeUnavailableNativeStyling');
@@ -174,8 +249,7 @@ export default class SubtitleSizer {
 
         this.message.textContent = messageText || '';
         this.message.classList.toggle('hide', !messageText);
-        this.sliderContainer.classList.toggle('hide', !!messageText);
-        this.valueLabel.classList.toggle('hide', !!messageText);
+        this.controls.classList.toggle('hide', !!messageText);
     }
 
     /**
@@ -190,9 +264,13 @@ export default class SubtitleSizer {
         }
 
         Events.off(this.player, 'subtitlerenderpathchange', this.onRenderPathChange);
-        document.removeEventListener('keydown', this.onKeyDown, true);
+        this.ownerDocument.removeEventListener('keydown', this.onKeyDown, true);
         this.slider.removeEventListener('input', this.onSliderInput);
         this.slider.removeEventListener('change', this.onSliderChange);
+        this.positionSlider.removeEventListener('input', this.onPositionInput);
+        this.positionSlider.removeEventListener('change', this.onPositionChange);
+        this.fontSelect.removeEventListener('change', this.onAppearanceSelectChange);
+        this.weightSelect.removeEventListener('change', this.onAppearanceSelectChange);
         this.player.clearSubtitleAppearancePreview();
         this.element.remove();
         this.element = null;

@@ -188,6 +188,133 @@ function normalizeTrackEventText(text, useHtml) {
     return useHtml ? result.replace(/\n/gi, '<br>') : result;
 }
 
+const ASS_FONT_FAMILIES = {
+    typewriter: 'Courier New',
+    print: 'Georgia',
+    console: 'Consolas',
+    cursive: 'Segoe Script',
+    casual: 'Comic Sans MS',
+    smallcaps: 'Copperplate'
+};
+
+/**
+ * Apply user text overrides to an ASS event without touching any positioning,
+ * animation, colour, or drawing commands. Inline font-size commands are
+ * scaled from their authored value; explicit font/weight commands are
+ * replaced by the user's current typography choices.
+ * @param {string} text - Authored ASS event text.
+ * @param {Object} appearance - Effective subtitle appearance.
+ * @returns {string} Event text with appearance overrides applied.
+ */
+function getAssEventTextWithAppearance(text, appearance) {
+    const multiplier = subtitleAppearanceHelper.getTextSizeMultiplier(appearance.textSize);
+    let result = text.replace(/\\fs(\d+(?:\.\d+)?)/gi, (match, value) =>
+        `\\fs${Math.round(Number(value) * multiplier * 100) / 100}`);
+    const fontName = ASS_FONT_FAMILIES[appearance.font];
+    const bold = appearance.textWeight === 'bold' ? 1 : 0;
+
+    if (fontName) {
+        result = result.replace(/\\fn[^\\}]*/gi, `\\fn${fontName}`);
+    }
+    result = result.replace(/\\b-?\d+/gi, `\\b${bold}`);
+
+    const overrides = [
+        fontName ? `\\fn${fontName}` : '',
+        `\\b${bold}`
+    ].join('');
+    return `{${overrides}}${result}`;
+}
+
+function splitAssFields(value, fieldCount) {
+    const fields = [];
+    let remainder = value;
+    for (let index = 1; index < fieldCount; index++) {
+        const separator = remainder.indexOf(',');
+        if (separator === -1) {
+            return null;
+        }
+        fields.push(remainder.slice(0, separator));
+        remainder = remainder.slice(separator + 1);
+    }
+    fields.push(remainder);
+    return fields;
+}
+
+/**
+ * Override only ASS typography while retaining the complete authored
+ * composition. Style alignments/margins and event-level positioning,
+ * animations, colours, drawings, and timing pass through byte-for-byte.
+ * @param {string} content - Authored ASS/SSA document.
+ * @param {Object} appearance - Effective subtitle appearance.
+ * @returns {string} ASS/SSA document ready for libass.
+ */
+function getAssContentWithAppearance(content, appearance) {
+    const multiplier = subtitleAppearanceHelper.getTextSizeMultiplier(appearance.textSize);
+    const fontName = ASS_FONT_FAMILIES[appearance.font];
+    const bold = appearance.textWeight === 'bold' ? '-1' : '0';
+    let section = '';
+    let format = [];
+
+    return content.split(/\r?\n/).map(line => {
+        const trimmedLine = line.trim();
+        if (trimmedLine.startsWith('[') && trimmedLine.endsWith(']')) {
+            section = trimmedLine.slice(1, -1).toLowerCase();
+            format = [];
+            return line;
+        }
+
+        const colonIndex = line.indexOf(':');
+        const lineKey = colonIndex === -1 ?
+            '' :
+            line.slice(0, colonIndex).trim().toLowerCase();
+        const lineValue = colonIndex === -1 ?
+            '' :
+            line.slice(colonIndex + 1).trimStart();
+
+        if (lineKey === 'format') {
+            format = lineValue.split(',').map(field => field.trim().toLowerCase());
+            return line;
+        }
+
+        if ((section === 'v4+ styles' || section === 'v4 styles') && lineKey === 'style' && format.length) {
+            const fields = splitAssFields(lineValue, format.length);
+            if (!fields) {
+                return line;
+            }
+            const fontSizeIndex = format.indexOf('fontsize');
+            const fontNameIndex = format.indexOf('fontname');
+            const boldIndex = format.indexOf('bold');
+            if (fontSizeIndex !== -1) {
+                const authoredSize = Number(fields[fontSizeIndex]);
+                if (Number.isFinite(authoredSize)) {
+                    fields[fontSizeIndex] = String(
+                        Math.round(authoredSize * multiplier * 100) / 100
+                    );
+                }
+            }
+            if (fontName && fontNameIndex !== -1) {
+                fields[fontNameIndex] = fontName;
+            }
+            if (boldIndex !== -1) {
+                fields[boldIndex] = bold;
+            }
+            return `${line.slice(0, colonIndex + 1)} ${fields.join(',')}`;
+        }
+
+        if (section === 'events' && lineKey === 'dialogue' && format.length) {
+            const fields = splitAssFields(lineValue, format.length);
+            const textIndex = format.indexOf('text');
+            if (!fields || textIndex === -1) {
+                return line;
+            }
+            fields[textIndex] = getAssEventTextWithAppearance(fields[textIndex], appearance);
+            return `${line.slice(0, colonIndex + 1)} ${fields.join(',')}`;
+        }
+
+        return line;
+    }).join('\n');
+}
+
 function getTextTrackUrl(track, item, format) {
     if (itemHelper.isLocalItem(item) && track.Path) {
         return track.Path;
@@ -236,6 +363,34 @@ export class HtmlVideoPlayer {
      */
     #videoDialog;
     /**
+     * Active Document Picture-in-Picture window. The complete video container
+     * is moved there so custom subtitles and appearance controls remain part
+     * of the popout instead of leaving only the bare video element.
+     * @type {Window | null}
+     */
+    #documentPictureInPictureWindow = null;
+    /**
+     * Original video-container placement restored when Document PiP closes.
+     * @type {{ parent: Node, nextSibling: Node | null } | null}
+     */
+    #documentPictureInPictureRestorePoint = null;
+    /**
+     * @type {(() => void) | null}
+     */
+    #documentPictureInPicturePageHideHandler = null;
+    /**
+     * @type {HTMLElement | null}
+     */
+    #documentPictureInPictureAppearanceButton = null;
+    /**
+     * @type {Object | null}
+     */
+    #documentPictureInPictureAppearanceOverlay = null;
+    /**
+     * @type {boolean | null}
+     */
+    #documentPictureInPictureOriginalVideoControls = null;
+    /**
      * @type {number | undefined}
      */
     #subtitleTrackIndexToSetOnPlaying;
@@ -250,7 +405,14 @@ export class HtmlVideoPlayer {
     /**
      * @type {any | null | undefined}
      */
-    #currentAssRenderer;
+    #currentAssRenderers = [ null, null ];
+    /**
+     * Original ASS source keyed by renderer. Every live appearance update
+     * derives from this immutable authored document, so dragging a slider
+     * never compounds size or loses any positioning/animation directives.
+     * @type {WeakMap<Object, { content: string, appearanceKey: string }>}
+     */
+    #assRendererStates = new WeakMap();
     /**
      * @type {any | null | undefined}
      */
@@ -330,7 +492,7 @@ export class HtmlVideoPlayer {
     /**
      * Transient appearance override plus sample line shown while the
      * in-player size overlay is open. Null when no preview is active.
-     * @type {{ textSize: string, sampleText: string } | null}
+     * @type {{ textSize?: string, verticalPosition?: string, font?: string, textWeight?: string, sampleText: string } | null}
      */
     #subtitleAppearancePreview = null;
     /**
@@ -702,32 +864,51 @@ export class HtmlVideoPlayer {
      */
     _setSubtitleOffset(offset) {
         const offsetValue = parseFloat(offset);
+        const appliedTrackIndices = new Set();
+        const transcodingOffset = (this._currentPlayOptions.transcodingOffsetTicks || 0) / 10000000;
 
-        // if .ass currently rendering
-        if (this.#currentAssRenderer) {
-            this.updateCurrentTrackOffset(offsetValue);
-            this.#currentAssRenderer.timeOffset = (this._currentPlayOptions.transcodingOffsetTicks || 0) / 10000000 + offsetValue;
-        } else if (this.#currentPgsRenderer) {
-            this.updateCurrentTrackOffset(offsetValue);
-            this.#currentPgsRenderer.timeOffset = (this._currentPlayOptions.transcodingOffsetTicks || 0) / 10000000 + offsetValue;
-        } else {
-            const trackElements = this.getTextTracks();
-            // if .vtt currently rendering
-            if (trackElements?.length > 0) {
-                trackElements.forEach((trackElement, index) => {
-                    this.setTextTrackSubtitleOffset(trackElement, offsetValue, index);
-                });
-            } else if (this.#currentTrackEvents || this.#currentSecondaryTrackEvents) {
-                this.#currentTrackEvents && this.setTrackEventsSubtitleOffset(this.#currentTrackEvents, offsetValue, PRIMARY_TEXT_TRACK_INDEX);
-                this.#currentSecondaryTrackEvents && this.setTrackEventsSubtitleOffset(this.#currentSecondaryTrackEvents, offsetValue, SECONDARY_TEXT_TRACK_INDEX);
-                this.refreshSubtitleTextAtTime(this.#mediaElement?.currentTime);
-            } else {
-                // Nothing applyable yet (subtitle still loading): retain the
-                // request and let the completing install apply it, so slider
-                // input during the loading window is not lost.
-                this.#pendingSubtitleOffset = offsetValue;
-                console.debug('No available track yet, retaining requested offset: ', offsetValue);
+        this.#currentAssRenderers.forEach((renderer, index) => {
+            if (!renderer) {
+                return;
             }
+            this.updateCurrentTrackOffset(offsetValue, index);
+            renderer.timeOffset = transcodingOffset + offsetValue;
+            renderer.setCurrentTime(this.#mediaElement?.currentTime + renderer.timeOffset);
+            appliedTrackIndices.add(index);
+        });
+
+        if (this.#currentPgsRenderer) {
+            this.updateCurrentTrackOffset(offsetValue, PRIMARY_TEXT_TRACK_INDEX);
+            this.#currentPgsRenderer.timeOffset = transcodingOffset + offsetValue;
+            appliedTrackIndices.add(PRIMARY_TEXT_TRACK_INDEX);
+        }
+
+        const trackElements = this.getTextTracks();
+        trackElements?.forEach((trackElement, index) => {
+            if (!appliedTrackIndices.has(index)) {
+                this.setTextTrackSubtitleOffset(trackElement, offsetValue, index);
+                appliedTrackIndices.add(index);
+            }
+        });
+
+        if (this.#currentTrackEvents && !appliedTrackIndices.has(PRIMARY_TEXT_TRACK_INDEX)) {
+            this.setTrackEventsSubtitleOffset(this.#currentTrackEvents, offsetValue, PRIMARY_TEXT_TRACK_INDEX);
+            appliedTrackIndices.add(PRIMARY_TEXT_TRACK_INDEX);
+        }
+        if (this.#currentSecondaryTrackEvents && !appliedTrackIndices.has(SECONDARY_TEXT_TRACK_INDEX)) {
+            this.setTrackEventsSubtitleOffset(this.#currentSecondaryTrackEvents, offsetValue, SECONDARY_TEXT_TRACK_INDEX);
+            appliedTrackIndices.add(SECONDARY_TEXT_TRACK_INDEX);
+        }
+        if (this.#currentTrackEvents || this.#currentSecondaryTrackEvents) {
+            this.refreshSubtitleTextAtTime(this.#mediaElement?.currentTime);
+        }
+
+        if (appliedTrackIndices.size === 0) {
+            // Nothing applyable yet (subtitle still loading): retain the
+            // request and let the completing install apply it, so slider
+            // input during the loading window is not lost.
+            this.#pendingSubtitleOffset = offsetValue;
+            console.debug('No available track yet, retaining requested offset: ', offsetValue);
         }
     }
 
@@ -982,6 +1163,7 @@ export class HtmlVideoPlayer {
     destroy() {
         this.setSubtitleOffset.cancel();
         this.clearSubtitleAppearancePreview();
+        this.exitDocumentPictureInPicture();
 
         if (this.#subtitleResizeObserver) {
             this.#subtitleResizeObserver.disconnect();
@@ -1161,11 +1343,17 @@ export class HtmlVideoPlayer {
 
         this.#initialMediaPrepared = true;
         const onMediaReady = () => {
-            if (this.#currentAssRenderer) {
-                this.#currentAssRenderer.timeOffset = (this._currentPlayOptions.transcodingOffsetTicks || 0) / 10000000 + this.#currentTrackOffset;
-                this.#currentAssRenderer.resize();
-                this.#currentAssRenderer.resetRenderAheadCache(false);
-            }
+            this.#currentAssRenderers.forEach((renderer, index) => {
+                if (!renderer) {
+                    return;
+                }
+                const trackOffset = this.isSecondaryTrack(index) ?
+                    this.#secondaryTrackOffset :
+                    this.#currentTrackOffset;
+                renderer.timeOffset = (this._currentPlayOptions.transcodingOffsetTicks || 0) / 10000000 + (trackOffset || 0);
+                renderer.resize();
+                renderer.resetRenderAheadCache(false);
+            });
 
             this.waitForFirstVideoFrame(elem);
             if (elem.paused) {
@@ -1338,9 +1526,10 @@ export class HtmlVideoPlayer {
                 tryRemoveElement(this.#videoSecondarySubtitlesElem);
                 this.#videoSecondarySubtitlesElem = null;
             }
-        } else if (this.#videoSubtitlesElem) {
+        } else {
             // destroy all
-            const subtitlesContainer = this.#videoSubtitlesElem.parentNode;
+            const subtitlesContainer = this.#videoSubtitlesElem?.parentNode
+                || this.#videoSecondarySubtitlesElem?.parentNode;
             if (subtitlesContainer) {
                 tryRemoveElement(subtitlesContainer);
             }
@@ -1447,7 +1636,7 @@ export class HtmlVideoPlayer {
             // choice persists for the next enabled subtitle. Native ::cue
             // font-size is known broken on Firefox (the same knowledge that
             // forces Firefox to custom rendering in useCustomSubtitles).
-            canAdjustSize: path === 'custom' || path === 'none' || path === 'pending'
+            canAdjustSize: path === 'custom' || path === 'ass' || path === 'none' || path === 'pending'
                 || (path === 'native' && !browser.firefox),
             canAdjustOffset: path === 'custom' || path === 'native' || path === 'ass'
                 || path === 'pgs' || path === 'pending'
@@ -1466,17 +1655,28 @@ export class HtmlVideoPlayer {
         this.destroyNativeTracks(videoElement, targetTrackIndex);
         this.destroyStoredTrackInfo(targetTrackIndex);
 
-        const octopus = this.#currentAssRenderer;
-        if (octopus) {
-            octopus.dispose();
+        const destroyAssRenderer = index => {
+            const renderer = this.#currentAssRenderers[index];
+            if (renderer) {
+                renderer.dispose();
+                this.#assRendererStates.delete(renderer);
+                this.#currentAssRenderers[index] = null;
+            }
+        };
+        if (typeof targetTrackIndex === 'number') {
+            destroyAssRenderer(targetTrackIndex);
+        } else {
+            destroyAssRenderer(PRIMARY_TEXT_TRACK_INDEX);
+            destroyAssRenderer(SECONDARY_TEXT_TRACK_INDEX);
         }
-        this.#currentAssRenderer = null;
 
-        const pgsRenderer = this.#currentPgsRenderer;
-        if (pgsRenderer) {
-            pgsRenderer.dispose();
+        if (!this.isSecondaryTrack(targetTrackIndex)) {
+            const pgsRenderer = this.#currentPgsRenderer;
+            if (pgsRenderer) {
+                pgsRenderer.dispose();
+            }
+            this.#currentPgsRenderer = null;
         }
-        this.#currentPgsRenderer = null;
     }
 
     /**
@@ -1548,9 +1748,14 @@ export class HtmlVideoPlayer {
     /**
      * @private
      */
-    renderSsaAss(videoElement, track, item) {
-        const generation = this.#subtitleRenderGenerations[PRIMARY_TEXT_TRACK_INDEX];
-        this.setSubtitleRenderPath('pending');
+    renderSsaAss(videoElement, track, item, targetTextTrackIndex = PRIMARY_TEXT_TRACK_INDEX) {
+        const rendererIndex = this.isSecondaryTrack(targetTextTrackIndex) ?
+            SECONDARY_TEXT_TRACK_INDEX :
+            PRIMARY_TEXT_TRACK_INDEX;
+        const generation = this.#subtitleRenderGenerations[rendererIndex];
+        if (this.isPrimaryTrack(rendererIndex)) {
+            this.setSubtitleRenderPath('pending');
+        }
         const supportedFonts = ['application/vnd.ms-opentype', 'application/x-truetype-font', 'font/otf', 'font/ttf', 'font/woff', 'font/woff2'];
         const availableFonts = [];
         const attachments = this._currentPlayOptions.mediaSource.MediaAttachments || [];
@@ -1565,8 +1770,14 @@ export class HtmlVideoPlayer {
         const fallbackFontList = apiClient.getUrl('/FallbackFont/Fonts', {
             ApiKey: apiClient.accessToken()
         });
+        const authoredContentPromise = fetch(getTextTrackUrl(track, item)).then(response => {
+            if (!response.ok) {
+                throw new Error(response.statusText);
+            }
+            return response.text();
+        });
         const htmlVideoPlayer = this;
-        const isCurrentRequest = () => this.isCurrentSubtitleRenderGeneration(PRIMARY_TEXT_TRACK_INDEX, generation);
+        const isCurrentRequest = () => this.isCurrentSubtitleRenderGeneration(rendererIndex, generation);
         import('@jellyfin/libass-wasm').then(({ default: SubtitlesOctopus }) => {
             if (!isCurrentRequest()) {
                 return;
@@ -1574,6 +1785,7 @@ export class HtmlVideoPlayer {
 
             const mediaSource = this._currentPlayOptions.mediaSource;
             const videoStream = getMediaStreamVideoTracks(mediaSource)[0];
+            let renderer;
 
             const options = {
                 video: videoElement,
@@ -1583,13 +1795,28 @@ export class HtmlVideoPlayer {
                 legacyWorkerUrl: `${appRouter.baseUrl()}/libraries/subtitles-octopus-worker-legacy.js`,
                 onError() {
                     // HACK: Clear JavascriptSubtitlesOctopus: it gets disposed when an error occurs
-                    htmlVideoPlayer.#currentAssRenderer = null;
-                    htmlVideoPlayer.setSubtitleRenderPath('none');
+                    if (htmlVideoPlayer.#currentAssRenderers[rendererIndex] === renderer) {
+                        htmlVideoPlayer.#currentAssRenderers[rendererIndex] = null;
+                    }
+                    if (htmlVideoPlayer.isPrimaryTrack(rendererIndex)) {
+                        htmlVideoPlayer.setSubtitleRenderPath('none');
+                    }
 
                     // HACK: Give JavascriptSubtitlesOctopus time to dispose itself
                     setTimeout(() => {
                         onErrorInternal(this, MediaError.ASS_RENDER_ERROR);
                     }, 0);
+                },
+                onReady() {
+                    if (!isCurrentRequest() || renderer !== htmlVideoPlayer.#currentAssRenderers[rendererIndex]) {
+                        return;
+                    }
+                    htmlVideoPlayer.captureAssRendererState(
+                        renderer,
+                        rendererIndex,
+                        generation,
+                        authoredContentPromise
+                    );
                 },
                 timeOffset: (this._currentPlayOptions.transcodingOffsetTicks || 0) / 10000000,
 
@@ -1611,13 +1838,21 @@ export class HtmlVideoPlayer {
                     return;
                 }
 
-                const currentRenderer = this.#currentAssRenderer;
+                const currentRenderer = this.#currentAssRenderers[rendererIndex];
                 if (currentRenderer) {
                     currentRenderer.dispose();
+                    this.#assRendererStates.delete(currentRenderer);
                 }
 
-                this.#currentAssRenderer = new SubtitlesOctopus(options);
-                this.setSubtitleRenderPath('ass');
+                renderer = new SubtitlesOctopus(options);
+                this.#currentAssRenderers[rendererIndex] = renderer;
+                renderer.canvasParent?.classList.toggle(
+                    'libassjs-canvas-parent-secondary',
+                    this.isSecondaryTrack(rendererIndex)
+                );
+                if (this.isPrimaryTrack(rendererIndex)) {
+                    this.setSubtitleRenderPath('ass');
+                }
                 this.applyPendingSubtitleOffset();
             };
 
@@ -1660,7 +1895,9 @@ export class HtmlVideoPlayer {
                 }
 
                 console.error('Failed to initialize ASS renderer', error);
-                this.setSubtitleRenderPath('none');
+                if (this.isPrimaryTrack(rendererIndex)) {
+                    this.setSubtitleRenderPath('none');
+                }
                 this.#pendingSubtitleOffset = null;
                 onErrorInternal(this, MediaError.ASS_RENDER_ERROR);
             });
@@ -1670,10 +1907,77 @@ export class HtmlVideoPlayer {
             }
 
             console.error('Failed to load ASS renderer module', error);
-            this.setSubtitleRenderPath('none');
+            if (this.isPrimaryTrack(rendererIndex)) {
+                this.setSubtitleRenderPath('none');
+            }
             this.#pendingSubtitleOffset = null;
             onErrorInternal(this, MediaError.ASS_RENDER_ERROR);
         });
+    }
+
+    /**
+     * Capture the immutable authored ASS source after libass is ready. It is
+     * the source for every live user override.
+     * @private
+     */
+    captureAssRendererState(renderer, rendererIndex, generation, authoredContentPromise) {
+        const isCurrentRenderer = () =>
+            this.isCurrentSubtitleRenderGeneration(rendererIndex, generation)
+            && this.#currentAssRenderers[rendererIndex] === renderer;
+
+        authoredContentPromise.then(content => {
+            if (!isCurrentRenderer()) {
+                return;
+            }
+            this.#assRendererStates.set(renderer, {
+                content,
+                appearanceKey: ''
+            });
+            this.applyAssRendererAppearance(renderer);
+        }).catch(error => {
+            if (isCurrentRenderer()) {
+                console.warn('Failed to load ASS source for appearance controls', error);
+            }
+        });
+    }
+
+    /**
+     * Apply the current user appearance to libass while retaining authored
+     * alignment, margins, positions, animation, colours, and other ASS
+     * semantics. A vertical-position choice translates the completed canvas
+     * as a nudge around the normal -3 setting instead of flattening all cues
+     * to one edge.
+     * @private
+     */
+    applyAssRendererAppearance(renderer) {
+        const state = this.#assRendererStates.get(renderer);
+        if (!state) {
+            return;
+        }
+
+        const appearance = this.getEffectiveAppearanceSettings();
+        const multiplier = subtitleAppearanceHelper.getTextSizeMultiplier(appearance.textSize);
+        const appearanceKey = JSON.stringify([
+            multiplier,
+            appearance.font || '',
+            appearance.textWeight || 'normal'
+        ]);
+        if (state.appearanceKey !== appearanceKey) {
+            state.appearanceKey = appearanceKey;
+            renderer.setTrack(getAssContentWithAppearance(state.content, appearance));
+        }
+
+        const position = Number.parseInt(appearance.verticalPosition, 10);
+        const baseline = this.#subtitleFontSize || 20;
+        const authoredPositionOffset = Number.isFinite(position) ?
+            (position + 3) * baseline * 1.35 :
+            0;
+        if (renderer.canvasParent) {
+            renderer.canvasParent.style.transform =
+                authoredPositionOffset === 0 ? '' : `translateY(${authoredPositionOffset}px)`;
+        }
+
+        renderer.setCurrentTime((this.#mediaElement?.currentTime || 0) + renderer.timeOffset);
     }
 
     /**
@@ -1719,7 +2023,9 @@ export class HtmlVideoPlayer {
      * @returns {HTMLElement | null} The container, or null before playback owns a surface.
      */
     getOrCreateSubtitlesContainer(videoElement) {
-        let subtitlesContainer = document.querySelector('.videoSubtitles');
+        let subtitlesContainer = this.#videoSubtitlesElem?.parentNode
+            || this.#videoSecondarySubtitlesElem?.parentNode
+            || this.#subtitlePreviewElem?.parentNode;
         if (subtitlesContainer) {
             return subtitlesContainer;
         }
@@ -1729,7 +2035,12 @@ export class HtmlVideoPlayer {
             return null;
         }
 
-        subtitlesContainer = document.createElement('div');
+        subtitlesContainer = parent.querySelector('.videoSubtitles');
+        if (subtitlesContainer) {
+            return subtitlesContainer;
+        }
+
+        subtitlesContainer = parent.ownerDocument.createElement('div');
         subtitlesContainer.classList.add('videoSubtitles');
         parent.appendChild(subtitlesContainer);
         return subtitlesContainer;
@@ -1766,9 +2077,10 @@ export class HtmlVideoPlayer {
                 this.setSubtitleRenderPath('custom');
                 this.applyPendingSubtitleOffset();
             } else if (!this.#videoSecondarySubtitlesElem && this.isSecondaryTrack(targetTextTrackIndex)) {
-                const subtitlesContainer = document.querySelector('.videoSubtitles');
+                const subtitlesContainer = this.getOrCreateSubtitlesContainer(videoElement);
                 if (!subtitlesContainer) return;
-                const secondarySubtitlesElement = document.createElement('div');
+                const secondarySubtitlesElement =
+                    subtitlesContainer.ownerDocument.createElement('div');
                 secondarySubtitlesElement.classList.add('videoSecondarySubtitlesInner');
                 // determine the order of the subtitles
                 if (subtitleVerticalPosition < 0) {
@@ -1781,6 +2093,10 @@ export class HtmlVideoPlayer {
                 this.#currentSecondaryTrackEvents = subtitleData.TrackEvents;
                 this.applyPendingSubtitleOffset();
             }
+            // Track selection can finish while playback is paused (including
+            // inside Document PiP). Paint the cue at the parked playhead now
+            // instead of waiting indefinitely for a future timeupdate.
+            this.refreshSubtitleTextAtTime(videoElement.currentTime);
         }).catch((error) => {
             if (!this.isCurrentSubtitleRenderGeneration(targetTextTrackIndex, generation)) {
                 return;
@@ -1804,7 +2120,9 @@ export class HtmlVideoPlayer {
     getEffectiveAppearanceSettings() {
         const settings = userSettings.getSubtitleAppearanceSettings();
         if (this.#subtitleAppearancePreview) {
-            settings.textSize = this.#subtitleAppearancePreview.textSize;
+            const appearancePreview = { ...this.#subtitleAppearancePreview };
+            delete appearancePreview.sampleText;
+            Object.assign(settings, appearancePreview);
         }
         return settings;
     }
@@ -1840,6 +2158,11 @@ export class HtmlVideoPlayer {
             this.setSubtitleAppearance(subtitlesContainer, this.#subtitlePreviewElem);
         }
 
+        this.#currentAssRenderers.forEach(renderer => {
+            if (renderer) {
+                this.applyAssRendererAppearance(renderer);
+            }
+        });
         this.setCueAppearance();
     }
 
@@ -1849,13 +2172,14 @@ export class HtmlVideoPlayer {
      * kept visible wherever real subtitles appear whenever no real cue is on
      * screen. Nothing is persisted; pair every call with
      * clearSubtitleAppearancePreview().
-     * @param {{ textSize: string|number, sampleText: string }} preview - Transient appearance override plus translated sample line.
+     * @param {{ textSize?: string|number, verticalPosition?: string|number, font?: string, textWeight?: string, sampleText: string }} preview - Transient appearance overrides plus translated sample line.
      * @returns {void}
      */
     setSubtitleAppearancePreview(preview) {
         this.#subtitleAppearancePreview = {
-            textSize: preview.textSize,
-            sampleText: preview.sampleText
+            ...preview,
+            textSize: preview.textSize == null ? undefined : String(preview.textSize),
+            verticalPosition: preview.verticalPosition == null ? undefined : String(preview.verticalPosition)
         };
 
         if (!this.#subtitlePreviewTimer) {
@@ -1902,6 +2226,27 @@ export class HtmlVideoPlayer {
     }
 
     /**
+     * Host in-player appearance controls beside the video and custom subtitle
+     * renderer so the controls follow them into Document Picture-in-Picture.
+     * @returns {HTMLElement} The active video player container.
+     */
+    getSubtitleAppearanceOverlayHost() {
+        if (this.#documentPictureInPictureWindow) {
+            // This component is lazy-loaded, so its stylesheet may have
+            // arrived after PiP opened. Refresh the copied styles before the
+            // panel is created in the PiP document.
+            this.copyDocumentPictureInPictureStyles(
+                this.#documentPictureInPictureWindow.document
+            );
+            return this.#videoDialog || this.#documentPictureInPictureWindow.document.body;
+        }
+        // In normal playback this must remain above (not inside) the player's
+        // animation stacking context, otherwise the OSD page can intercept
+        // presses even though the panel is visibly painted over the video.
+        return document.body;
+    }
+
+    /**
      * Keep the preview sample line present and correctly shown/hidden: shown
      * while no real cue text (custom or native) is visible, hidden while one
      * is, so the user always sees exactly one line at the chosen size.
@@ -1911,6 +2256,14 @@ export class HtmlVideoPlayer {
     updateSubtitlePreviewLine() {
         const preview = this.#subtitleAppearancePreview;
         if (!preview) {
+            return;
+        }
+
+        // libass itself is updated live. Its canvas does not expose whether a
+        // cue is active, so a DOM sample would sometimes duplicate a real ASS
+        // cue and obscure the authored composition.
+        if (this.#subtitleRenderPath === 'ass') {
+            this.#subtitlePreviewElem?.classList.add('hide');
             return;
         }
 
@@ -1957,6 +2310,11 @@ export class HtmlVideoPlayer {
             if (fontSize !== null) {
                 this.#subtitleFontSize = fontSize;
                 this.#videoDialog?.style.setProperty('--subtitle-font-size', `${fontSize}px`);
+                this.#currentAssRenderers.forEach(renderer => {
+                    if (renderer) {
+                        this.applyAssRendererAppearance(renderer);
+                    }
+                });
                 // Native cues receive a concrete pixel value, so their rule
                 // must be regenerated when the rendered video height changes.
                 this.setCueAppearance();
@@ -2012,7 +2370,7 @@ export class HtmlVideoPlayer {
         if (!itemHelper.isLocalItem(item) || track.IsExternal) {
             const format = (track.Codec || '').toLowerCase();
             if (format === 'ssa' || format === 'ass') {
-                this.renderSsaAss(videoElement, track, item);
+                this.renderSsaAss(videoElement, track, item, targetTextTrackIndex);
                 return;
             }
             if (format === 'pgssub') {
@@ -2396,8 +2754,11 @@ export class HtmlVideoPlayer {
 
         const video = document.createElement('video');
         if (
+            // Chromium's Document PiP can carry the custom subtitle renderer
+            // and its controls along with the video.
+            typeof window.documentPictureInPicture?.requestWindow === 'function'
             // Check non-standard Safari PiP support
-            typeof video.webkitSupportsPresentationMode === 'function' && video.webkitSupportsPresentationMode('picture-in-picture') && typeof video.webkitSetPresentationMode === 'function'
+            || typeof video.webkitSupportsPresentationMode === 'function' && video.webkitSupportsPresentationMode('picture-in-picture') && typeof video.webkitSetPresentationMode === 'function'
             // Check non-standard Windows PiP support
             || (window.Windows
                 && Windows.UI.ViewManagement.ApplicationView.getForCurrentView()
@@ -2474,15 +2835,230 @@ export class HtmlVideoPlayer {
         console.error(`Picture in picture error: ${err}`);
     }
 
-    setPictureInPictureEnabled(isEnabled) {
+    /**
+     * Copy the app's loaded styles into a Document PiP browsing context. A
+     * moved element keeps its classes but resolves CSS against its new
+     * document, so without this the video, subtitles, and controls are
+     * unstyled.
+     * @private
+     * @param {Document} targetDocument - PiP document receiving the player.
+     */
+    copyDocumentPictureInPictureStyles(targetDocument) {
+        targetDocument.querySelectorAll('[data-sloptank-pip-style]')
+            .forEach(element => {
+                element.remove();
+            });
+
+        for (const source of document.querySelectorAll('link[rel="stylesheet"], style')) {
+            const copy = source.cloneNode(true);
+            copy.setAttribute('data-sloptank-pip-style', '');
+            if (source instanceof HTMLLinkElement && copy instanceof HTMLLinkElement) {
+                copy.href = source.href;
+            }
+            targetDocument.head.appendChild(copy);
+        }
+
+        const baseStyle = targetDocument.createElement('style');
+        baseStyle.setAttribute('data-sloptank-pip-style', '');
+        baseStyle.textContent = `
+            html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                overflow: hidden;
+                background: #000;
+            }
+            .videoPlayerContainer {
+                width: 100vw;
+                height: 100vh;
+            }
+            .videoPlayerContainer > video[controls]::-webkit-media-controls {
+                display: flex !important;
+            }
+            .documentPipSubtitleAppearanceButton {
+                position: fixed;
+                top: .75em;
+                right: .75em;
+                z-index: 1300;
+                width: 2.6em;
+                height: 2.6em;
+                padding: 0;
+                border: 1px solid rgba(255, 255, 255, .45);
+                border-radius: 50%;
+                color: #fff;
+                background: rgba(20, 20, 20, .72);
+                font: 600 1em/1 sans-serif;
+                cursor: pointer;
+            }
+            .documentPipSubtitleAppearanceButton:hover,
+            .documentPipSubtitleAppearanceButton:focus-visible {
+                background: rgba(45, 45, 45, .95);
+            }
+        `;
+        targetDocument.head.appendChild(baseStyle);
+    }
+
+    /**
+     * Open the appearance panel from the compact control inside Document PiP.
+     * @private
+     * @returns {Promise<void>}
+     */
+    async openDocumentPictureInPictureAppearance() {
+        this.#documentPictureInPictureAppearanceOverlay?.destroy();
+
+        const { default: SubtitleSizer } =
+            await import('../../components/subtitlesizer/subtitlesizer');
+        if (!this.#documentPictureInPictureWindow || !this.#videoDialog) {
+            return;
+        }
+
+        this.#documentPictureInPictureAppearanceOverlay = new SubtitleSizer({
+            player: this,
+            settings: userSettings,
+            translate: globalize.translate,
+            onClose: () => {
+                this.#documentPictureInPictureAppearanceOverlay = null;
+            }
+        });
+    }
+
+    /**
+     * Put the complete video surface in a Document PiP window. This retains
+     * DOM-, canvas-, and image-rendered subtitles plus the appearance panel.
+     * @private
+     * @returns {Promise<void>}
+     */
+    async enterDocumentPictureInPicture() {
+        const documentPictureInPicture = window.documentPictureInPicture;
+        const videoDialog = this.#videoDialog;
+        const video = this.#mediaElement;
+        if (!documentPictureInPicture?.requestWindow || !videoDialog || !video) {
+            return;
+        }
+
+        const rect = video.getBoundingClientRect();
+        const pipWindow = await documentPictureInPicture.requestWindow({
+            width: Math.max(320, Math.round(rect.width)),
+            height: Math.max(180, Math.round(rect.height))
+        });
+
+        // Playback can be torn down while the user-agent is opening the
+        // window. Do not move a stale player into it.
+        if (this.#videoDialog !== videoDialog || this.#mediaElement !== video) {
+            pipWindow.close();
+            return;
+        }
+
+        this.#documentPictureInPictureWindow = pipWindow;
+        this.#documentPictureInPictureRestorePoint = {
+            parent: videoDialog.parentNode,
+            nextSibling: videoDialog.nextSibling
+        };
+        this.copyDocumentPictureInPictureStyles(pipWindow.document);
+        pipWindow.document.body.appendChild(videoDialog);
+        this.#documentPictureInPictureOriginalVideoControls = video.controls;
+        video.controls = true;
+
+        const appearanceButton = pipWindow.document.createElement('button');
+        appearanceButton.type = 'button';
+        appearanceButton.classList.add('documentPipSubtitleAppearanceButton');
+        appearanceButton.title = globalize.translate('HeaderSubtitleAppearance');
+        appearanceButton.setAttribute(
+            'aria-label',
+            globalize.translate('HeaderSubtitleAppearance')
+        );
+        appearanceButton.textContent = 'Aa';
+        appearanceButton.addEventListener('click', () => {
+            this.openDocumentPictureInPictureAppearance().catch(
+                HtmlVideoPlayer.onPictureInPictureError
+            );
+        });
+        videoDialog.appendChild(appearanceButton);
+        this.#documentPictureInPictureAppearanceButton = appearanceButton;
+
+        this.#documentPictureInPicturePageHideHandler = () => {
+            this.restoreDocumentPictureInPicturePlayer();
+        };
+        pipWindow.addEventListener(
+            'pagehide',
+            this.#documentPictureInPicturePageHideHandler,
+            { once: true }
+        );
+    }
+
+    /**
+     * Move the player back to its exact original DOM position.
+     * @private
+     */
+    restoreDocumentPictureInPicturePlayer() {
+        const pipWindow = this.#documentPictureInPictureWindow;
+        const restorePoint = this.#documentPictureInPictureRestorePoint;
+        const videoDialog = this.#videoDialog;
         const video = this.#mediaElement;
 
-        if (document.pictureInPictureEnabled) {
+        if (pipWindow && this.#documentPictureInPicturePageHideHandler) {
+            pipWindow.removeEventListener(
+                'pagehide',
+                this.#documentPictureInPicturePageHideHandler
+            );
+        }
+
+        this.#documentPictureInPictureWindow = null;
+        this.#documentPictureInPictureRestorePoint = null;
+        this.#documentPictureInPicturePageHideHandler = null;
+        this.#documentPictureInPictureAppearanceOverlay?.destroy();
+        this.#documentPictureInPictureAppearanceOverlay = null;
+        this.#documentPictureInPictureAppearanceButton?.remove();
+        this.#documentPictureInPictureAppearanceButton = null;
+        if (video && this.#documentPictureInPictureOriginalVideoControls != null) {
+            video.controls = this.#documentPictureInPictureOriginalVideoControls;
+        }
+        this.#documentPictureInPictureOriginalVideoControls = null;
+
+        if (videoDialog && restorePoint?.parent) {
+            const nextSibling = restorePoint.nextSibling
+                && Array.from(restorePoint.parent.childNodes).includes(restorePoint.nextSibling) ?
+                restorePoint.nextSibling :
+                null;
+            restorePoint.parent.insertBefore(videoDialog, nextSibling);
+        }
+    }
+
+    /**
+     * Close Document PiP and restore the player. Idempotent.
+     * @private
+     */
+    exitDocumentPictureInPicture() {
+        const pipWindow = this.#documentPictureInPictureWindow;
+        if (!pipWindow) {
+            return;
+        }
+
+        this.restoreDocumentPictureInPicturePlayer();
+        if (!pipWindow.closed) {
+            pipWindow.close();
+        }
+    }
+
+    async setPictureInPictureEnabled(isEnabled) {
+        const video = this.#mediaElement;
+
+        if (typeof window.documentPictureInPicture?.requestWindow === 'function') {
+            if (isEnabled) {
+                try {
+                    await this.enterDocumentPictureInPicture();
+                } catch (error) {
+                    HtmlVideoPlayer.onPictureInPictureError(error);
+                }
+            } else {
+                this.exitDocumentPictureInPicture();
+            }
+        } else if (document.pictureInPictureEnabled) {
             if (video) {
                 if (isEnabled) {
-                    video.requestPictureInPicture().catch(HtmlVideoPlayer.onPictureInPictureError);
+                    await video.requestPictureInPicture().catch(HtmlVideoPlayer.onPictureInPictureError);
                 } else {
-                    document.exitPictureInPicture().catch(HtmlVideoPlayer.onPictureInPictureError);
+                    await document.exitPictureInPicture().catch(HtmlVideoPlayer.onPictureInPictureError);
                 }
             }
         } else if (window.Windows) {
@@ -2498,7 +3074,10 @@ export class HtmlVideoPlayer {
     }
 
     isPictureInPictureEnabled() {
-        if (document.pictureInPictureEnabled) {
+        if (this.#documentPictureInPictureWindow
+                && !this.#documentPictureInPictureWindow.closed) {
+            return true;
+        } else if (document.pictureInPictureEnabled) {
             return !!document.pictureInPictureElement;
         } else if (window.Windows) {
             return this.isPip || false;

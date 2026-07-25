@@ -124,15 +124,21 @@
     },
     {
       "id": "subtitle_controls.track_menu",
-      "title": "Subtitle track menu: live size overlay and offset sync",
-      "description": "The subtitle track menu opens a live-preview size control and an offset sync control, with honest fallbacks for players that cannot support them directly.",
+      "title": "Subtitle track menu: live appearance overlay and offset sync",
+      "description": "The subtitle track menu opens live-preview appearance and offset controls, keeps custom subtitles available in Document Picture-in-Picture, and preserves authored ASS layout while applying user styling.",
       "owner": "web-client",
       "kind": "user-action",
       "files": [
+        "e2e/subtitle-controls.spec.ts",
+        "src/components/playback/playbackmanager.js",
         "src/controllers/playback/video/SubtitleTrackMenu.js",
+        "src/controllers/playback/video/SubtitleTrackMenu.test.jsx",
         "src/components/subtitlesizer/subtitlesizer.js",
+        "src/components/subtitlesizer/subtitlesizer.scss",
+        "src/components/subtitlesizer/subtitlesizer.template.html",
         "src/components/subtitlesync/subtitlesync.js",
-        "src/apps/stable/features/playback/utils/subtitleStyles.ts"
+        "src/apps/stable/features/playback/utils/subtitleStyles.ts",
+        "src/plugins/htmlVideoPlayer/plugin.js"
       ],
       "added": "2026-07-23",
       "paths": [
@@ -160,6 +166,16 @@
           "id": "subtitle_controls.track_menu.offset_shifts_displayed_cue",
           "type": "happy",
           "requiredAssertions": ["displayed_cue_text_changes"]
+        },
+        {
+          "id": "subtitle_controls.track_menu.document_pip_custom_renderer_and_live_appearance",
+          "type": "happy",
+          "requiredAssertions": ["subtitle_visible_in_document_pip", "secondary_subtitle_visible_when_selected_while_paused", "appearance_controls_apply_live_in_document_pip"]
+        },
+        {
+          "id": "subtitle_controls.track_menu.ass_authored_layout_live_appearance_secondary_and_offset",
+          "type": "happy",
+          "requiredAssertions": ["authored_top_and_bottom_positions_preserved", "size_font_weight_and_position_apply_live", "secondary_ass_renderer_does_not_replace_primary", "paused_offset_updates_and_restores"]
         },
         {
           "id": "subtitle_controls.track_menu.cast_player.presets_fallback",

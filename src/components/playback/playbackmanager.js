@@ -881,10 +881,10 @@ export class PlaybackManager {
         self.trackHasSecondarySubtitleSupport = function (track, player = self._currentPlayer) {
             if (!player || !track) return false;
             const format = (track.Codec || '').toLowerCase();
-            // Currently, only non-SSA/non-ASS external subtitles are supported.
-            // Showing secondary subtitles does not work with any SSA/ASS subtitle combinations because
-            // of the complexity of how they are rendered and the risk of the subtitles overlapping
-            return format !== 'ssa' && format !== 'ass' && getDeliveryMethod(track) === 'External';
+            // Text-based ASS/SSA tracks have independent renderer instances,
+            // so they can now be primary or secondary without tearing each
+            // other down. Bitmap PGS remains a primary-only renderer.
+            return format !== 'pgssub' && getDeliveryMethod(track) === 'External';
         };
 
         self.secondarySubtitleTracks = function (player = self._currentPlayer) {

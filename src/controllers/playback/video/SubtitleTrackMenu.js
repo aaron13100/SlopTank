@@ -140,7 +140,7 @@ export default class SubtitleTrackMenu {
 
         items.unshift({
             id: SIZE_MENU_ID,
-            name: this.translate('SubtitleSize')
+            name: this.translate('HeaderSubtitleAppearance')
         });
 
         if (this.canAddSecondarySubtitle(player, streams, secondaryStreams, currentIndex)) {
@@ -270,7 +270,7 @@ export default class SubtitleTrackMenu {
         const appearanceSettings = this.settings.getSubtitleAppearanceSettings();
         const currentMultiplier = getTextSizeMultiplier(appearanceSettings.textSize);
         const selectedId = await actionSheet.show({
-            title: this.translate('SubtitleSize'),
+            title: this.translate('LabelTextSize'),
             items: SIZE_PRESETS.map(preset => ({
                 id: preset.id,
                 name: preset.name,

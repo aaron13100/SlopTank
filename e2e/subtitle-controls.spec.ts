@@ -140,7 +140,7 @@ async function expectOverlayReachable(page: import('@playwright/test').Page, sel
 async function openSizeOverlay(page: import('@playwright/test').Page) {
     await openOsd(page);
     await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
-    await page.getByText('Subtitle Size', { exact: true }).click();
+    await page.getByText('Subtitle Appearance', { exact: true }).click();
     await expect(page.locator('.subtitleSizerContainer')).toBeVisible();
     await expectOverlayReachable(page, '.subtitleSizerContainer');
 }
@@ -185,26 +185,69 @@ async function dragOffsetSliderTo(page: import('@playwright/test').Page, seconds
 /**
  * Measure the pixels the libass canvas actually presents to the user.
  * @param page - Page containing the active libass renderer.
- * @returns Sampled non-transparent pixel count and pixel hash.
+ * @returns Sampled non-transparent pixel count/hash and their vertical bounds.
  */
 async function assCanvasSignature(page: import('@playwright/test').Page) {
-    return page.locator('.libassjs-canvas').evaluate((canvas: HTMLCanvasElement) => {
+    return page.locator(
+        '.libassjs-canvas-parent:not(.libassjs-canvas-parent-secondary) .libassjs-canvas'
+    ).evaluate((canvas: HTMLCanvasElement) => {
         const context = canvas.getContext('2d');
         if (!context) {
-            return { alphaPixels: 0, hash: 0 };
+            return {
+                alphaPixels: 0,
+                hash: 0,
+                minY: -1,
+                maxY: -1,
+                width: canvas.width,
+                height: canvas.height
+            };
         }
 
         const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
         let alphaPixels = 0;
         let hash = 2166136261;
+        let minY = canvas.height;
+        let maxY = -1;
         for (let offset = 0; offset < pixels.length; offset += 64) {
             const alpha = pixels[offset + 3];
-            if (alpha > 0) alphaPixels++;
+            if (alpha > 0) {
+                alphaPixels++;
+                const y = Math.floor((offset / 4) / canvas.width);
+                minY = Math.min(minY, y);
+                maxY = Math.max(maxY, y);
+            }
             hash ^= pixels[offset] + pixels[offset + 1] + pixels[offset + 2] + alpha;
             hash = Math.imul(hash, 16777619);
         }
-        return { alphaPixels, hash: hash >>> 0 };
+        return {
+            alphaPixels,
+            hash: hash >>> 0,
+            minY: alphaPixels ? minY : -1,
+            maxY,
+            width: canvas.width,
+            height: canvas.height
+        };
     });
+}
+
+async function seekAndPauseAssCue(
+    video: import('@playwright/test').Locator,
+    page: import('@playwright/test').Page,
+    seconds: number
+) {
+    await video.evaluate(async (el: HTMLVideoElement, targetTime) => {
+        const seeked = new Promise<void>(resolve => {
+            el.addEventListener('seeked', () => resolve(), { once: true });
+        });
+        el.currentTime = targetTime;
+        await seeked;
+        el.pause();
+    }, seconds);
+    await expect.poll(() => assCanvasSignature(page), { timeout: 30_000 })
+        .toMatchObject({ alphaPixels: expect.any(Number) });
+    await expect.poll(async () => (await assCanvasSignature(page)).alphaPixels, {
+        timeout: 30_000
+    }).toBeGreaterThan(50);
 }
 
 function sampleLineFontSize(page: import('@playwright/test').Page) {
@@ -218,6 +261,14 @@ async function setSizeSlider(page: import('@playwright/test').Page, percent: num
         el.dispatchEvent(new Event('input', { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
     }, percent);
+}
+
+async function setPositionSlider(page: import('@playwright/test').Page, position: number) {
+    await page.locator('.subtitlePositionSlider').evaluate((el: HTMLInputElement, value) => {
+        el.value = String(value);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+    }, position);
 }
 
 function previewFontSize(page: import('@playwright/test').Page) {
@@ -416,7 +467,7 @@ test('the TV remote can open, adjust, and close the size control', async ({ page
     )).toBe(true);
 
     // A TV remote starts on the player's focused pause button. Navigate to
-    // Subtitles, then move from the selected track to Subtitle Size.
+    // Subtitles, then move from the selected track to Subtitle Appearance.
     for (let press = 0; press < 3; press++) {
         await page.keyboard.press('ArrowRight');
     }
@@ -432,12 +483,12 @@ test('the TV remote can open, adjust, and close the size control', async ({ page
     for (let press = 0; press < 10; press++) {
         const focusedText = await page.evaluate(
             () => document.activeElement?.textContent?.trim());
-        if (focusedText === 'Subtitle Size') break;
+        if (focusedText === 'Subtitle Appearance') break;
         await page.keyboard.press('ArrowUp');
     }
     await expect.poll(() => page.evaluate(
         () => document.activeElement?.textContent?.trim()
-    )).toBe('Subtitle Size');
+    )).toBe('Subtitle Appearance');
     await page.keyboard.press('Enter');
     await expect(page.locator('.subtitleSizerContainer')).toBeVisible();
     await expectOverlayReachable(page, '.subtitleSizerContainer');
@@ -503,8 +554,9 @@ test('the sample line goes away however the user dismisses the size control', as
     // 2. Pressing the video dismisses it -- and must not also pause the movie,
     //    since dismissing was the whole point of the press.
     await openSizeOverlay(page);
-    const viewport = page.viewportSize()!;
-    await page.mouse.click(viewport.width / 2, viewport.height * 0.3);
+    const panel = await page.locator('.subtitleSizerContainer').boundingBox();
+    if (!panel) throw new Error('subtitle appearance panel has no box'); // allow-raw-error: e2e setup fast-fail
+    await page.mouse.click(Math.max(10, panel.x / 2), panel.y + panel.height / 2);
     await expect(sampleLine).toHaveCount(0);
     await page.waitForTimeout(500);
     expect(await video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false);
@@ -520,7 +572,7 @@ test('the sample line goes away however the user dismisses the size control', as
 });
 
 // @covers subtitle_controls.track_menu.open_sizer.live_preview_persists
-test('subtitle size slider previews live at the subtitle position and persists', async ({ page, config }) => {
+test('subtitle appearance controls preview live and persist without weakening size behavior', async ({ page, config }) => {
     await login(page, config.username, config.password);
     const video = await startPlayback(page, config);
 
@@ -540,6 +592,23 @@ test('subtitle size slider previews live at the subtitle position and persists',
     await setSizeSlider(page, 25);
     await expect.poll(() => previewFontSize(page)).toBeCloseTo(baseline * 0.25, 0);
 
+    const bottomBeforePositionChange = await previewLine.evaluate(
+        el => Math.round(el.getBoundingClientRect().bottom));
+    await setPositionSlider(page, -8);
+    await expect.poll(() => previewLine.evaluate(
+        el => Math.round(el.getBoundingClientRect().bottom)))
+        .toBeLessThan(bottomBeforePositionChange);
+
+    await page.locator('.subtitleFontSelect').selectOption('console');
+    await expect.poll(() => previewLine.evaluate(
+        el => getComputedStyle(el).fontFamily))
+        .toContain('Consolas');
+
+    await page.locator('.subtitleWeightSelect').selectOption('bold');
+    await expect.poll(() => previewLine.evaluate(
+        el => getComputedStyle(el).fontWeight))
+        .toBe('700');
+
     // Closing removes the sample line and ends the preview.
     await page.locator('.subtitleSizer-closeButton').click();
     await expect(previewLine).toHaveCount(0);
@@ -547,8 +616,88 @@ test('subtitle size slider previews live at the subtitle position and persists',
     // The choice persisted: reopening shows the slider at 25%.
     await openSizeOverlay(page);
     await expect(page.locator('.subtitleSizerValue')).toHaveText('25%');
+    await expect(page.locator('.subtitlePositionSlider')).toHaveValue('-8');
+    await expect(page.locator('.subtitleFontSelect')).toHaveValue('console');
+    await expect(page.locator('.subtitleWeightSelect')).toHaveValue('bold');
     await setSizeSlider(page, 100);
+    await setPositionSlider(page, -3);
+    await page.locator('.subtitleFontSelect').selectOption('');
+    await page.locator('.subtitleWeightSelect').selectOption('normal');
     await page.locator('.subtitleSizer-closeButton').click();
+});
+
+// @covers subtitle_controls.track_menu.document_pip_custom_renderer_and_live_appearance
+test('Document PiP keeps custom subtitles and live appearance controls', async ({ page, config }, testInfo) => {
+    await login(page, config.username, config.password);
+    const video = await startPlayback(page, config);
+    const documentPipSupported = await page.evaluate(
+        () => typeof window.documentPictureInPicture?.requestWindow === 'function');
+    expect(documentPipSupported).toBe(true);
+
+    await openOsd(page);
+    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
+    const mainSubtitleLine = page.locator(
+        '.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)');
+    await parkOnCue(video, mainSubtitleLine);
+    const cueText = await mainSubtitleLine.textContent();
+
+    await openOsd(page);
+    const pipPagePromise = page.context().waitForEvent('page');
+    await page.locator('.videoOsdBottom-maincontrols .btnPip').click();
+    const pipPage = await pipPagePromise;
+
+    const pipVideo = pipPage.locator('.videoPlayerContainer video');
+    const pipSubtitleLine = pipPage.locator(
+        '.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)');
+    await expect(pipVideo).toBeVisible();
+    await expect.poll(() => pipVideo.evaluate((el: HTMLVideoElement) => el.controls))
+        .toBe(true);
+    await expect(pipSubtitleLine).toBeVisible();
+    await expect(pipSubtitleLine).toHaveText(cueText || '');
+
+    // Selecting a secondary track after the player has moved documents must
+    // still find the shared subtitle container in the PiP document.
+    await openOsd(page);
+    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await page.getByText('Secondary Subtitles', { exact: true }).click();
+    await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
+    const pipSecondaryLine = pipPage.locator('.videoSecondarySubtitlesInner');
+    await expect(pipSecondaryLine).toBeVisible();
+    await expect(pipSecondaryLine).toHaveText(cueText || '');
+
+    const initialFontSize = await pipSubtitleLine.evaluate(
+        el => parseFloat(getComputedStyle(el).fontSize));
+    await pipPage.locator('.documentPipSubtitleAppearanceButton').click();
+    await expect(pipPage.locator('.subtitleSizerContainer')).toBeVisible();
+    await expectOverlayReachable(pipPage, '.subtitleSizerContainer');
+
+    await setSizeSlider(pipPage, 200);
+    await expect.poll(() => pipSubtitleLine.evaluate(
+        el => parseFloat(getComputedStyle(el).fontSize)))
+        .toBeGreaterThan(initialFontSize * 1.5);
+
+    await pipPage.locator('.subtitleFontSelect').selectOption('console');
+    await pipPage.locator('.subtitleWeightSelect').selectOption('bold');
+    await expect.poll(() => pipSubtitleLine.evaluate(el => ({
+        family: getComputedStyle(el).fontFamily,
+        weight: getComputedStyle(el).fontWeight
+    }))).toMatchObject({
+        family: expect.stringContaining('Consolas'),
+        weight: '700'
+    });
+    await testInfo.attach('document-pip-subtitle-appearance.png', {
+        body: await pipPage.screenshot(),
+        contentType: 'image/png'
+    });
+
+    await setSizeSlider(pipPage, 100);
+    await pipPage.locator('.subtitleFontSelect').selectOption('');
+    await pipPage.locator('.subtitleWeightSelect').selectOption('normal');
+    await pipPage.locator('.subtitleSizer-closeButton').click();
+    await pipPage.close();
+
+    await expect(page.locator('.videoPlayerContainer video')).toBeVisible();
 });
 
 // @covers subtitle_controls.track_menu.sizer_applies_to_rendered_cues
@@ -763,8 +912,8 @@ test('subtitle offset explains itself without a subtitle and shifts cues with on
     ), { timeout: 10_000 }).toBe(textBefore);
 });
 
-// @covers subtitle_controls.track_menu.offset_shifts_displayed_cue
-test('subtitle offset refreshes a paused ASS cue without a playback tick', async ({ page, config }) => {
+// @covers subtitle_controls.track_menu.ass_authored_layout_live_appearance_secondary_and_offset
+test('ASS preserves authored layout while appearance, secondary, and paused offset remain controllable', async ({ page, config }) => {
     await login(page, config.username, config.password);
     const video = await startPlayback(page, {
         itemId: requireAssSubtitleItemId(),
@@ -776,35 +925,74 @@ test('subtitle offset refreshes a paused ASS cue without a playback tick', async
     await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
 
     await expect(page.locator('.libassjs-canvas')).toBeVisible({ timeout: 30_000 });
-    await expect.poll(async () => {
-        const position = await video.evaluate(async (el: HTMLVideoElement) => {
-            if (el.currentTime < 181.5 || el.currentTime > 184.5) {
-                el.currentTime = 182;
-            }
-            if (el.paused) await el.play();
-            return el.currentTime;
-        });
-        const signature = await assCanvasSignature(page);
-        if (position >= 181.5 && signature.alphaPixels > 50) {
-            await video.evaluate((el: HTMLVideoElement) => el.pause());
-        }
-        return position >= 181.5 && signature.alphaPixels;
-    }, { timeout: 60_000 }).toBeGreaterThan(50);
 
-    let lastSignature = await assCanvasSignature(page);
-    let stableObservations = 0;
+    // This fixture intentionally has a DefaultTop cue and a normal bottom cue
+    // active together here. Keeping pixels in both halves proves that the
+    // controllable path did not flatten ASS into bottom-only plain captions.
+    await seekAndPauseAssCue(video, page, 122.8);
+    const authoredLayout = await assCanvasSignature(page);
+    expect(authoredLayout.minY).toBeLessThan(authoredLayout.height * 0.4);
+    expect(authoredLayout.maxY).toBeGreaterThan(authoredLayout.height * 0.6);
+
+    // A single long dialogue cue makes rendered-pixel comparisons stable.
+    await seekAndPauseAssCue(video, page, 185.5);
+    await openSizeOverlay(page);
+    await expect(page.locator('.subtitleSizerControls')).toBeVisible();
+    await expect(page.locator('.subtitleSizerMessage')).toBeHidden();
+
+    await setSizeSlider(page, 25);
+    await expect.poll(async () => (await assCanvasSignature(page)).alphaPixels, {
+        timeout: 30_000
+    }).toBeGreaterThan(10);
+    const small = await assCanvasSignature(page);
+
+    await setSizeSlider(page, 200);
+    await expect.poll(async () => (await assCanvasSignature(page)).alphaPixels, {
+        timeout: 30_000
+    }).toBeGreaterThan(small.alphaPixels * 2);
+    const large = await assCanvasSignature(page);
+
+    await page.locator('.subtitleFontSelect').selectOption('console');
+    await page.locator('.subtitleWeightSelect').selectOption('bold');
+    await expect.poll(async () => (await assCanvasSignature(page)).hash, {
+        timeout: 30_000
+    }).not.toBe(large.hash);
+
+    const canvasBeforeNudge = await page.locator('.libassjs-canvas').boundingBox();
+    if (!canvasBeforeNudge) throw new Error('ASS canvas has no box'); // allow-raw-error: e2e setup fast-fail
+    await setPositionSlider(page, -8);
+    await expect.poll(async () => (await page.locator('.libassjs-canvas').boundingBox())?.y)
+        .toBeLessThan(canvasBeforeNudge.y);
+
+    await setSizeSlider(page, 100);
+    await setPositionSlider(page, -3);
+    await page.locator('.subtitleFontSelect').selectOption('');
+    await page.locator('.subtitleWeightSelect').selectOption('normal');
+    await page.locator('.subtitleSizer-closeButton').click();
+
+    // ASS is also independently selectable as a secondary subtitle. The
+    // primary canvas must remain connected when the second renderer appears.
+    await openOsd(page);
+    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await page.getByText('Secondary Subtitles', { exact: true }).click();
+    await page.locator('.actionSheetMenuItem', { hasText: 'French' }).first().click();
+    await expect(page.locator('.libassjs-canvas')).toHaveCount(2, { timeout: 30_000 });
     await expect.poll(async () => {
-        const current = await assCanvasSignature(page);
-        if (current.alphaPixels === lastSignature.alphaPixels && current.hash === lastSignature.hash) {
-            stableObservations++;
-        } else {
-            stableObservations = 0;
-            lastSignature = current;
-        }
-        return stableObservations;
-    }).toBeGreaterThanOrEqual(3);
-    const before = lastSignature;
-    expect(before.alphaPixels).toBeGreaterThan(50);
+        const alphaCounts = await page.locator('.libassjs-canvas').evaluateAll(
+            canvases => canvases.map(canvas => {
+                const element = canvas as HTMLCanvasElement;
+                const context = element.getContext('2d');
+                if (!context) return 0;
+                const pixels = context.getImageData(0, 0, element.width, element.height).data;
+                let count = 0;
+                for (let offset = 3; offset < pixels.length; offset += 64) {
+                    if (pixels[offset] > 0) count++;
+                }
+                return count;
+            })
+        );
+        return alphaCounts.every(count => count > 50);
+    }, { timeout: 30_000 }).toBe(true);
 
     await openOsd(page);
     await page.locator('.videoOsdBottom-maincontrols .btnVideoOsdSettings').click();
@@ -820,6 +1008,7 @@ test('subtitle offset refreshes a paused ASS cue without a playback tick', async
     });
     expect(timeUpdatesBeforeDrag).toBe(0);
 
+    const before = await assCanvasSignature(page);
     await dragOffsetSliderTo(page, 30);
     await expect.poll(() => assCanvasSignature(page), { timeout: 10_000 }).not.toEqual(before);
     await expect.poll(() => video.evaluate(
