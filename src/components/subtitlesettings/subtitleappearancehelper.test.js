@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    getAssSubtitleBottomPercentage,
     getSecondarySubtitleOffset,
     getStyles,
     getSubtitleFontSize,
@@ -148,6 +149,45 @@ describe('subtitle vertical position', () => {
         expect(getSubtitleVerticalPosition(-20, '2').percentage)
             .toBe(6.075);
     });
+});
+
+describe('ASS subtitle preview position', () => {
+    const header = `[Script Info]
+PlayResX: 1280
+PlayResY: 720
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, Outline, Shadow, Alignment, MarginL, MarginR, MarginV
+Style: Sign,Arial,48,0,0,8,15,15,20
+Style: Dialogue,Arial,48,2,0,2,15,15,15
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+`;
+
+    it('uses ordinary authored dialogue instead of a positioned sign', () => {
+        const content = `${header}Dialogue: 0,0:00:00.00,0:00:05.00,Sign,,0,0,0,,{\\pos(640,80)}Title
+Dialogue: 0,0:00:05.00,0:00:10.00,Dialogue,,0,0,0,,Spoken line`;
+
+        expect(getAssSubtitleBottomPercentage(content)).toBeCloseTo(
+            100 - 17 * 100 / 720
+        );
+    });
+
+    it('honors a dialogue event margin override', () => {
+        const content = `${header}Dialogue: 0,0:00:00.00,0:00:05.00,Dialogue,,0,0,40,,Spoken line`;
+
+        expect(getAssSubtitleBottomPercentage(content)).toBeCloseTo(
+            100 - 42 * 100 / 720
+        );
+    });
+
+    it.each([ '', 'not ass', '[Script Info]\\nPlayResY: 0' ])(
+        'rejects content without a usable bottom dialogue style (%s)',
+        content => {
+            expect(getAssSubtitleBottomPercentage(content)).toBeNull();
+        }
+    );
 });
 
 describe('secondary subtitle separation', () => {

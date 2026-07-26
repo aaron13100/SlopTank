@@ -439,7 +439,7 @@ export class HtmlVideoPlayer {
      * Original ASS source keyed by renderer. Every live appearance update
      * derives from this immutable authored document, so dragging a slider
      * never compounds size or loses any positioning/animation directives.
-     * @type {WeakMap<Object, { content: string, appearanceKey: string }>}
+     * @type {WeakMap<Object, { content: string, appearanceKey: string, authoredBottomPercentage: number | null }>}
      */
     #assRendererStates = new WeakMap();
     /**
@@ -1986,7 +1986,9 @@ export class HtmlVideoPlayer {
             }
             this.#assRendererStates.set(renderer, {
                 content,
-                appearanceKey: ''
+                appearanceKey: '',
+                authoredBottomPercentage:
+                    subtitleAppearanceHelper.getAssSubtitleBottomPercentage(content)
             });
             this.applyAssRendererAppearance(renderer);
         }).catch(error => {
@@ -2511,17 +2513,41 @@ export class HtmlVideoPlayer {
         }
 
         this.#subtitlePreviewElem.textContent = preview.sampleText;
+        const appearance = this.getEffectiveAppearanceSettings();
         const position = subtitleAppearanceHelper.getSubtitleVerticalPosition(
-            this.getEffectiveAppearanceSettings().verticalPosition
+            appearance.verticalPosition,
+            appearance.textSize
         );
-        // Native VTTCue positions are centre anchors. Custom/ASS subtitles use
-        // lower-edge anchors so their existing bottom placement is retained.
-        // Offset only the sample itself when previewing the native path.
-        this.#subtitlePreviewElem.style.transform =
-            this.#subtitleRenderPath === 'native'
-                && position.fraction !== 0 ?
-                `translateY(${position.fraction * 50}%)` :
-                '';
+        // Native VTTCue positions are centre anchors. ASS keeps the selected
+        // track's authored lower margin. The shared DOM preview needs a
+        // renderer-specific correction for either path.
+        let previewTransform = this.#subtitleRenderPath === 'native'
+            && position.fraction !== 0 ?
+            `translateY(${position.fraction * 50}%)` :
+            '';
+
+        const primaryAssRenderer = this.#currentAssRenderers[PRIMARY_TEXT_TRACK_INDEX];
+        const assState = primaryAssRenderer ?
+            this.#assRendererStates.get(primaryAssRenderer) :
+            null;
+        const videoBounds = this.#mediaElement?.getBoundingClientRect();
+        if (this.#subtitleRenderPath === 'ass'
+            && assState
+            && videoBounds?.height) {
+            const bottom = subtitleAppearanceHelper.getSubtitleVerticalPosition(
+                VERTICAL_POSITION_BOTTOM,
+                appearance.textSize
+            );
+            if (assState.authoredBottomPercentage !== null) {
+                const offset = (
+                    assState.authoredBottomPercentage - bottom.percentage
+                ) * videoBounds.height / 100;
+                if (Math.abs(offset) >= 0.01) {
+                    previewTransform = `translateY(${offset}px)`;
+                }
+            }
+        }
+        this.#subtitlePreviewElem.style.transform = previewTransform;
 
         const customCueVisible = [
             this.#videoSubtitlesElem,

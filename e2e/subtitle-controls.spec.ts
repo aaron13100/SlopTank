@@ -1090,6 +1090,37 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
     const videoBox = await video.boundingBox();
     if (!videoBox) throw new Error('video has no box'); // allow-raw-error: e2e setup fast-fail
 
+    // The preview's normal bottom position must match an ordinary authored
+    // dialogue cue, not just the translated midpoint of the position slider.
+    await setPositionSlider(page, -4);
+    const defaultCanvas = page.locator(
+        '.libassjs-canvas-parent:not(.libassjs-canvas-parent-secondary) .libassjs-canvas'
+    );
+    await expect.poll(() => renderedAssCanvasBounds(defaultCanvas))
+        .not.toBeNull();
+    const defaultCueBounds = await renderedAssCanvasBounds(defaultCanvas);
+    if (!defaultCueBounds) {
+        throw new Error('ASS dialogue has no rendered bounds'); // allow-raw-error: e2e assertion setup
+    }
+    await video.evaluate(async (el: HTMLVideoElement) => {
+        const seeked = new Promise<void>(resolve => {
+            el.addEventListener('seeked', () => resolve(), { once: true });
+        });
+        el.currentTime = 0;
+        await seeked;
+        el.pause();
+    });
+    const defaultPreviewLine = page.locator('.videoSubtitlesPreviewLine');
+    await expect(defaultPreviewLine).toBeVisible();
+    const defaultPreviewBox = await defaultPreviewLine.boundingBox();
+    if (!defaultPreviewBox) {
+        throw new Error('ASS cue-gap preview has no box'); // allow-raw-error: e2e assertion setup
+    }
+    expect(Math.abs(
+        defaultPreviewBox.y + defaultPreviewBox.height - defaultCueBounds.bottom
+    )).toBeLessThan(videoBox.height * 0.01);
+    await seekAndPauseAssCue(video, page, 185.5);
+
     // The sample shown in a cue gap uses the same effective lower-edge anchor
     // as ordinary ASS dialogue instead of the DOM renderer's old, different
     // centre/top interpolation.

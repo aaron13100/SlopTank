@@ -43,6 +43,133 @@ export function getSubtitleVerticalPosition(position, textSize) {
     return { value, fraction, percentage, centerPercentage };
 }
 
+function splitAssFields(value, fieldCount) {
+    const fields = [];
+    let remainder = value;
+    for (let index = 1; index < fieldCount; index++) {
+        const separator = remainder.indexOf(',');
+        if (separator === -1) {
+            return null;
+        }
+        fields.push(remainder.slice(0, separator));
+        remainder = remainder.slice(separator + 1);
+    }
+    fields.push(remainder);
+    return fields;
+}
+
+function getAssStyleBottomPercentage(style, playResY, eventMargin) {
+    const alignment = Number(style.alignment);
+    const margin = Number(eventMargin) > 0 ? Number(eventMargin) : Number(style.marginv);
+    const outline = Math.max(0, Number(style.outline) || 0);
+    const shadow = Math.max(0, Number(style.shadow) || 0);
+    if (!Number.isFinite(playResY)
+        || playResY <= 0
+        || ![ 1, 2, 3 ].includes(alignment)
+        || !Number.isFinite(margin)
+        || margin < 0) {
+        return null;
+    }
+
+    return Math.min(100, Math.max(
+        0,
+        100 - (margin + outline + shadow) * 100 / playResY
+    ));
+}
+
+/**
+ * Find the lower edge used by ordinary bottom-aligned dialogue in an ASS/SSA
+ * document. The preview is a DOM element, so it needs this authored anchor to
+ * match libass tracks whose margins differ from the generic subtitle default.
+ * Explicitly positioned/title-card events are skipped.
+ * @param {string} content - Authored ASS/SSA document.
+ * @returns {number|null} Lower edge as a percentage of the video height.
+ */
+export function getAssSubtitleBottomPercentage(content) {
+    if (typeof content !== 'string' || !content) {
+        return null;
+    }
+
+    let section = '';
+    let playResY = NaN;
+    let format = [];
+    let fallbackStyle = null;
+    const styles = new Map();
+
+    for (const line of content.split(/\r?\n/)) {
+        const trimmedLine = line.trim();
+        if (trimmedLine.startsWith('[') && trimmedLine.endsWith(']')) {
+            section = trimmedLine.slice(1, -1).toLowerCase();
+            format = [];
+            continue;
+        }
+
+        const colonIndex = line.indexOf(':');
+        if (colonIndex === -1) {
+            continue;
+        }
+        const lineKey = line.slice(0, colonIndex).trim().toLowerCase();
+        const lineValue = line.slice(colonIndex + 1).trimStart();
+        if (lineKey === 'playresy') {
+            playResY = Number(lineValue);
+            continue;
+        }
+        if (lineKey === 'format') {
+            format = lineValue.split(',').map(field => field.trim().toLowerCase());
+            continue;
+        }
+
+        if ((section === 'v4+ styles' || section === 'v4 styles')
+            && lineKey === 'style'
+            && format.length) {
+            const fields = splitAssFields(lineValue, format.length);
+            if (!fields) {
+                continue;
+            }
+            const style = Object.fromEntries(
+                format.map((field, index) => [ field, fields[index]?.trim() ])
+            );
+            styles.set(style.name?.toLowerCase(), style);
+            if (fallbackStyle === null
+                && getAssStyleBottomPercentage(style, playResY, 0) !== null) {
+                fallbackStyle = style;
+            }
+            continue;
+        }
+
+        if (section === 'events' && lineKey === 'dialogue' && format.length) {
+            const fields = splitAssFields(lineValue, format.length);
+            if (!fields) {
+                continue;
+            }
+            const event = Object.fromEntries(
+                format.map((field, index) => [ field, fields[index]?.trim() ])
+            );
+            // Signs and authored compositions are not representative of the
+            // regular dialogue lane the sample text is meant to preview.
+            if (/\\(?:pos|move)\s*\(|\\an[4-9]/i.test(event.text || '')) {
+                continue;
+            }
+            const style = styles.get(event.style?.toLowerCase());
+            if (!style) {
+                continue;
+            }
+            const percentage = getAssStyleBottomPercentage(
+                style,
+                playResY,
+                event.marginv
+            );
+            if (percentage !== null) {
+                return percentage;
+            }
+        }
+    }
+
+    return fallbackStyle ?
+        getAssStyleBottomPercentage(fallbackStyle, playResY, 0) :
+        null;
+}
+
 /**
  * Resolve a persisted subtitle text-size choice to a multiplier around the
  * proportional video-height baseline. The persisted value is either a numeric
@@ -297,5 +424,6 @@ export default {
     getSubtitleFontSize: getSubtitleFontSize,
     getTextSizeMultiplier: getTextSizeMultiplier,
     getSubtitleVerticalPosition: getSubtitleVerticalPosition,
+    getAssSubtitleBottomPercentage: getAssSubtitleBottomPercentage,
     getSecondarySubtitleOffset: getSecondarySubtitleOffset
 };
