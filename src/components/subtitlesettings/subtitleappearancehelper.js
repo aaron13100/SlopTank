@@ -9,18 +9,21 @@ const SUBTITLE_LINE_HEIGHT_RATIO = 1.35;
 export const TEXT_SIZE_MIN_MULTIPLIER = 0.25;
 export const TEXT_SIZE_MAX_MULTIPLIER = 2;
 export const VERTICAL_POSITION_TOP = -20;
-export const VERTICAL_POSITION_BOTTOM = -4;
+export const VERTICAL_POSITION_BOTTOM = -5;
 export const VERTICAL_POSITION_DEFAULT = VERTICAL_POSITION_BOTTOM;
 export const VERTICAL_POSITION_STEP = 0.25;
 
+// Preserve the established meaning of every saved position while limiting new
+// selections to -5. Rescaling the range itself would move all existing values.
+const VERTICAL_POSITION_REFERENCE_BOTTOM = -4;
 const VERTICAL_POSITION_BOTTOM_PERCENT = 94;
 
 /**
  * Map the persisted line-style setting onto a lower-edge anchor in the video.
  * The top endpoint leaves half of one normally-spaced subtitle line visible;
- * the bottom endpoint retains the existing authored/default placement.
- * Keeping the persisted range negative remains compatible with cast clients
- * and older settings.
+ * the historical -4 reference retains the established placement of saved
+ * values. Keeping the persisted range negative remains compatible with cast
+ * clients and older settings.
  * @param {string|number} position - Persisted vertical-position setting.
  * @param {string|number} [textSize] - Effective text-size setting.
  * @returns {{ value: number, fraction: number, percentage: number, centerPercentage: number }} Clamped setting and renderer anchors.
@@ -31,7 +34,7 @@ export function getSubtitleVerticalPosition(position, textSize) {
         Math.min(VERTICAL_POSITION_BOTTOM, Math.max(VERTICAL_POSITION_TOP, numeric)) :
         VERTICAL_POSITION_DEFAULT;
     const fraction = (value - VERTICAL_POSITION_TOP)
-        / (VERTICAL_POSITION_BOTTOM - VERTICAL_POSITION_TOP);
+        / (VERTICAL_POSITION_REFERENCE_BOTTOM - VERTICAL_POSITION_TOP);
     const halfLinePercentage = SUBTITLE_HEIGHT_RATIO
         * SUBTITLE_LINE_HEIGHT_RATIO
         * getTextSizeMultiplier(textSize)

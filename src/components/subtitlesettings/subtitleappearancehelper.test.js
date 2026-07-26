@@ -119,26 +119,26 @@ describe('subtitle vertical position', () => {
             percentage: 3.0375,
             centerPercentage: 0
         });
-        expect(getSubtitleVerticalPosition(-4, '1')).toEqual({
-            value: -4,
-            fraction: 1,
-            percentage: 94,
-            centerPercentage: 94
+        expect(getSubtitleVerticalPosition(-5, '1')).toEqual({
+            value: -5,
+            fraction: 0.9375,
+            percentage: 88.31484375,
+            centerPercentage: 88.125
         });
         expect(getSubtitleVerticalPosition(2, '1')).toEqual({
-            value: -4,
-            fraction: 1,
-            percentage: 94,
-            centerPercentage: 94
+            value: -5,
+            fraction: 0.9375,
+            percentage: 88.31484375,
+            centerPercentage: 88.125
         });
         expect(getWindowStyle({ verticalPosition: -20 }, 'top')).toBe('0%');
         expect(getWindowStyle({ verticalPosition: -20 }, 'bottom')).toBe('auto');
         expect(getWindowStyle({ verticalPosition: -20 }, 'transform'))
             .toBe('translateY(-50%)');
-        expect(getWindowStyle({ verticalPosition: -4 }, 'top')).toBe('94%');
-        expect(getWindowStyle({ verticalPosition: -4 }, 'bottom')).toBe('auto');
-        expect(getWindowStyle({ verticalPosition: -4 }, 'transform'))
-            .toBe('translateY(-100%)');
+        expect(getWindowStyle({ verticalPosition: -5 }, 'top')).toBe('88.125%');
+        expect(getWindowStyle({ verticalPosition: -5 }, 'bottom')).toBe('auto');
+        expect(getWindowStyle({ verticalPosition: -5 }, 'transform'))
+            .toBe('translateY(-96.875%)');
     });
 
     it('keeps half a line visible at the top for every text size', () => {

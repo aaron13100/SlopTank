@@ -38,7 +38,7 @@ function createHarness({
     playerKind = 'local',
     withSecondary = false
 }) {
-    let appearanceSettings = { textSize, verticalPosition: -4 };
+    let appearanceSettings = { textSize, verticalPosition: -5 };
     let liveApplyCount = 0;
     const player = {
         previewLog: [],
@@ -158,7 +158,7 @@ describe('SubtitleTrackMenu', () => {
         // opening immediately begins a preview at the persisted size
         expect(harness.player.activePreview).toEqual({
             textSize: '1.5',
-            verticalPosition: '-4',
+            verticalPosition: '-5',
             font: '',
             textWeight: 'normal',
             sampleText: 'SubtitleSizePreviewSample'
@@ -173,7 +173,7 @@ describe('SubtitleTrackMenu', () => {
         fireEvent.change(slider);
         expect(harness.settings.savedAppearances).toContainEqual({
             textSize: '0.25',
-            verticalPosition: -4
+            verticalPosition: -5
         });
 
         // closing ends the preview and removes the overlay
@@ -315,7 +315,7 @@ describe('SubtitleTrackMenu', () => {
         await waitFor(() => {
             expect(harness.settings.savedAppearances).toContainEqual({
                 textSize: '1.25',
-                verticalPosition: -4
+                verticalPosition: -5
             });
         });
         expect(harness.getLiveApplyCount()).toBe(1);

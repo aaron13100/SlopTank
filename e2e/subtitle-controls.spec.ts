@@ -664,7 +664,7 @@ test('subtitle appearance controls preview live and persist without weakening si
     expect(visiblePreviewHeight / topPreviewBox.height).toBeLessThan(0.6);
 
     await setSizeSlider(page, 25);
-    await setPositionSlider(page, -4);
+    await setPositionSlider(page, -5);
     const bottomBeforePositionChange = await previewLine.evaluate(
         el => Math.round(el.getBoundingClientRect().bottom));
     await setPositionSlider(page, -8);
@@ -693,7 +693,7 @@ test('subtitle appearance controls preview live and persist without weakening si
     await expect(page.locator('.subtitleFontSelect')).toHaveValue('console');
     await expect(page.locator('.subtitleWeightSelect')).toHaveValue('bold');
     await setSizeSlider(page, 100);
-    await setPositionSlider(page, -4);
+    await setPositionSlider(page, -5);
     await page.locator('.subtitleFontSelect').selectOption('');
     await page.locator('.subtitleWeightSelect').selectOption('normal');
     await page.locator('.subtitleSizer-closeButton').click();
@@ -843,7 +843,7 @@ test('a saved Native preference still produces a resizable real cue', async ({ p
         localStorage.setItem(`${server.UserId}-localplayersubtitleappearance3`, JSON.stringify({
             subtitleStyling: 'Native',
             textSize: '1',
-            verticalPosition: -4
+            verticalPosition: -5
         }));
     });
     const video = await startPlayback(page, config);
@@ -1092,7 +1092,7 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
 
     // The preview's normal bottom position must match an ordinary authored
     // dialogue cue, not just the translated midpoint of the position slider.
-    await setPositionSlider(page, -4);
+    await setPositionSlider(page, -5);
     const defaultCanvas = page.locator(
         '.libassjs-canvas-parent:not(.libassjs-canvas-parent-secondary) .libassjs-canvas'
     );
@@ -1179,7 +1179,7 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
     expect(visibleTopCueHeight / topCueHeight).toBeGreaterThan(0.3);
     expect(visibleTopCueHeight / topCueHeight).toBeLessThan(0.7);
 
-    await setPositionSlider(page, -4);
+    await setPositionSlider(page, -5);
     await expect.poll(async () => (await assRenderedVerticalBounds(page)).bottom)
         .toBeLessThanOrEqual(videoBox.y + videoBox.height);
     const bottomBounds = await assRenderedVerticalBounds(page);
