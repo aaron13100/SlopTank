@@ -2055,7 +2055,16 @@ export class HtmlVideoPlayer {
             (position.percentage - bottom.percentage) * renderedHeight / 100;
         const totalOffset = authoredPositionOffset + additionalOffset;
         if (renderer.canvasParent) {
-            renderer.canvasParent.style.transform =
+            // SubtitlesOctopus compensates for canvasParent movement during
+            // resize by adding the inverse amount to canvas.style.top. That
+            // silently cancels a parent transform after seeks, transcode
+            // changes, or any ResizeObserver callback. Keep the parent fixed
+            // and translate the canvas, whose transform the renderer leaves
+            // untouched while recalculating its top/left/size.
+            renderer.canvasParent.style.transform = '';
+        }
+        if (renderer.canvas) {
+            renderer.canvas.style.transform =
                 totalOffset === 0 ? '' : `translateY(${totalOffset}px)`;
         }
     }

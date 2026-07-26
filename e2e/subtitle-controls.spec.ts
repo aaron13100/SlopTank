@@ -1134,6 +1134,22 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
     if (!realCueBounds) {
         throw new Error('ASS dialogue has no rendered bounds'); // allow-raw-error: e2e assertion setup
     }
+    // libass recalculates canvas top/left on resize. The vertical-position
+    // transform must survive that pass instead of being canceled by an
+    // inverse canvas top adjustment.
+    const originalViewport = page.viewportSize();
+    if (!originalViewport) {
+        throw new Error('browser has no viewport size'); // allow-raw-error: e2e assertion setup
+    }
+    await page.setViewportSize({
+        width: originalViewport.width - 1,
+        height: originalViewport.height
+    });
+    await expect.poll(async () => {
+        const resizedBounds = await renderedAssCanvasBounds(alignmentCanvas);
+        return resizedBounds?.bottom;
+    }).toBeCloseTo(realCueBounds.bottom, 0);
+    await page.setViewportSize(originalViewport);
     await video.evaluate(async (el: HTMLVideoElement) => {
         const seeked = new Promise<void>(resolve => {
             el.addEventListener('seeked', () => resolve(), { once: true });

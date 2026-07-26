@@ -236,6 +236,24 @@ test('seek bar trickplay preview renders a real thumbnail and updates its tile',
     ).not.toBe(firstTile);
 });
 
+test('playback title keeps readable contrast over bright video', async ({ page, config }) => {
+    await login(page, config.username, config.password);
+    await startPlayback(page, config);
+    await openOsd(page);
+
+    const pageTitle = page.locator('.osdHeader .pageTitle');
+    await expect(pageTitle).not.toBeEmpty();
+    const titleStyle = await pageTitle.evaluate(element => {
+        const style = getComputedStyle(element);
+        return {
+            backgroundColor: style.backgroundColor,
+            textShadow: style.textShadow
+        };
+    });
+    expect(titleStyle.backgroundColor).toMatch(/^rgba\(\d+, \d+, \d+, 0\.68\)$/);
+    expect(titleStyle.textShadow).not.toBe('none');
+});
+
 test('volume slider and mute button change the real video state', async ({ page, config }) => {
     await login(page, config.username, config.password);
     const video = await startPlayback(page, config);
