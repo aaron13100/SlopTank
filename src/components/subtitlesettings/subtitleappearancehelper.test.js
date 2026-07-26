@@ -102,39 +102,51 @@ describe('subtitle vertical position', () => {
             expect(getWindowStyle(
                 { textSize, verticalPosition: -12 },
                 'top'
-            )).toBe('49.5%');
+            )).toBe('47%');
             expect(getWindowStyle(
                 { textSize, verticalPosition: -12 },
                 'transform'
-            )).toBe('translateY(-50%)');
+            )).toBe('translateY(-75%)');
         }
     );
 
     // @covers subtitle_controls.appearance_sizing.position_anchors_to_chosen_edge
-    it('keeps both endpoints visible and clamps legacy out-of-range values', () => {
-        expect(getSubtitleVerticalPosition(-20)).toEqual({
+    it('allows half a line above the top and clamps legacy out-of-range values', () => {
+        expect(getSubtitleVerticalPosition(-20, '1')).toEqual({
             value: -20,
             fraction: 0,
-            percentage: 5
+            percentage: 3.0375,
+            centerPercentage: 0
         });
-        expect(getSubtitleVerticalPosition(-4)).toEqual({
+        expect(getSubtitleVerticalPosition(-4, '1')).toEqual({
             value: -4,
             fraction: 1,
-            percentage: 94
+            percentage: 94,
+            centerPercentage: 94
         });
-        expect(getSubtitleVerticalPosition(2)).toEqual({
+        expect(getSubtitleVerticalPosition(2, '1')).toEqual({
             value: -4,
             fraction: 1,
-            percentage: 94
+            percentage: 94,
+            centerPercentage: 94
         });
-        expect(getWindowStyle({ verticalPosition: -20 }, 'top')).toBe('5%');
+        expect(getWindowStyle({ verticalPosition: -20 }, 'top')).toBe('0%');
         expect(getWindowStyle({ verticalPosition: -20 }, 'bottom')).toBe('auto');
         expect(getWindowStyle({ verticalPosition: -20 }, 'transform'))
-            .toBe('translateY(0%)');
+            .toBe('translateY(-50%)');
         expect(getWindowStyle({ verticalPosition: -4 }, 'top')).toBe('94%');
         expect(getWindowStyle({ verticalPosition: -4 }, 'bottom')).toBe('auto');
         expect(getWindowStyle({ verticalPosition: -4 }, 'transform'))
             .toBe('translateY(-100%)');
+    });
+
+    it('keeps half a line visible at the top for every text size', () => {
+        expect(getSubtitleVerticalPosition(-20, '0.25').percentage)
+            .toBe(0.759375);
+        expect(getSubtitleVerticalPosition(-20, '1').percentage)
+            .toBe(3.0375);
+        expect(getSubtitleVerticalPosition(-20, '2').percentage)
+            .toBe(6.075);
     });
 });
 

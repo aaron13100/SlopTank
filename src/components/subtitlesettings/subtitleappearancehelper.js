@@ -4,6 +4,7 @@
  */
 
 const SUBTITLE_HEIGHT_RATIO = 0.045;
+const SUBTITLE_LINE_HEIGHT_RATIO = 1.35;
 
 export const TEXT_SIZE_MIN_MULTIPLIER = 0.25;
 export const TEXT_SIZE_MAX_MULTIPLIER = 2;
@@ -12,28 +13,34 @@ export const VERTICAL_POSITION_BOTTOM = -4;
 export const VERTICAL_POSITION_DEFAULT = VERTICAL_POSITION_BOTTOM;
 export const VERTICAL_POSITION_STEP = 0.25;
 
-const VERTICAL_POSITION_TOP_PERCENT = 5;
 const VERTICAL_POSITION_BOTTOM_PERCENT = 94;
 
 /**
- * Map the persisted line-style setting onto a bounded position in the visible
- * video. Keeping the persisted range negative remains compatible with cast
- * clients and older settings, while the rendered result is a smooth,
- * predictable top-to-bottom track whose endpoints remain visible.
+ * Map the persisted line-style setting onto a lower-edge anchor in the video.
+ * The top endpoint leaves half of one normally-spaced subtitle line visible;
+ * the bottom endpoint retains the existing authored/default placement.
+ * Keeping the persisted range negative remains compatible with cast clients
+ * and older settings.
  * @param {string|number} position - Persisted vertical-position setting.
- * @returns {{ value: number, fraction: number, percentage: number }} Clamped setting and visible placement.
+ * @param {string|number} [textSize] - Effective text-size setting.
+ * @returns {{ value: number, fraction: number, percentage: number, centerPercentage: number }} Clamped setting and renderer anchors.
  */
-export function getSubtitleVerticalPosition(position) {
+export function getSubtitleVerticalPosition(position, textSize) {
     const numeric = typeof position === 'number' ? position : Number(position);
     const value = Number.isFinite(numeric) ?
         Math.min(VERTICAL_POSITION_BOTTOM, Math.max(VERTICAL_POSITION_TOP, numeric)) :
         VERTICAL_POSITION_DEFAULT;
     const fraction = (value - VERTICAL_POSITION_TOP)
         / (VERTICAL_POSITION_BOTTOM - VERTICAL_POSITION_TOP);
-    const percentage = VERTICAL_POSITION_TOP_PERCENT
-        + fraction * (VERTICAL_POSITION_BOTTOM_PERCENT - VERTICAL_POSITION_TOP_PERCENT);
+    const halfLinePercentage = SUBTITLE_HEIGHT_RATIO
+        * SUBTITLE_LINE_HEIGHT_RATIO
+        * getTextSizeMultiplier(textSize)
+        * 50;
+    const percentage = halfLinePercentage
+        + fraction * (VERTICAL_POSITION_BOTTOM_PERCENT - halfLinePercentage);
+    const centerPercentage = fraction * VERTICAL_POSITION_BOTTOM_PERCENT;
 
-    return { value, fraction, percentage };
+    return { value, fraction, percentage, centerPercentage };
 }
 
 /**
@@ -233,19 +240,26 @@ function getWindowStyles(settings, preview) {
     const list = [];
 
     if (!preview) {
-        const position = getSubtitleVerticalPosition(settings.verticalPosition);
-        list.push({ name: 'top', value: `${position.percentage}%` });
+        const position = getSubtitleVerticalPosition(
+            settings.verticalPosition,
+            settings.textSize
+        );
+        // DOM subtitle blocks can use their own measured height, so interpolate
+        // from a centre anchor at the top to the existing lower-edge anchor at
+        // the bottom. This keeps exactly half of any sized line visible at the
+        // upper endpoint without changing the lower endpoint.
+        list.push({
+            name: 'top',
+            value: `${position.fraction * VERTICAL_POSITION_BOTTOM_PERCENT}%`
+        });
         // Explicitly override the stylesheet's legacy `bottom: 0`. Clearing
         // the inline declaration would merely reveal that rule, stretching
         // the container from `top` to the bottom and making translateY()
         // resolve against a fixed strip instead of the rendered text height.
         list.push({ name: 'bottom', value: 'auto' });
-        // At the top, the subtitle's top edge sits on the safe bound; at the
-        // bottom, its bottom edge does. Intermediate values interpolate
-        // smoothly and remain independent of the selected text size.
         list.push({
             name: 'transform',
-            value: `translateY(${position.fraction === 0 ? 0 : -position.fraction * 100}%)`
+            value: `translateY(${-50 - position.fraction * 50}%)`
         });
     }
 

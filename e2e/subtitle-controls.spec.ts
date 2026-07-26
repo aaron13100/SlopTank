@@ -647,6 +647,24 @@ test('subtitle appearance controls preview live and persist without weakening si
     await setSizeSlider(page, 25);
     await expect.poll(() => previewFontSize(page)).toBeCloseTo(baseline * 0.25, 0);
 
+    await setSizeSlider(page, 100);
+    await setPositionSlider(page, -20);
+    const videoBox = await video.boundingBox();
+    const topPreviewBox = await previewLine.boundingBox();
+    if (!videoBox || !topPreviewBox) {
+        throw new Error('video or subtitle preview has no box'); // allow-raw-error: e2e assertion setup
+    }
+    const visiblePreviewHeight = Math.min(
+        topPreviewBox.y + topPreviewBox.height,
+        videoBox.y + videoBox.height
+    ) - Math.max(topPreviewBox.y, videoBox.y);
+    expect(topPreviewBox.y).toBeLessThan(videoBox.y);
+    expect(topPreviewBox.y + topPreviewBox.height).toBeGreaterThan(videoBox.y);
+    expect(visiblePreviewHeight / topPreviewBox.height).toBeGreaterThan(0.4);
+    expect(visiblePreviewHeight / topPreviewBox.height).toBeLessThan(0.6);
+
+    await setSizeSlider(page, 25);
+    await setPositionSlider(page, -4);
     const bottomBeforePositionChange = await previewLine.evaluate(
         el => Math.round(el.getBoundingClientRect().bottom));
     await setPositionSlider(page, -8);
@@ -1071,12 +1089,48 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
 
     const videoBox = await video.boundingBox();
     if (!videoBox) throw new Error('video has no box'); // allow-raw-error: e2e setup fast-fail
+
+    // The sample shown in a cue gap uses the same effective lower-edge anchor
+    // as ordinary ASS dialogue instead of the DOM renderer's old, different
+    // centre/top interpolation.
+    await setPositionSlider(page, -12);
+    const alignmentCanvas = page.locator(
+        '.libassjs-canvas-parent:not(.libassjs-canvas-parent-secondary) .libassjs-canvas'
+    );
+    await expect.poll(() => renderedAssCanvasBounds(alignmentCanvas))
+        .not.toBeNull();
+    const realCueBounds = await renderedAssCanvasBounds(alignmentCanvas);
+    if (!realCueBounds) {
+        throw new Error('ASS dialogue has no rendered bounds'); // allow-raw-error: e2e assertion setup
+    }
+    await video.evaluate(async (el: HTMLVideoElement) => {
+        const seeked = new Promise<void>(resolve => {
+            el.addEventListener('seeked', () => resolve(), { once: true });
+        });
+        el.currentTime = 0;
+        await seeked;
+        el.pause();
+    });
+    const previewLine = page.locator('.videoSubtitlesPreviewLine');
+    await expect(previewLine).toBeVisible();
+    const assGapPreviewBox = await previewLine.boundingBox();
+    if (!assGapPreviewBox) {
+        throw new Error('ASS cue-gap preview has no box'); // allow-raw-error: e2e assertion setup
+    }
+    expect(Math.abs(
+        assGapPreviewBox.y + assGapPreviewBox.height - realCueBounds.bottom
+    )).toBeLessThan(videoBox.height * 0.01);
+    await seekAndPauseAssCue(video, page, 185.5);
+
     await setPositionSlider(page, -20);
     await expect.poll(async () => (await assRenderedVerticalBounds(page)).top)
-        .toBeGreaterThanOrEqual(videoBox.y);
+        .toBeLessThan(videoBox.y);
     const topBounds = await assRenderedVerticalBounds(page);
-    expect(topBounds.top).toBeLessThan(videoBox.y + videoBox.height * 0.12);
-    expect(topBounds.bottom).toBeLessThanOrEqual(videoBox.y + videoBox.height);
+    expect(topBounds.bottom).toBeGreaterThan(videoBox.y);
+    const visibleTopCueHeight = topBounds.bottom - videoBox.y;
+    const topCueHeight = topBounds.bottom - topBounds.top;
+    expect(visibleTopCueHeight / topCueHeight).toBeGreaterThan(0.3);
+    expect(visibleTopCueHeight / topCueHeight).toBeLessThan(0.7);
 
     await setPositionSlider(page, -4);
     await expect.poll(async () => (await assRenderedVerticalBounds(page)).bottom)

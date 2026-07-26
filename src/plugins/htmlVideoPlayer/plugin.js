@@ -2036,10 +2036,13 @@ export class HtmlVideoPlayer {
      * @returns {void}
      */
     setAssRendererVerticalPosition(renderer, additionalOffset = 0) {
+        const appearance = this.getEffectiveAppearanceSettings();
         const position = subtitleAppearanceHelper.getSubtitleVerticalPosition(
-            this.getEffectiveAppearanceSettings().verticalPosition);
+            appearance.verticalPosition,
+            appearance.textSize);
         const bottom = subtitleAppearanceHelper.getSubtitleVerticalPosition(
-            VERTICAL_POSITION_BOTTOM);
+            VERTICAL_POSITION_BOTTOM,
+            appearance.textSize);
         const renderedHeight = renderer.canvasParent?.getBoundingClientRect().height
             || this.#mediaElement?.getBoundingClientRect().height
             || 0;
@@ -2380,15 +2383,17 @@ export class HtmlVideoPlayer {
      * @private
      */
     updateNativeCuePositions() {
+        const appearance = this.getEffectiveAppearanceSettings();
         const position = subtitleAppearanceHelper.getSubtitleVerticalPosition(
-            this.getEffectiveAppearanceSettings().verticalPosition);
+            appearance.verticalPosition,
+            appearance.textSize);
         for (const track of this.getTextTracks() || []) {
             for (const cue of track.cues || []) {
                 if ('snapToLines' in cue) {
                     cue.snapToLines = false;
                 }
                 if ('line' in cue) {
-                    cue.line = position.percentage;
+                    cue.line = position.centerPercentage;
                 }
                 if ('lineAlign' in cue) {
                     cue.lineAlign = 'center';
@@ -2506,6 +2511,17 @@ export class HtmlVideoPlayer {
         }
 
         this.#subtitlePreviewElem.textContent = preview.sampleText;
+        const position = subtitleAppearanceHelper.getSubtitleVerticalPosition(
+            this.getEffectiveAppearanceSettings().verticalPosition
+        );
+        // Native VTTCue positions are centre anchors. Custom/ASS subtitles use
+        // lower-edge anchors so their existing bottom placement is retained.
+        // Offset only the sample itself when previewing the native path.
+        this.#subtitlePreviewElem.style.transform =
+            this.#subtitleRenderPath === 'native'
+                && position.fraction !== 0 ?
+                `translateY(${position.fraction * 50}%)` :
+                '';
 
         const customCueVisible = [
             this.#videoSubtitlesElem,
@@ -2655,7 +2671,8 @@ export class HtmlVideoPlayer {
 
             const subtitleAppearance = userSettings.getSubtitleAppearanceSettings();
             const cuePosition = subtitleAppearanceHelper.getSubtitleVerticalPosition(
-                subtitleAppearance.verticalPosition);
+                subtitleAppearance.verticalPosition,
+                subtitleAppearance.textSize);
 
             // add some cues to show the text
             // in safari, the cues need to be added before setting the track mode to showing
@@ -2665,7 +2682,7 @@ export class HtmlVideoPlayer {
                 const cue = new TrackCue(trackEvent.StartPositionTicks / 10000000, trackEvent.EndPositionTicks / 10000000, text);
 
                 cue.snapToLines = false;
-                cue.line = cuePosition.percentage;
+                cue.line = cuePosition.centerPercentage;
                 cue.lineAlign = 'center';
 
                 trackElement.addCue(cue);
