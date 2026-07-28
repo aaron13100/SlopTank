@@ -3,30 +3,30 @@ import { ImageType } from '@jellyfin/sdk/lib/generated-client/models/image-type'
 import React, { FunctionComponent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import animeSeaBreeze from 'assets/img/profile-avatars/anime-sea-breeze.png';
-import animeSpacePilot from 'assets/img/profile-avatars/anime-space-pilot.png';
-import animeSunset from 'assets/img/profile-avatars/anime-sunset.png';
-import cartoonExplorer from 'assets/img/profile-avatars/cartoon-explorer.png';
-import ceramicRedPanda from 'assets/img/profile-avatars/ceramic-red-panda.png';
-import daisyFrog from 'assets/img/profile-avatars/daisy-frog.png';
-import desertBloom from 'assets/img/profile-avatars/desert-bloom.png';
-import feltAxolotl from 'assets/img/profile-avatars/felt-axolotl.png';
-import geometricCreative from 'assets/img/profile-avatars/geometric-creative.png';
-import mangaElder from 'assets/img/profile-avatars/manga-elder.png';
-import moonlitFox from 'assets/img/profile-avatars/moonlit-fox.png';
-import moonlitMountain from 'assets/img/profile-avatars/moonlit-mountain.png';
-import mushroomGrove from 'assets/img/profile-avatars/mushroom-grove.png';
-import neonCassette from 'assets/img/profile-avatars/neon-cassette.png';
-import neonJellyfish from 'assets/img/profile-avatars/neon-jellyfish.png';
-import oceanWhale from 'assets/img/profile-avatars/ocean-whale.png';
-import paperDragon from 'assets/img/profile-avatars/paper-dragon.png';
-import paperPortrait from 'assets/img/profile-avatars/paper-portrait.png';
-import rainyCapybara from 'assets/img/profile-avatars/rainy-capybara.png';
-import radiantSun from 'assets/img/profile-avatars/radiant-sun.png';
-import retroRobot from 'assets/img/profile-avatars/retro-robot.png';
-import risoLaugh from 'assets/img/profile-avatars/riso-laugh.png';
-import spaceExplorer from 'assets/img/profile-avatars/space-explorer.png';
-import stormCloud from 'assets/img/profile-avatars/storm-cloud.png';
+import astronautHelmet from 'assets/img/profile-avatars/astronaut-helmet.png';
+import bicycleHelmet from 'assets/img/profile-avatars/bicycle-helmet.png';
+import blackCat from 'assets/img/profile-avatars/black-cat.png';
+import bonsaiTree from 'assets/img/profile-avatars/bonsai-tree.png';
+import bookStack from 'assets/img/profile-avatars/book-stack.png';
+import boulderingShoe from 'assets/img/profile-avatars/bouldering-shoe.png';
+import burrito from 'assets/img/profile-avatars/burrito.png';
+import camera from 'assets/img/profile-avatars/camera.png';
+import cowboyBoot from 'assets/img/profile-avatars/cowboy-boot.png';
+import electricGuitar from 'assets/img/profile-avatars/electric-guitar.png';
+import espresso from 'assets/img/profile-avatars/espresso.png';
+import gameController from 'assets/img/profile-avatars/game-controller.png';
+import knittingYarn from 'assets/img/profile-avatars/knitting-yarn.png';
+import magicalWand from 'assets/img/profile-avatars/magical-wand.png';
+import mushroom from 'assets/img/profile-avatars/mushroom.png';
+import ramenBowl from 'assets/img/profile-avatars/ramen-bowl.png';
+import rubberDuck from 'assets/img/profile-avatars/rubber-duck.png';
+import samuraiHelmet from 'assets/img/profile-avatars/samurai-helmet.png';
+import skateboard from 'assets/img/profile-avatars/skateboard.png';
+import skull from 'assets/img/profile-avatars/skull.png';
+import swimGoggles from 'assets/img/profile-avatars/swim-goggles.png';
+import taikoDrum from 'assets/img/profile-avatars/taiko-drum.png';
+import telescope from 'assets/img/profile-avatars/telescope.png';
+import twentySidedDie from 'assets/img/profile-avatars/twenty-sided-die.png';
 import Dashboard from '../../../../utils/dashboard';
 import globalize from '../../../../lib/globalize';
 import { appHost } from '../../../../components/apphost';
@@ -50,30 +50,30 @@ interface ProfileAvatar {
 }
 
 const profileAvatars: ProfileAvatar[] = [
-    { filename: 'felt-axolotl.png', image: feltAxolotl, nameKey: 'AvatarFeltAxolotl' },
-    { filename: 'rainy-capybara.png', image: rainyCapybara, nameKey: 'AvatarRainyCapybara' },
-    { filename: 'daisy-frog.png', image: daisyFrog, nameKey: 'AvatarDaisyFrog' },
-    { filename: 'ceramic-red-panda.png', image: ceramicRedPanda, nameKey: 'AvatarCeramicRedPanda' },
-    { filename: 'cartoon-explorer.png', image: cartoonExplorer, nameKey: 'AvatarCartoonExplorer' },
-    { filename: 'geometric-creative.png', image: geometricCreative, nameKey: 'AvatarGeometricCreative' },
-    { filename: 'riso-laugh.png', image: risoLaugh, nameKey: 'AvatarRisoLaugh' },
-    { filename: 'paper-portrait.png', image: paperPortrait, nameKey: 'AvatarPaperPortrait' },
-    { filename: 'anime-space-pilot.png', image: animeSpacePilot, nameKey: 'AvatarAnimeSpacePilot' },
-    { filename: 'anime-sea-breeze.png', image: animeSeaBreeze, nameKey: 'AvatarAnimeSeaBreeze' },
-    { filename: 'anime-sunset.png', image: animeSunset, nameKey: 'AvatarAnimeSunset' },
-    { filename: 'manga-elder.png', image: mangaElder, nameKey: 'AvatarMangaElder' },
-    { filename: 'moonlit-fox.png', image: moonlitFox, nameKey: 'AvatarMoonlitFox' },
-    { filename: 'retro-robot.png', image: retroRobot, nameKey: 'AvatarRetroRobot' },
-    { filename: 'neon-jellyfish.png', image: neonJellyfish, nameKey: 'AvatarNeonJellyfish' },
-    { filename: 'space-explorer.png', image: spaceExplorer, nameKey: 'AvatarSpaceExplorer' },
-    { filename: 'mushroom-grove.png', image: mushroomGrove, nameKey: 'AvatarMushroomGrove' },
-    { filename: 'radiant-sun.png', image: radiantSun, nameKey: 'AvatarRadiantSun' },
-    { filename: 'paper-dragon.png', image: paperDragon, nameKey: 'AvatarPaperDragon' },
-    { filename: 'desert-bloom.png', image: desertBloom, nameKey: 'AvatarDesertBloom' },
-    { filename: 'ocean-whale.png', image: oceanWhale, nameKey: 'AvatarOceanWhale' },
-    { filename: 'neon-cassette.png', image: neonCassette, nameKey: 'AvatarNeonCassette' },
-    { filename: 'storm-cloud.png', image: stormCloud, nameKey: 'AvatarStormCloud' },
-    { filename: 'moonlit-mountain.png', image: moonlitMountain, nameKey: 'AvatarMoonlitMountain' }
+    { filename: 'samurai-helmet.png', image: samuraiHelmet, nameKey: 'AvatarSamuraiHelmet' },
+    { filename: 'magical-wand.png', image: magicalWand, nameKey: 'AvatarAnimeMagicWand' },
+    { filename: 'knitting-yarn.png', image: knittingYarn, nameKey: 'AvatarKnittingYarn' },
+    { filename: 'swim-goggles.png', image: swimGoggles, nameKey: 'AvatarSwimGoggles' },
+    { filename: 'skull.png', image: skull, nameKey: 'AvatarSkull' },
+    { filename: 'burrito.png', image: burrito, nameKey: 'AvatarBurrito' },
+    { filename: 'taiko-drum.png', image: taikoDrum, nameKey: 'AvatarTaikoDrum' },
+    { filename: 'bouldering-shoe.png', image: boulderingShoe, nameKey: 'AvatarBoulderingShoe' },
+    { filename: 'ramen-bowl.png', image: ramenBowl, nameKey: 'AvatarRamenBowl' },
+    { filename: 'game-controller.png', image: gameController, nameKey: 'AvatarGameController' },
+    { filename: 'twenty-sided-die.png', image: twentySidedDie, nameKey: 'AvatarTwentySidedDie' },
+    { filename: 'electric-guitar.png', image: electricGuitar, nameKey: 'AvatarElectricGuitar' },
+    { filename: 'black-cat.png', image: blackCat, nameKey: 'AvatarBlackCat' },
+    { filename: 'mushroom.png', image: mushroom, nameKey: 'AvatarMushroom' },
+    { filename: 'telescope.png', image: telescope, nameKey: 'AvatarTelescope' },
+    { filename: 'astronaut-helmet.png', image: astronautHelmet, nameKey: 'AvatarAstronautHelmet' },
+    { filename: 'skateboard.png', image: skateboard, nameKey: 'AvatarSkateboard' },
+    { filename: 'espresso.png', image: espresso, nameKey: 'AvatarEspresso' },
+    { filename: 'bonsai-tree.png', image: bonsaiTree, nameKey: 'AvatarBonsaiTree' },
+    { filename: 'rubber-duck.png', image: rubberDuck, nameKey: 'AvatarRubberDuck' },
+    { filename: 'cowboy-boot.png', image: cowboyBoot, nameKey: 'AvatarCowboyBoot' },
+    { filename: 'camera.png', image: camera, nameKey: 'AvatarCamera' },
+    { filename: 'book-stack.png', image: bookStack, nameKey: 'AvatarBookStack' },
+    { filename: 'bicycle-helmet.png', image: bicycleHelmet, nameKey: 'AvatarBicycleHelmet' }
 ];
 
 const UserProfile: FunctionComponent = () => {
