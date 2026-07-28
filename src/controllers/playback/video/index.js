@@ -36,6 +36,7 @@ import { PluginType } from '../../../types/plugin.ts';
 import { getParameterByName } from '../../../utils/url.ts';
 import { permalinkStartSecondsToTicks } from '../../../components/router/permalinkId.ts';
 import SubtitleTrackMenu from './SubtitleTrackMenu';
+import { selectTrickplayResolution, TrickplayDiscovery } from './trickplayDiscovery';
 
 function getOpenedDialog() {
     return document.querySelector('.dialogContainer .dialog.opened');
@@ -141,23 +142,32 @@ export default function (view) {
         }
 
         // Update trickplay data
-        trickplayResolution = null;
+        trickplayDiscovery.stop();
 
         const mediaSourceId = currentPlayer.streamInfo.mediaSource.Id;
-        const trickplayResolutions = item.Trickplay?.[mediaSourceId];
-        if (trickplayResolutions) {
-            // Prefer highest resolution <= 20% of total screen resolution width
-            let bestWidth;
-            const maxWidth = window.screen.width * window.devicePixelRatio * 0.2;
-            for (const [, info] of Object.entries(trickplayResolutions)) {
-                if (!bestWidth
-                        || (info.Width < bestWidth && bestWidth > maxWidth) // Objects not guaranteed to be sorted in any order, first width might be > maxWidth.
-                        || (info.Width > bestWidth && info.Width <= maxWidth)) {
-                    bestWidth = info.Width;
-                }
-            }
+        const maxWidth = window.screen.width * window.devicePixelRatio * 0.2;
+        trickplayResolution = selectTrickplayResolution(item, mediaSourceId, maxWidth);
+        if (!trickplayResolution && item.Id) {
+            const itemId = item.Id;
+            const apiClient = ServerConnections.getApiClient(item.ServerId);
+            trickplayDiscovery.start(
+                () => apiClient.getItems(apiClient.getCurrentUserId(), {
+                    Ids: itemId,
+                    Fields: [ 'Trickplay' ],
+                    Limit: 1
+                }).then(result => result.Items?.[0]),
+                mediaSourceId,
+                maxWidth,
+                (refreshedItem, resolution) => {
+                    if (currentItem?.Id !== itemId
+                        || currentPlayer?.streamInfo.mediaSource.Id !== mediaSourceId) {
+                        return;
+                    }
 
-            if (bestWidth) trickplayResolution = trickplayResolutions[bestWidth];
+                    currentItem.Trickplay = refreshedItem.Trickplay;
+                    trickplayResolution = resolution;
+                }
+            );
         }
     }
 
@@ -712,6 +722,7 @@ export default function (view) {
     }
 
     function releaseCurrentPlayer() {
+        trickplayDiscovery.stop();
         destroyStats();
         destroySubtitleSync();
         subtitleTrackMenu.closeOverlays();
@@ -1646,6 +1657,7 @@ export default function (view) {
     let playbackStartTimeTicks = 0;
     let subtitleSyncOverlay;
     let trickplayResolution = null;
+    const trickplayDiscovery = new TrickplayDiscovery();
     let permalinkResumePromise;
     let isViewSetup = false;
     const nowPlayingVolumeSlider = view.querySelector('.osdVolumeSlider');
