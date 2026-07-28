@@ -1,8 +1,32 @@
 import type { UserDto } from '@jellyfin/sdk/lib/generated-client';
 import { ImageType } from '@jellyfin/sdk/lib/generated-client/models/image-type';
-import React, { FunctionComponent, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { FunctionComponent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import animeSeaBreeze from 'assets/img/profile-avatars/anime-sea-breeze.png';
+import animeSpacePilot from 'assets/img/profile-avatars/anime-space-pilot.png';
+import animeSunset from 'assets/img/profile-avatars/anime-sunset.png';
+import cartoonExplorer from 'assets/img/profile-avatars/cartoon-explorer.png';
+import ceramicRedPanda from 'assets/img/profile-avatars/ceramic-red-panda.png';
+import daisyFrog from 'assets/img/profile-avatars/daisy-frog.png';
+import desertBloom from 'assets/img/profile-avatars/desert-bloom.png';
+import feltAxolotl from 'assets/img/profile-avatars/felt-axolotl.png';
+import geometricCreative from 'assets/img/profile-avatars/geometric-creative.png';
+import mangaElder from 'assets/img/profile-avatars/manga-elder.png';
+import moonlitFox from 'assets/img/profile-avatars/moonlit-fox.png';
+import moonlitMountain from 'assets/img/profile-avatars/moonlit-mountain.png';
+import mushroomGrove from 'assets/img/profile-avatars/mushroom-grove.png';
+import neonCassette from 'assets/img/profile-avatars/neon-cassette.png';
+import neonJellyfish from 'assets/img/profile-avatars/neon-jellyfish.png';
+import oceanWhale from 'assets/img/profile-avatars/ocean-whale.png';
+import paperDragon from 'assets/img/profile-avatars/paper-dragon.png';
+import paperPortrait from 'assets/img/profile-avatars/paper-portrait.png';
+import rainyCapybara from 'assets/img/profile-avatars/rainy-capybara.png';
+import radiantSun from 'assets/img/profile-avatars/radiant-sun.png';
+import retroRobot from 'assets/img/profile-avatars/retro-robot.png';
+import risoLaugh from 'assets/img/profile-avatars/riso-laugh.png';
+import spaceExplorer from 'assets/img/profile-avatars/space-explorer.png';
+import stormCloud from 'assets/img/profile-avatars/storm-cloud.png';
 import Dashboard from '../../../../utils/dashboard';
 import globalize from '../../../../lib/globalize';
 import { appHost } from '../../../../components/apphost';
@@ -15,164 +39,234 @@ import UserPasswordForm from 'components/dashboard/users/UserPasswordForm';
 import Page from 'components/Page';
 import Loading from 'components/loading/LoadingComponent';
 import Button from 'elements/emby-button/Button';
+import { useApi } from 'hooks/useApi';
+
+import './userprofile.scss';
+
+interface ProfileAvatar {
+    filename: string
+    image: string
+    nameKey: string
+}
+
+const profileAvatars: ProfileAvatar[] = [
+    { filename: 'felt-axolotl.png', image: feltAxolotl, nameKey: 'AvatarFeltAxolotl' },
+    { filename: 'rainy-capybara.png', image: rainyCapybara, nameKey: 'AvatarRainyCapybara' },
+    { filename: 'daisy-frog.png', image: daisyFrog, nameKey: 'AvatarDaisyFrog' },
+    { filename: 'ceramic-red-panda.png', image: ceramicRedPanda, nameKey: 'AvatarCeramicRedPanda' },
+    { filename: 'cartoon-explorer.png', image: cartoonExplorer, nameKey: 'AvatarCartoonExplorer' },
+    { filename: 'geometric-creative.png', image: geometricCreative, nameKey: 'AvatarGeometricCreative' },
+    { filename: 'riso-laugh.png', image: risoLaugh, nameKey: 'AvatarRisoLaugh' },
+    { filename: 'paper-portrait.png', image: paperPortrait, nameKey: 'AvatarPaperPortrait' },
+    { filename: 'anime-space-pilot.png', image: animeSpacePilot, nameKey: 'AvatarAnimeSpacePilot' },
+    { filename: 'anime-sea-breeze.png', image: animeSeaBreeze, nameKey: 'AvatarAnimeSeaBreeze' },
+    { filename: 'anime-sunset.png', image: animeSunset, nameKey: 'AvatarAnimeSunset' },
+    { filename: 'manga-elder.png', image: mangaElder, nameKey: 'AvatarMangaElder' },
+    { filename: 'moonlit-fox.png', image: moonlitFox, nameKey: 'AvatarMoonlitFox' },
+    { filename: 'retro-robot.png', image: retroRobot, nameKey: 'AvatarRetroRobot' },
+    { filename: 'neon-jellyfish.png', image: neonJellyfish, nameKey: 'AvatarNeonJellyfish' },
+    { filename: 'space-explorer.png', image: spaceExplorer, nameKey: 'AvatarSpaceExplorer' },
+    { filename: 'mushroom-grove.png', image: mushroomGrove, nameKey: 'AvatarMushroomGrove' },
+    { filename: 'radiant-sun.png', image: radiantSun, nameKey: 'AvatarRadiantSun' },
+    { filename: 'paper-dragon.png', image: paperDragon, nameKey: 'AvatarPaperDragon' },
+    { filename: 'desert-bloom.png', image: desertBloom, nameKey: 'AvatarDesertBloom' },
+    { filename: 'ocean-whale.png', image: oceanWhale, nameKey: 'AvatarOceanWhale' },
+    { filename: 'neon-cassette.png', image: neonCassette, nameKey: 'AvatarNeonCassette' },
+    { filename: 'storm-cloud.png', image: stormCloud, nameKey: 'AvatarStormCloud' },
+    { filename: 'moonlit-mountain.png', image: moonlitMountain, nameKey: 'AvatarMoonlitMountain' }
+];
 
 const UserProfile: FunctionComponent = () => {
     const [ searchParams ] = useSearchParams();
     const userId = searchParams.get('userId');
-    const { data: user, isPending: isUserPending } = useUser(userId ? { userId: userId } : undefined);
+    const { data: user, isPending: isUserPending } = useUser(userId ? { userId } : undefined);
+    const { refreshUser } = useApi();
     const libraryMenu = useMemo(async () => ((await import('../../../../scripts/libraryMenu')).default), []);
+    const uploadImageInput = useRef<HTMLInputElement>(null);
+    const avatarGrid = useRef<HTMLDivElement>(null);
+    const [ canEditImage, setCanEditImage ] = useState(false);
+    const [ isUploadingImage, setIsUploadingImage ] = useState(false);
+    const [ previewImageUrl, setPreviewImageUrl ] = useState<string | null>(null);
 
-    const element = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (user?.Name) {
+            void libraryMenu.then(menu => menu.setTitle(user.Name));
+        }
+    }, [ user?.Name, libraryMenu ]);
 
-    const reloadUser = useCallback(() => {
-        const page = element.current;
+    useEffect(() => {
+        let isDisposed = false;
 
-        if (!page) {
-            console.error('[userprofile] Unexpected null page reference');
+        if (!user?.Policy) {
+            setCanEditImage(false);
             return;
         }
 
-        if (!user?.Name || !user?.Id) {
-            throw new Error('Unexpected null user name or id');
-        }
+        Dashboard.getCurrentUser().then((loggedInUser: UserDto) => {
+            const canEdit = appHost.supports('fileinput')
+                && Boolean(loggedInUser?.Policy?.IsAdministrator || user.Policy?.EnableUserPreferenceAccess);
 
-        void libraryMenu.then(menu => menu.setTitle(user.Name));
-
-        let imageUrl = 'assets/img/avatar.png';
-        if (user.PrimaryImageTag) {
-            imageUrl = window.ApiClient.getUserImageUrl(user.Id, {
-                tag: user.PrimaryImageTag,
-                type: 'Primary'
-            });
-        }
-        const userImage = (page.querySelector('#image') as HTMLDivElement);
-        userImage.style.backgroundImage = 'url(' + imageUrl + ')';
-
-        Dashboard.getCurrentUser().then(function (loggedInUser: UserDto) {
-            if (!user.Policy) {
-                throw new Error('Unexpected null user.Policy');
-            }
-
-            if (user.PrimaryImageTag) {
-                (page.querySelector('#btnAddImage') as HTMLButtonElement).classList.add('hide');
-                (page.querySelector('#btnDeleteImage') as HTMLButtonElement).classList.remove('hide');
-            } else if (appHost.supports('fileinput') && (loggedInUser?.Policy?.IsAdministrator || user.Policy.EnableUserPreferenceAccess)) {
-                (page.querySelector('#btnDeleteImage') as HTMLButtonElement).classList.add('hide');
-                (page.querySelector('#btnAddImage') as HTMLButtonElement).classList.remove('hide');
+            if (!isDisposed) {
+                setCanEditImage(canEdit);
             }
         }).catch(err => {
             console.error('[userprofile] failed to get current user', err);
         });
-    }, [user, libraryMenu]);
 
-    useEffect(() => {
-        const page = element.current;
+        return () => {
+            isDisposed = true;
+        };
+    }, [ user ]);
 
-        if (!page) {
-            console.error('[userprofile] Unexpected null page reference');
+    const uploadUserImage = useCallback(async (file: File, previewUrl: string) => {
+        if (!userId) {
+            console.error('[userprofile] missing user id');
             return;
         }
 
-        reloadUser();
+        setIsUploadingImage(true);
+        setPreviewImageUrl(previewUrl);
+        loading.show();
 
-        const onFileReaderError = (evt: ProgressEvent<FileReader>) => {
+        try {
+            await window.ApiClient.uploadUserImage(userId, ImageType.Primary, file);
+            await queryClient.invalidateQueries({
+                queryKey: [ 'User' ]
+            });
+            if (userId === window.ApiClient.getCurrentUserId()) {
+                await refreshUser?.();
+            }
+        } catch (err) {
+            console.error('[userprofile] failed to upload image', err);
+            setPreviewImageUrl(null);
+            toast(globalize.translate('ImageUploadFailed'));
+        } finally {
             loading.hide();
-            switch (evt.target?.error?.code) {
-                case DOMException.NOT_FOUND_ERR:
-                    toast(globalize.translate('FileNotFound'));
-                    break;
-                case DOMException.ABORT_ERR:
-                    onFileReaderAbort();
-                    break;
-                default:
-                    toast(globalize.translate('FileReadError'));
+            setIsUploadingImage(false);
+        }
+    }, [ refreshUser, userId ]);
+
+    const onFileReaderError = useCallback((evt: ProgressEvent<FileReader>) => {
+        loading.hide();
+        switch (evt.target?.error?.name) {
+            case 'NotFoundError':
+                toast(globalize.translate('FileNotFound'));
+                break;
+            case 'AbortError':
+                toast(globalize.translate('FileReadCancelled'));
+                break;
+            default:
+                toast(globalize.translate('FileReadError'));
+        }
+    }, []);
+
+    const onUploadImage = useCallback((evt: React.ChangeEvent<HTMLInputElement>) => {
+        const file = evt.target.files?.[0];
+        evt.target.value = '';
+
+        if (!file || !/image.*/.exec(file.type)) {
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onerror = onFileReaderError;
+        reader.onabort = () => toast(globalize.translate('FileReadCancelled'));
+        reader.onload = () => {
+            if (typeof reader.result === 'string') {
+                void uploadUserImage(file, reader.result);
             }
         };
+        reader.readAsDataURL(file);
+    }, [ onFileReaderError, uploadUserImage ]);
 
-        const onFileReaderAbort = () => {
-            loading.hide();
-            toast(globalize.translate('FileReadCancelled'));
-        };
+    const onPresetImageClick = useCallback((evt: React.MouseEvent<HTMLButtonElement>) => {
+        if (isUploadingImage) {
+            return;
+        }
 
-        const setFiles = (evt: Event) => {
-            const userImage = (page.querySelector('#image') as HTMLDivElement);
-            const target = evt.target as HTMLInputElement;
-            const file = (target.files as FileList)[0];
-
-            if (!file || !/image.*/.exec(file.type)) {
-                return false;
-            }
-
-            const reader: FileReader = new FileReader();
-            reader.onerror = onFileReaderError;
-            reader.onabort = onFileReaderAbort;
-            reader.onload = () => {
-                if (!userId) {
-                    console.error('[userprofile] missing user id');
-                    return;
+        const avatarIndex = Number(evt.currentTarget.dataset.avatarIndex);
+        const avatar = profileAvatars[avatarIndex];
+        const uploadPresetImage = async () => {
+            try {
+                const response = await fetch(avatar.image);
+                if (!response.ok) {
+                    throw new Error(`Avatar image request failed with status ${response.status}`);
                 }
 
-                userImage.style.backgroundImage = 'url(' + reader.result + ')';
-                window.ApiClient.uploadUserImage(userId, ImageType.Primary, file).then(function () {
-                    loading.hide();
-                    void queryClient.invalidateQueries({
-                        queryKey: ['User']
-                    });
-                }).catch(err => {
-                    console.error('[userprofile] failed to upload image', err);
+                const blob = await response.blob();
+                const file = new File([ blob ], avatar.filename, {
+                    type: blob.type || 'image/png'
                 });
-            };
-
-            reader.readAsDataURL(file);
+                await uploadUserImage(file, avatar.image);
+            } catch (err) {
+                console.error('[userprofile] failed to load preset image', err);
+                toast(globalize.translate('ImageUploadFailed'));
+            }
         };
 
-        const onDeleteImageClick = function () {
-            if (!userId) {
-                console.error('[userprofile] missing user id');
-                return;
-            }
+        uploadPresetImage().catch(err => {
+            console.error('[userprofile] unexpected preset image error', err);
+        });
+    }, [ isUploadingImage, uploadUserImage ]);
 
-            confirm(
+    const onAddImageClick = useCallback(() => {
+        uploadImageInput.current?.click();
+    }, []);
+
+    const onPreviousAvatarPage = useCallback(() => {
+        if (avatarGrid.current) {
+            avatarGrid.current.scrollLeft -= avatarGrid.current.clientWidth * 0.8;
+        }
+    }, []);
+
+    const onNextAvatarPage = useCallback(() => {
+        if (avatarGrid.current) {
+            avatarGrid.current.scrollLeft += avatarGrid.current.clientWidth * 0.8;
+        }
+    }, []);
+
+    const onDeleteImageClick = useCallback(async () => {
+        if (!userId) {
+            console.error('[userprofile] missing user id');
+            return;
+        }
+
+        try {
+            await confirm(
                 globalize.translate('DeleteImageConfirmation'),
                 globalize.translate('DeleteImage')
-            ).then(function () {
-                loading.show();
-                window.ApiClient.deleteUserImage(userId, ImageType.Primary).then(function () {
-                    loading.hide();
-                    void queryClient.invalidateQueries({
-                        queryKey: ['User']
-                    });
-                }).catch(err => {
-                    console.error('[userprofile] failed to delete image', err);
-                });
-            }).catch(() => {
-                // confirm dialog closed
+            );
+        } catch {
+            return;
+        }
+
+        loading.show();
+        try {
+            await window.ApiClient.deleteUserImage(userId, ImageType.Primary);
+            setPreviewImageUrl(null);
+            await queryClient.invalidateQueries({
+                queryKey: [ 'User' ]
             });
-        };
-
-        const addImageClick = function () {
-            const uploadImage = page.querySelector('#uploadImage') as HTMLInputElement;
-            uploadImage.value = '';
-            uploadImage.click();
-        };
-
-        const onUploadImage = (e: Event) => {
-            setFiles(e);
-        };
-
-        (page.querySelector('#btnDeleteImage') as HTMLButtonElement).addEventListener('click', onDeleteImageClick);
-        (page.querySelector('#btnAddImage') as HTMLButtonElement).addEventListener('click', addImageClick);
-        (page.querySelector('#uploadImage') as HTMLInputElement).addEventListener('change', onUploadImage);
-
-        return () => {
-            (page.querySelector('#btnDeleteImage') as HTMLButtonElement).removeEventListener('click', onDeleteImageClick);
-            (page.querySelector('#btnAddImage') as HTMLButtonElement).removeEventListener('click', addImageClick);
-            (page.querySelector('#uploadImage') as HTMLInputElement).removeEventListener('change', onUploadImage);
-        };
-    }, [reloadUser, user, userId]);
+            if (userId === window.ApiClient.getCurrentUserId()) {
+                await refreshUser?.();
+            }
+        } catch (err) {
+            console.error('[userprofile] failed to delete image', err);
+        } finally {
+            loading.hide();
+        }
+    }, [ refreshUser, userId ]);
 
     if (isUserPending || !user) {
         return <Loading />;
+    }
+
+    let imageUrl = previewImageUrl || 'assets/img/avatar.png';
+    if (!previewImageUrl && user.PrimaryImageTag && user.Id) {
+        imageUrl = window.ApiClient.getUserImageUrl(user.Id, {
+            tag: user.PrimaryImageTag,
+            type: 'Primary'
+        });
     }
 
     return (
@@ -181,51 +275,112 @@ const UserProfile: FunctionComponent = () => {
             title={globalize.translate('Profile')}
             className='mainAnimatedPage libraryPage userPreferencesPage userPasswordPage noSecondaryNavPage'
         >
-            <div ref={element} className='padded-left padded-right padded-bottom-page'>
-                <div
-                    className='readOnlyContent'
-                    style={{ margin: '0 auto', marginBottom: '1.8em', padding: '0 1em', display: 'flex', flexDirection: 'row', alignItems: 'center' }}
-                >
-                    <div
-                        className='imagePlaceHolder'
-                        style={{ position: 'relative', display: 'inline-block', maxWidth: 200 }}
-                    >
-                        <input
-                            id='uploadImage'
-                            type='file'
-                            accept='image/*'
-                            style={{ position: 'absolute', right: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
-                        />
+            <div className='padded-left padded-right padded-bottom-page'>
+                <div className='userProfileHeader readOnlyContent'>
+                    <div className='userProfileImagePlaceholder imagePlaceHolder'>
+                        {canEditImage && (
+                            <input
+                                ref={uploadImageInput}
+                                id='uploadImage'
+                                className='userProfileImageInput'
+                                type='file'
+                                accept='image/*'
+                                aria-label={globalize.translate('ButtonAddImage')}
+                                disabled={isUploadingImage}
+                                onChange={onUploadImage}
+                            />
+                        )}
                         <div
                             id='image'
-                            style={{ width: 200, height: 200, backgroundRepeat: 'no-repeat', backgroundPosition: 'center', borderRadius: '100%', backgroundSize: 'cover' }}
+                            className='userProfileImage'
+                            style={{ backgroundImage: `url(${imageUrl})` }}
                         />
                     </div>
-                    <div style={{ verticalAlign: 'top', margin: '1em 2em', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <h2 className='username' style={{ margin: 0, fontSize: 'xx-large' }}>
-                            {user?.Name}
+                    <div className='userProfileDetails'>
+                        <h2 className='username userProfileName'>
+                            {user.Name}
                         </h2>
-                        <br />
-                        <Button
-                            type='button'
-                            id='btnAddImage'
-                            className='raised button-submit hide'
-                            title={globalize.translate('ButtonAddImage')}
-                        />
-                        <Button
-                            type='button'
-                            id='btnDeleteImage'
-                            className='raised hide'
-                            title={globalize.translate('DeleteImage')}
-                        />
+                        {canEditImage && (
+                            <>
+                                <Button
+                                    type='button'
+                                    id='btnAddImage'
+                                    className='raised button-submit'
+                                    title={globalize.translate('ButtonAddImage')}
+                                    disabled={isUploadingImage}
+                                    onClick={onAddImageClick}
+                                />
+                                {user.PrimaryImageTag && (
+                                    <Button
+                                        type='button'
+                                        id='btnDeleteImage'
+                                        className='raised'
+                                        title={globalize.translate('DeleteImage')}
+                                        disabled={isUploadingImage}
+                                        onClick={onDeleteImageClick}
+                                    />
+                                )}
+                            </>
+                        )}
                     </div>
                 </div>
-                <UserPasswordForm
-                    user={user}
-                />
+                {canEditImage && (
+                    <section className='profileAvatarPicker readOnlyContent' aria-labelledby='profileAvatarPickerTitle'>
+                        <div className='profileAvatarPickerHeader'>
+                            <div>
+                                <h2 id='profileAvatarPickerTitle' className='profileAvatarPickerTitle'>
+                                    {globalize.translate('ChooseProfileImage')}
+                                </h2>
+                                <p className='profileAvatarPickerHelp'>
+                                    {globalize.translate('ProfileImagePresetsHelp')}
+                                </p>
+                            </div>
+                            <div className='profileAvatarScrollControls'>
+                                <button
+                                    type='button'
+                                    className='profileAvatarScrollButton'
+                                    aria-label={globalize.translate('Previous')}
+                                    onClick={onPreviousAvatarPage}
+                                >
+                                    <span className='material-icons' aria-hidden='true'>chevron_left</span>
+                                </button>
+                                <button
+                                    type='button'
+                                    className='profileAvatarScrollButton'
+                                    aria-label={globalize.translate('Next')}
+                                    onClick={onNextAvatarPage}
+                                >
+                                    <span className='material-icons' aria-hidden='true'>chevron_right</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div ref={avatarGrid} className='profileAvatarGrid'>
+                            {profileAvatars.map((avatar, avatarIndex) => {
+                                const avatarName = globalize.translate(avatar.nameKey);
+                                return (
+                                    <button
+                                        key={avatar.filename}
+                                        type='button'
+                                        className='profileAvatarButton'
+                                        aria-label={globalize.translate('UsePresetImage', avatarName)}
+                                        data-avatar-index={avatarIndex}
+                                        disabled={isUploadingImage}
+                                        onClick={onPresetImageClick}
+                                    >
+                                        <img
+                                            className='profileAvatarImage'
+                                            src={avatar.image}
+                                            alt=''
+                                        />
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </section>
+                )}
+                <UserPasswordForm user={user} />
             </div>
         </Page>
-
     );
 };
 

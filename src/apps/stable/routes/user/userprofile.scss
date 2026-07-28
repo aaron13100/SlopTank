@@ -1,0 +1,174 @@
+.userProfileHeader {
+    display: flex;
+    align-items: center;
+    margin: 0 auto 1.8em;
+    padding: 0 1em;
+}
+
+.userProfileImagePlaceholder {
+    position: relative;
+    display: inline-block;
+    flex: 0 0 auto;
+    max-width: 12.5em;
+}
+
+.userProfileImageInput {
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    opacity: 0;
+}
+
+.userProfileImage {
+    width: 12.5em;
+    height: 12.5em;
+    border-radius: 50%;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+.userProfileDetails {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    gap: 1em;
+    margin: 1em 2em;
+    vertical-align: top;
+}
+
+.userProfileName {
+    margin: 0;
+    font-size: xx-large;
+}
+
+.profileAvatarPicker {
+    margin: 0 auto 2.5em;
+    padding: 0 1em;
+}
+
+.profileAvatarPickerHeader {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1em;
+}
+
+.profileAvatarPickerTitle {
+    margin-bottom: 0.25em;
+}
+
+.profileAvatarPickerHelp {
+    margin: 0 0 0.75em;
+    opacity: 0.75;
+}
+
+.profileAvatarScrollControls {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 0.5em;
+    margin-bottom: 0.75em;
+}
+
+.profileAvatarScrollButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5em;
+    height: 2.5em;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.14);
+    color: inherit;
+    cursor: pointer;
+}
+
+.profileAvatarScrollButton:hover {
+    background: rgba(255, 255, 255, 0.28);
+}
+
+.profileAvatarScrollButton:focus-visible {
+    outline: 0.18em solid var(--jf-palette-primary-main, #00a4dc);
+    outline-offset: 0.12em;
+}
+
+.profileAvatarGrid {
+    display: flex;
+    gap: 1em;
+    max-width: 100%;
+    padding: 0.25em 0.2em 0.9em;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-behavior: smooth;
+    scroll-snap-type: inline mandatory;
+    scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+    -webkit-overflow-scrolling: touch;
+}
+
+.profileAvatarButton {
+    flex: 0 0 7em;
+    aspect-ratio: 1;
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 0.2em solid transparent;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    scroll-snap-align: start;
+    transition:
+        border-color 160ms ease,
+        transform 160ms ease;
+}
+
+.profileAvatarButton:hover {
+    border-color: rgba(255, 255, 255, 0.65);
+    transform: scale(1.045);
+}
+
+.profileAvatarButton:focus-visible {
+    border-color: var(--jf-palette-primary-main, #00a4dc);
+    outline: 0.18em solid rgba(255, 255, 255, 0.9);
+    outline-offset: 0.15em;
+}
+
+.profileAvatarButton:disabled {
+    cursor: wait;
+    opacity: 0.55;
+    transform: none;
+}
+
+.profileAvatarImage {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+@media (max-width: 50em) {
+    .profileAvatarButton {
+        flex-basis: 6.5em;
+    }
+}
+
+@media (max-width: 34em) {
+    .userProfileHeader {
+        flex-direction: column;
+    }
+
+    .userProfileDetails {
+        margin: 1em 0;
+    }
+
+    .profileAvatarPickerHeader {
+        align-items: start;
+    }
+
+    .profileAvatarButton {
+        flex-basis: 6em;
+    }
+}
