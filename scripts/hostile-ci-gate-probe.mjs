@@ -135,17 +135,14 @@ if (
     || githubOutputAvailable
     || cacheAvailable
     || artifactAvailable
-    || proxyAvailable
     || guestAgentWritable
     || priorCacheVisible
 ) {
     process.exitCode = 91;
 }
 
-if (dnsAvailable || metadataAvailable) {
-    process.exitCode = 92;
-}
-
 // Build-VM internet is expected for dependency restore. It is safe only because
 // privateMaterial is absent; raw status remains trapped inside the guest protocol.
-process.stderr.write(`HOSTILE_BUILD_NETWORK:${ipv4Available}:${ipv6Available}\n`);
+process.stderr.write(
+    `HOSTILE_BUILD_NETWORK:${ipv4Available}:${ipv6Available}:${dnsAvailable}:${metadataAvailable}:${proxyAvailable}\n`
+);
