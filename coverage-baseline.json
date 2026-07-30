@@ -5,10 +5,10 @@
         "generatedBy": "scripts/coverage-baseline.mjs"
     },
     "thresholds": {
-        "lines": 6.76,
-        "statements": 6.76,
-        "functions": 33.44,
-        "branches": 57.53
+        "lines": 8.19,
+        "statements": 8.19,
+        "functions": 35.36,
+        "branches": 61.87
     },
     "schema_version": 1
 }
