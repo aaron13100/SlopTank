@@ -11,8 +11,6 @@ import { ServerConnections } from 'lib/jellyfin-apiclient';
 import { toApi } from 'utils/jellyfin-apiclient/compat';
 import { queryClient } from 'utils/query/queryClient';
 
-import { buildPermalinkHashPath, mintExternalPermalinkId } from './permalinkId.ts';
-
 /** Pages of "no return" (when "Go back" should behave differently, probably quitting the application). */
 const START_PAGE_PATHS = ['/home', '/login', '/selectserver'];
 
@@ -311,20 +309,12 @@ export class AppRouter {
         const itemType = item.Type || (options ? options.itemType : null);
         const serverId = item.ServerId || options.serverId;
 
-        // Opt-in only (docs/internal/permalink-url-design.md section 5): getRouteUrl
-        // is called 46+ times across this app for routine in-app navigation, and
-        // this fork's resolver (permalinkResolver.ts) is a full-library provider-id
-        // scan rather than the design's O(1) server-side lookup -- wiring this into
-        // every navigation would make every poster click pay that cost. Share/copy
-        // call sites opt in explicitly via options.permalink; ordinary navigation
-        // is unaffected and keeps returning the GUID route below.
-        if (options.permalink && !itemHelper.isLocalItem(item)) {
-            const permalinkId = mintExternalPermalinkId(item);
-            if (permalinkId) {
-                return buildPermalinkHashPath('info', permalinkId);
-            }
-        }
-
+        // getRouteUrl returns an in-app navigation target and stays synchronous
+        // (docs/internal/permalink-url-design.md section 5): it is called 46+
+        // times across 24 files, and a permalink cannot be chosen without the
+        // server's `POST /Items/{id}/Permalink` round trip. Share and copy own
+        // that round trip themselves and build their own absolute URLs; routine
+        // navigation keeps returning the GUID route below.
         if (item === 'settings') {
             return '#/mypreferencesmenu';
         }
@@ -539,21 +529,6 @@ export class AppRouter {
         }
 
         return '#/details?id=' + id + '&serverId=' + serverId;
-    }
-
-    /**
-     * Best-effort, synchronous pretty "watch" permalink for a share/copy
-     * action (docs/internal/permalink-url-design.md section 3.1's #/w/<id>).
-     * Returns null when the item is local or carries no already-loaded
-     * external id -- callers fall back to their own legacy share URL in
-     * that case (e.g. the durable #/video?id=&serverId= link this fork
-     * already treats as shareable).
-     */
-    getPlaybackPermalinkUrl(item) {
-        if (!item || itemHelper.isLocalItem(item)) return null;
-
-        const permalinkId = mintExternalPermalinkId(item);
-        return permalinkId ? buildPermalinkHashPath('watch', permalinkId) : null;
     }
 
     showLocalLogin(serverId) {

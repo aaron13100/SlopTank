@@ -1,156 +1,233 @@
 import type { Api } from '@jellyfin/sdk/lib/api';
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base-item-dto';
 import { BaseItemKind } from '@jellyfin/sdk/lib/generated-client/models/base-item-kind';
-import { ItemFields } from '@jellyfin/sdk/lib/generated-client/models/item-fields';
-import { getItemsApi } from '@jellyfin/sdk/lib/utils/api/items-api';
 
-import { PERMALINK_ELIGIBLE_TYPES, tmdbQualifierForType, type ParsedPermalinkId } from './permalinkId';
+import { randomId } from 'utils/random';
+
+import {
+    PermalinkRequestError,
+    isPermalinkRequestError,
+    discoverPermalinkCandidates,
+    exchangePermalinkPlaybackLease,
+    redeemPermalinkDetails,
+    redeemPermalinkPlayback,
+    type PermalinkCandidateEnvelope
+} from './permalinkApi';
+import type { ParsedPermalinkId, PermalinkKind } from './permalinkId';
 
 /**
- * Resolves a parsed permalink id to a real item (docs/internal/permalink-url-design.md
- * section 4). The design's own resolution algorithm calls for a dedicated,
- * purpose-bound `GET /Permalinks/{id}/Items` server endpoint (4.1) backed by
- * an exact-value provider-id query and, for ids with no external provider,
- * a server-minted `sk-` identity capsule (3.6). Neither exists yet: this
- * fork has no working .NET build/deploy pipeline in this environment (no
- * dotnet SDK, no container runtime, and the live server process is the
- * stock Jellyfin.app binary with a patched --webdir, not a build of this
- * repo's SlopTank-server fork), so a new server endpoint could not be
- * compiled, tested, or deployed this session. See the follow-up task filed
- * against this gap.
+ * Resolves a parsed permalink id to a real item
+ * (docs/internal/permalink-url-design.md section 4.2).
  *
- * v1 therefore resolves imdb/tmdb ids entirely client-side against the
- * already-deployed, stock `GET /Items?hasImdbId=&hasTmdbId=` presence
- * filter, narrowing to an exact match locally. This is strictly a slower
- * substitute for the same contract (still discards extras/trailers before
- * matching, still pages until the count is exhausted, still surfaces
- * ambiguity/not-found/error rather than guessing) -- callers only use it for
- * a one-time permalink open, never for routine in-app navigation, so the
- * extra cost is bounded to the moment a shared link is actually opened.
- * `sk-` ids are parsed but never resolvable until the server-side identity
- * capsule ships.
+ * Every namespace -- `tt`, `tm-*` and `sk-` alike -- resolves through the one
+ * protected endpoint `GET /Permalinks/{id}/Items` and its purpose-bound lease
+ * redemption. The client never queries the library itself: it does not scan,
+ * does not filter, does not rank, and does not learn what an id means from
+ * anything except a lease the server issued and then re-verified at
+ * redemption. Extras, trailers, type qualification, provider casing and
+ * assignment mismatches are all decided server-side against durable evidence,
+ * which is the only place they can be decided correctly.
+ *
+ * The client's remaining responsibilities are the ones it can honour: parse
+ * before any network call, never decide from a truncated candidate set, never
+ * auto-pick between several candidates, and surface a typed failure with the
+ * server's own code rather than collapsing it into "not found".
  */
 
-const PAGE_SIZE = 200;
-
-export interface PermalinkCandidate {
-    id: string
+/** An item the caller may navigate to. */
+export interface PermalinkTarget {
+    itemId: string
     serverId: string
+}
+
+/** One entry in the disambiguation chooser, described from a redeemed lease. */
+export interface PermalinkChoice extends PermalinkTarget {
     name: string
     type: BaseItemKind
     productionYear?: number
 }
 
 export type PermalinkResolution =
-    | { status: 'resolved', item: PermalinkCandidate }
-    | { status: 'ambiguous', candidates: PermalinkCandidate[] }
+    | { status: 'resolved', item: PermalinkTarget }
+    | { status: 'ambiguous', candidates: PermalinkChoice[] }
     | { status: 'not-found' }
-    | { status: 'unsupported', reason: string }
-    | { status: 'error', message: string };
+    | { status: 'evidence-required', code: string, message: string }
+    | { status: 'conflict', code: string, message: string }
+    | { status: 'unavailable', code: string, message: string }
+    | { status: 'error', code: string, message: string };
 
-function toCandidate(item: BaseItemDto): PermalinkCandidate {
+/** The server's code for an external alias that has never been minted from an authenticated item page. */
+const EVIDENCE_REQUIRED_CODE = 'EvidenceRequired';
+
+export interface PermalinkResolveRequest {
+    /** The SDK Api for the single server being asked. There is no multi-server fanout (design 4.2). */
+    api: Api
+    /** The server the route belongs to, used to build the legacy route once an item id is known. */
+    serverId: string
+    /** The already-parsed id. Parsing failures never reach this module. */
+    parsed: ParsedPermalinkId
+    /** Which route is resolving: the info page, or the player. */
+    kind: PermalinkKind
+    /** Aborts in-flight requests when the route changes, so a late response cannot install a stale result. */
+    signal?: AbortSignal
+}
+
+/**
+ * Resolves one permalink for one route.
+ *
+ * @param request The server, id, route kind and abort signal for this resolution.
+ * @returns A typed resolution state. Ambiguity, absence and every server
+ *   refusal are distinct states; none of them is ever reported as another.
+ * @throws The underlying abort error when the caller's signal fires, so the
+ *   query layer can discard the attempt rather than render a failure.
+ */
+export async function resolvePermalink(request: PermalinkResolveRequest): Promise<PermalinkResolution> {
+    try {
+        const candidates = await discoverPermalinkCandidates({
+            api: request.api,
+            permalinkId: request.parsed.id,
+            // Discovery always asks for `details`: a details lease is the one
+            // form that can either describe a candidate or be exchanged for a
+            // playback lease, so a single discovery serves both routes and the
+            // ambiguity chooser without redeeming anything speculatively.
+            purpose: 'details',
+            signal: request.signal
+        });
+
+        if (candidates.length === 0) {
+            return { status: 'not-found' };
+        }
+
+        if (candidates.length > 1) {
+            return { status: 'ambiguous', candidates: await describeCandidates(request, candidates) };
+        }
+
+        return request.kind === 'info' ?
+            await resolveForInfo(request, candidates[0]) :
+            await resolveForWatch(request, candidates[0]);
+    } catch (error) {
+        return toFailure(error);
+    }
+}
+
+async function resolveForInfo(
+    request: PermalinkResolveRequest,
+    candidate: PermalinkCandidateEnvelope
+): Promise<PermalinkResolution> {
+    const item = await redeemPermalinkDetails({
+        api: request.api,
+        candidate,
+        signal: request.signal
+    });
+
+    const itemId = item.Id;
+    if (!itemId) {
+        return {
+            status: 'conflict',
+            code: 'redeemed-item-incomplete',
+            message: 'The server redeemed this link but returned an item without an id.'
+        };
+    }
+
+    return { status: 'resolved', item: { itemId, serverId: item.ServerId ?? request.serverId } };
+}
+
+async function resolveForWatch(
+    request: PermalinkResolveRequest,
+    candidate: PermalinkCandidateEnvelope
+): Promise<PermalinkResolution> {
+    // The player route spends its details lease on the purpose exchange rather
+    // than on a DTO: the server re-checks the binding, the assignment head and
+    // the active aliases again on the way through, and the playback lease it
+    // returns is what freezes the plan actually played.
+    const playbackCandidate = await exchangePermalinkPlaybackLease({
+        api: request.api,
+        candidate,
+        signal: request.signal
+    });
+
+    const snapshot = await redeemPermalinkPlayback({
+        api: request.api,
+        candidate: playbackCandidate,
+        playbackSessionId: randomId(),
+        signal: request.signal
+    });
+
+    return { status: 'resolved', item: { itemId: snapshot.itemId, serverId: request.serverId } };
+}
+
+/**
+ * Describes several candidates for the chooser by redeeming each one's details
+ * lease. Fails closed: if any candidate cannot be redeemed the whole
+ * resolution surfaces that failure, because a chooser that silently omits a
+ * candidate is a chooser that can auto-pick the wrong work.
+ */
+async function describeCandidates(
+    request: PermalinkResolveRequest,
+    candidates: PermalinkCandidateEnvelope[]
+): Promise<PermalinkChoice[]> {
+    const described: PermalinkChoice[] = [];
+
+    for (const candidate of candidates) {
+        const item = await redeemPermalinkDetails({
+            api: request.api,
+            candidate,
+            signal: request.signal
+        });
+
+        // Same contract the single-match path enforces: an entry without an id
+        // would render as a link to nothing, which is worse than saying the
+        // chooser could not be built.
+        if (!item.Id) {
+            throw new PermalinkRequestError({
+                kind: 'conflict',
+                code: 'redeemed-item-incomplete',
+                message: 'The server redeemed a candidate for this link but returned an item without an id.',
+                hint: 'The chooser is not shown rather than offering an entry that cannot be opened.'
+            });
+        }
+
+        described.push(toChoice(item, item.Id, request.serverId));
+    }
+
+    return described;
+}
+
+function toChoice(item: BaseItemDto, itemId: string, fallbackServerId: string): PermalinkChoice {
     return {
-        id: item.Id ?? '',
-        serverId: item.ServerId ?? '',
+        itemId,
+        serverId: item.ServerId ?? fallbackServerId,
         name: item.Name ?? '',
         type: item.Type ?? BaseItemKind.Video,
         productionYear: item.ProductionYear ?? undefined
     };
 }
 
-function isDiscarded(item: BaseItemDto): boolean {
-    // Extras and trailers commonly carry the parent work's provider id and
-    // must be discarded before matching, never ranked below a real match
-    // (design section 4.2 rule 4): a trailer that is the sole surviving row
-    // would otherwise be treated as the resolved item.
-    return !!item.ExtraType || item.Type === BaseItemKind.Trailer;
-}
-
-function matchesParsedId(item: BaseItemDto, parsed: ParsedPermalinkId): boolean {
-    if (parsed.namespace === 'imdb') {
-        const value = item.ProviderIds?.Imdb;
-        return !!value && value.toLowerCase() === parsed.id.toLowerCase();
-    }
-
-    if (parsed.namespace !== 'tmdb') return false;
-
-    // tmdb: the stored value must match AND the item's own type must
-    // qualify to the same namespace the id was minted under (section 3.2 --
-    // TMDB movie 4613 and TMDB series 4613 are unrelated works).
-    const value = item.ProviderIds?.Tmdb;
-    if (!value || value !== parsed.numericId || !item.Type) return false;
-    return tmdbQualifierForType(item.Type) === parsed.qualifier;
-}
-
-interface ProviderPresenceFilter {
-    hasImdbId?: boolean
-    hasTmdbId?: boolean
-}
-
-/**
- * Pages through /Items until the reported total is exhausted (design
- * section 4.2 rule 3: never decide from a truncated result set), collecting
- * every surviving (non-discarded, exact-matching) candidate.
- */
-async function collectMatches(api: Api, parsed: ParsedPermalinkId, providerFilter: ProviderPresenceFilter): Promise<BaseItemDto[]> {
-    const matches: BaseItemDto[] = [];
-    let startIndex = 0;
-    let totalRecordCount = Infinity;
-
-    while (startIndex < totalRecordCount) {
-        const response = await getItemsApi(api).getItems({
-            recursive: true,
-            includeItemTypes: PERMALINK_ELIGIBLE_TYPES,
-            fields: [ ItemFields.ProviderIds ],
-            enableImages: false,
-            enableUserData: false,
-            enableTotalRecordCount: true,
-            startIndex,
-            limit: PAGE_SIZE,
-            ...providerFilter
-        });
-
-        const page = response.data.Items ?? [];
-        totalRecordCount = response.data.TotalRecordCount ?? page.length;
-
-        for (const item of page) {
-            if (!isDiscarded(item) && matchesParsedId(item, parsed)) {
-                matches.push(item);
-            }
-        }
-
-        if (page.length === 0) break;
-        startIndex += page.length;
-    }
-
-    return matches;
-}
-
-/**
- * Resolves a parsed permalink id against the given server. Never guesses:
- * zero or several surviving matches are returned as distinct states for the
- * caller to render (not-found message, or an ambiguity chooser).
- */
-export async function resolvePermalink(api: Api, parsed: ParsedPermalinkId): Promise<PermalinkResolution> {
-    if (parsed.namespace === 'sloptank') {
+/** Maps a typed request failure onto the resolution state the route renders. */
+function toFailure(error: unknown): PermalinkResolution {
+    if (!isPermalinkRequestError(error)) {
         return {
-            status: 'unsupported',
-            reason: 'This server does not yet support sk- fallback permalinks (no server-side identity capsule).'
+            status: 'error',
+            code: 'resolver-failure',
+            message: error instanceof Error ? error.message : String(error)
         };
     }
 
-    const providerFilter: ProviderPresenceFilter = parsed.namespace === 'imdb' ?
-        { hasImdbId: true } :
-        { hasTmdbId: true };
-
-    let matches: BaseItemDto[];
-    try {
-        matches = await collectMatches(api, parsed, providerFilter);
-    } catch (err) {
-        return { status: 'error', message: err instanceof Error ? err.message : String(err) };
+    if (error.kind === 'aborted') {
+        throw error;
     }
 
-    if (matches.length === 0) return { status: 'not-found' };
-    if (matches.length > 1) return { status: 'ambiguous', candidates: matches.map(toCandidate) };
-    return { status: 'resolved', item: toCandidate(matches[0]) };
+    if (error.code === EVIDENCE_REQUIRED_CODE) {
+        return { status: 'evidence-required', code: error.code, message: error.message };
+    }
+
+    if (error.kind === 'unavailable') {
+        return { status: 'unavailable', code: error.code, message: error.message };
+    }
+
+    if (error.kind === 'conflict') {
+        return { status: 'conflict', code: error.code, message: error.message };
+    }
+
+    return { status: 'error', code: error.code, message: error.message };
 }

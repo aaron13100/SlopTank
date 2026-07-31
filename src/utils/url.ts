@@ -1,4 +1,23 @@
 /**
+ * Removes every trailing slash from an origin or base url so a caller can
+ * append its own path with exactly one separator.
+ *
+ * Written as a scan rather than a `/\/+$/` replace on purpose: a trailing-slash
+ * regex backtracks super-linearly on adversarial input, and this runs on a
+ * value that can come from server-served configuration.
+ * @param value The origin or base url to normalize.
+ * @returns The same value with any trailing slashes removed.
+ */
+export const trimTrailingSlashes = (value: string): string => {
+    let end = value.length;
+    while (end > 0 && value[end - 1] === '/') {
+        end -= 1;
+    }
+
+    return value.slice(0, end);
+};
+
+/**
  * Gets the url search string.
  * This function should be used instead of location.search alone, because the app router
  * includes search parameters in the hash portion of the url.

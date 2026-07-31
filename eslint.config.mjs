@@ -187,10 +187,18 @@ export default tseslint.config(
         }
     },
 
-    // E2E tests run in Node via Playwright's test runner, never shipped to
-    // the browser bundle, so browser-compat checks don't apply here.
+    // Test files never reach the browser bundle: Playwright specs run in Node
+    // and Vitest specs run in jsdom, so an API a test harness uses to drive a
+    // case says nothing about what the shipped app requires of a TV browser.
     {
-        files: [ 'e2e/**', 'playwright.config.ts' ],
+        files: [
+            'e2e/**',
+            'playwright.config.ts',
+            '**/*.test.js',
+            '**/*.test.jsx',
+            '**/*.test.ts',
+            '**/*.test.tsx'
+        ],
         rules: {
             'compat/compat': 'off'
         }

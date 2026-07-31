@@ -15,7 +15,9 @@ import { appHost } from './apphost';
 import { appRouter } from './router/appRouter';
 import itemHelper, { canEditPlaylist } from './itemHelper';
 import { playbackManager } from './playback/playbackmanager';
+import { buildShareUrl } from './router/permalinkShare';
 import toast from './toast/toast';
+import { getShareOrigin } from '../scripts/settings/webSettings';
 import * as userSettings from '../scripts/settings/userSettings';
 
 /** @typedef {import('@jellyfin/sdk/lib/generated-client/models/base-item-dto').BaseItemDto} BaseItemDto */
@@ -378,7 +380,17 @@ export async function getCommands(options) {
         });
     }
 
-    if (!browser.tv && options.share === true && itemHelper.canCopyPlayLink(item)) {
+    // Copy Link and Copy Play Link are deliberately not gated by the native
+    // Share capability or by the server's public-sharing switch
+    // (docs/internal/permalink-url-design.md section 5): they are the reliable
+    // way to obtain a permanent URL, so they must be present even where the
+    // Share command above is not.
+    if (!browser.tv && options.share === true && itemHelper.canCopyPermalink(item)) {
+        commands.push({
+            name: globalize.translate('CopyLink'),
+            id: 'copy-link',
+            icon: 'link'
+        });
         commands.push({
             name: globalize.translate('CopyPlayLink'),
             id: 'copy-play-link',
@@ -423,6 +435,66 @@ function getResolveFunction(resolve, commandId, changed, deleted, itemId) {
             itemId: itemId
         });
     };
+}
+
+/**
+ * Asks the server to persist this item's permalink evidence and returns the
+ * URL to publish (docs/internal/permalink-url-design.md section 5). Ensure
+ * always runs before any URL is constructed, for every item, so a published
+ * link is always one the server has bound to evidence -- or an explicitly
+ * temporary legacy link carrying the server's own reason.
+ *
+ * @param {object} apiClient The legacy api client for the item's server.
+ * @param {import('@jellyfin/sdk/lib/api').Api} api The SDK api for the same server.
+ * @param {BaseItemDto} item The item being shared.
+ * @param {'info'|'watch'} kind Whether the link opens the info page or the player.
+ * @returns {Promise<import('./router/permalinkShare').PermalinkShareUrl>} The permanent link, an explicitly temporary one, or the reason no link exists.
+ */
+async function publishItemLink(apiClient, api, item, kind) {
+    const origin = await getShareOrigin(apiClient.serverAddress());
+    return buildShareUrl({ api, origin, item, kind });
+}
+
+/**
+ * Copies the item's permanent link, telling the user plainly which of the two
+ * they got. A temporary link names the server's own refusal code rather than
+ * a generic failure, so the reason is actionable.
+ *
+ * @param {object} apiClient The legacy api client for the item's server.
+ * @param {import('@jellyfin/sdk/lib/api').Api} api The SDK api for the same server.
+ * @param {BaseItemDto} item The item being shared.
+ * @param {'info'|'watch'} kind Whether the link opens the info page or the player.
+ * @param {'CopyLink'|'CopyPlayLink'} stringPrefix The string key family for this command's messages.
+ * @returns {Promise<void>} Resolves once the clipboard write and its notification are done.
+ */
+async function copyItemLink(apiClient, api, item, kind, stringPrefix) {
+    let link;
+    try {
+        link = await publishItemLink(apiClient, api, item, kind);
+    } catch (error) {
+        console.error('[itemContextMenu] could not build a share link:', error);
+        toast(globalize.translate('PermalinkResolveError', String(error)));
+        return;
+    }
+
+    if (link.status === 'unavailable') {
+        // Nothing to copy: say why instead of putting a link that cannot
+        // resolve on the clipboard.
+        toast(globalize.translate('PermalinkResolveError', link.reason));
+        return;
+    }
+
+    try {
+        await copy(link.url);
+        toast(link.status === 'permanent' ?
+            globalize.translate(`${stringPrefix}Success`) :
+            globalize.translate(`${stringPrefix}TemporarySuccess`, link.reason));
+    } catch (error) {
+        // Clipboard write refused (permissions, insecure context): fall back to
+        // a selectable field rather than losing the link the user asked for.
+        console.warn('[itemContextMenu] clipboard write failed, showing the link instead:', error);
+        prompt(globalize.translate(stringPrefix), link.url);
+    }
 }
 
 function executeCommand(item, id, options) {
@@ -631,30 +703,33 @@ function executeCommand(item, id, options) {
                 deleteItem(apiClient, item).then(getResolveFunction(resolve, id, true, true, itemId), getResolveFunction(resolve, id));
                 break;
             case 'share':
-                navigator.share({
-                    title: item.Name,
-                    text: item.Overview,
-                    url: `${apiClient.serverAddress()}/web/${appRouter.getRouteUrl(item, { permalink: true })}`
+                // The native Share sheet publishes exactly the URL the copy
+                // commands do, so a shared link is never weaker than a copied
+                // one (docs/internal/permalink-url-design.md section 5).
+                publishItemLink(apiClient, api, item, 'info').then(link => {
+                    if (link.status === 'unavailable') {
+                        toast(globalize.translate('PermalinkResolveError', link.reason));
+                        return;
+                    }
+
+                    navigator.share({
+                        title: item.Name,
+                        text: item.Overview,
+                        url: link.url
+                    });
+                }).catch(error => {
+                    console.error('[itemContextMenu] share failed:', error);
+                    toast(globalize.translate('PermalinkResolveError', String(error)));
                 });
                 break;
-            case 'copy-play-link': {
-                const permalinkPath = appRouter.getPlaybackPermalinkUrl(item);
-                const isPermalink = !!permalinkPath;
-                // No mintable external id yet: this fork has not built the
-                // sk- fallback identity capsule (docs/internal/permalink-url-design.md
-                // section 3.6), so fall back to the durable GUID watch link
-                // this app already treats as shareable (appRouter.js
-                // showVideoOsd / video/index.js resumeFromPermalink).
-                const playLinkPath = permalinkPath || `video?id=${item.Id}&serverId=${item.ServerId}`;
-                const playLinkUrl = `${apiClient.serverAddress()}/web/${playLinkPath}`;
-                copy(playLinkUrl).then(() => {
-                    toast(globalize.translate(isPermalink ? 'CopyPlayLinkSuccess' : 'CopyPlayLinkTemporarySuccess'));
-                }).catch(() => {
-                    prompt(globalize.translate('CopyPlayLink'), playLinkUrl);
-                });
+            case 'copy-link':
+                copyItemLink(apiClient, api, item, 'info', 'CopyLink');
                 getResolveFunction(resolve, id)();
                 break;
-            }
+            case 'copy-play-link':
+                copyItemLink(apiClient, api, item, 'watch', 'CopyPlayLink');
+                getResolveFunction(resolve, id)();
+                break;
             case 'album':
                 appRouter.showItem(item.AlbumId, item.ServerId);
                 getResolveFunction(resolve, id)();

@@ -94,39 +94,18 @@ describe('appRouter video OSD navigation', () => {
     });
 });
 
-describe('appRouter pretty permalink minting (opt-in only)', () => {
-    it('getRouteUrl ignores a mintable external id by default, for ordinary in-app navigation', () => {
+describe('appRouter never mints a permalink itself', () => {
+    // Regression guard for docs/internal/permalink-url-design.md section 5: a
+    // permalink may only be the alias the server persisted evidence for, and
+    // getRouteUrl is synchronous, so it can never be the thing that chooses
+    // one. Share and copy do their own `POST /Items/{id}/Permalink` first
+    // (itemContextMenu.js); an item DTO that happens to carry an external
+    // provider id must not shortcut that.
+    it('getRouteUrl returns the GUID route even when the item carries a mintable external id', () => {
         const { appRouter } = createHarness(['/home']);
         const item = { Id: 'item1', ServerId: 's1', Type: 'Movie', ProviderIds: { Imdb: 'tt0062622' } };
 
         expect(appRouter.getRouteUrl(item)).toBe('#/details?id=item1&serverId=s1');
-    });
-
-    it('getRouteUrl mints a pretty info permalink when options.permalink is set and an external id is already loaded', () => {
-        const { appRouter } = createHarness(['/home']);
-        const item = { Id: 'item1', ServerId: 's1', Type: 'Movie', ProviderIds: { Imdb: 'tt0062622' } };
-
-        expect(appRouter.getRouteUrl(item, { permalink: true })).toBe('#/p/tt0062622');
-    });
-
-    it('getRouteUrl falls back to the GUID route when options.permalink is set but no external id is loaded', () => {
-        const { appRouter } = createHarness(['/home']);
-        const item = { Id: 'item1', ServerId: 's1', Type: 'Movie' };
-
         expect(appRouter.getRouteUrl(item, { permalink: true })).toBe('#/details?id=item1&serverId=s1');
-    });
-
-    it('getPlaybackPermalinkUrl mints a pretty watch permalink for an eligible item', () => {
-        const { appRouter } = createHarness(['/home']);
-        const item = { Id: 'item1', ServerId: 's1', Type: 'Movie', ProviderIds: { Imdb: 'tt0062622' } };
-
-        expect(appRouter.getPlaybackPermalinkUrl(item)).toBe('#/w/tt0062622');
-    });
-
-    it('getPlaybackPermalinkUrl returns null for a local item or one with no external id', () => {
-        const { appRouter } = createHarness(['/home']);
-
-        expect(appRouter.getPlaybackPermalinkUrl({ Id: 'local123', Type: 'Movie', ProviderIds: { Imdb: 'tt1' } })).toBeNull();
-        expect(appRouter.getPlaybackPermalinkUrl({ Id: 'item1', ServerId: 's1', Type: 'Movie' })).toBeNull();
     });
 });

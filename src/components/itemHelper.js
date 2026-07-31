@@ -241,12 +241,14 @@ export function canShare (item, user) {
 }
 
 /**
- * Whether "Copy Play Link" should be offered (docs/internal/permalink-url-design.md
- * section 5): unlike canShare, this is never gated by EnablePublicSharing or
- * native Share support -- it just copies a URL to the clipboard, which
- * carries neither implication.
+ * Whether "Copy Link" and "Copy Play Link" should be offered
+ * (docs/internal/permalink-url-design.md section 5): unlike canShare, these
+ * are never gated by EnablePublicSharing, the Web Share capability, or native
+ * Share support -- they just copy a URL to the clipboard, which carries none
+ * of those implications. Any visible, non-local item of a shareable type
+ * qualifies for an authenticated user.
  */
-export function canCopyPlayLink (item) {
+export function canCopyPermalink (item) {
     return isShareableItemType(item) && !isLocalItem(item);
 }
 
@@ -372,7 +374,7 @@ export default {
     canEditSubtitles,
     canEditLyrics,
     canShare: canShare,
-    canCopyPlayLink: canCopyPlayLink,
+    canCopyPermalink: canCopyPermalink,
     enableDateAddedDisplay: enableDateAddedDisplay,
     canMarkPlayed: canMarkPlayed,
     canRate: canRate,

@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { BaseItemKind } from '@jellyfin/sdk/lib/generated-client/models/base-item-kind';
-import { ExtraType } from '@jellyfin/sdk/lib/generated-client/models/extra-type';
-
 import {
     buildPermalinkHashPath,
-    mintExternalPermalinkId,
+    buildPermalinkShareUrl,
     parsePermalinkId,
     permalinkStartSecondsToTicks
 } from './permalinkId';
@@ -63,55 +60,31 @@ describe('parsePermalinkId', () => {
     });
 });
 
-describe('mintExternalPermalinkId', () => {
-    it('prefers imdb over tmdb', () => {
-        const item = {
-            Type: BaseItemKind.Movie,
-            ProviderIds: { Imdb: 'tt0062622', Tmdb: '62' }
-        };
-        expect(mintExternalPermalinkId(item)).toBe('tt0062622');
+// The client used to mint an external id from an item's own ProviderIds here.
+// That is gone on purpose: an alias the server has not bound to durable
+// evidence does not resolve, so publishing one ships a dead link. Choosing the
+// id is now `POST /Items/{id}/Permalink` (permalinkApi.ts), exercised through
+// the real copy/share entry point in itemContextMenu.permalink.test.js, and
+// this module only shapes the URL around whatever alias came back.
+
+describe('buildPermalinkShareUrl', () => {
+    it('builds the pasteable pretty entry URL for each kind', () => {
+        expect(buildPermalinkShareUrl('https://media.example', 'info', 'tt3522806'))
+            .toBe('https://media.example/web/p/tt3522806');
+        expect(buildPermalinkShareUrl('https://media.example', 'watch', 'tm-mv-4613'))
+            .toBe('https://media.example/web/w/tm-mv-4613');
     });
 
-    it('falls back to a type-qualified tmdb id when no imdb id is present', () => {
-        const item = {
-            Type: BaseItemKind.Series,
-            ProviderIds: { Tmdb: '4613' }
-        };
-        expect(mintExternalPermalinkId(item)).toBe('tm-tv-4613');
+    it('never doubles the separator when the origin carries trailing slashes', () => {
+        expect(buildPermalinkShareUrl('https://media.example//', 'info', 'tt3522806'))
+            .toBe('https://media.example/web/p/tt3522806');
     });
 
-    it('qualifies tmdb ids by the item\'s own type, not by provider metadata alone', () => {
-        const movie = { Type: BaseItemKind.Movie, ProviderIds: { Tmdb: '4613' } };
-        const series = { Type: BaseItemKind.Series, ProviderIds: { Tmdb: '4613' } };
-        expect(mintExternalPermalinkId(movie)).toBe('tm-mv-4613');
-        expect(mintExternalPermalinkId(series)).toBe('tm-tv-4613');
-    });
+    it('round trips its own output back through the parser', () => {
+        const id = 'sk-2f3k2m9qbd8x4w1r0ehtyc5vnz';
+        const url = buildPermalinkShareUrl('https://media.example', 'watch', id);
 
-    it('returns null for a type with no defined tmdb qualifier (e.g. Video)', () => {
-        const item = { Type: BaseItemKind.Video, ProviderIds: { Tmdb: '4613' } };
-        expect(mintExternalPermalinkId(item)).toBeNull();
-    });
-
-    it('returns null for an ineligible type even with a valid imdb id', () => {
-        const item = { Type: BaseItemKind.Trailer, ProviderIds: { Imdb: 'tt0062622' } };
-        expect(mintExternalPermalinkId(item)).toBeNull();
-    });
-
-    it('returns null for an extra even when its own type is eligible', () => {
-        const item = { Type: BaseItemKind.Video, ExtraType: ExtraType.Trailer, ProviderIds: { Imdb: 'tt0062622' } };
-        expect(mintExternalPermalinkId(item)).toBeNull();
-    });
-
-    it('returns null with no provider ids, no item, or no type', () => {
-        expect(mintExternalPermalinkId({ Type: BaseItemKind.Movie })).toBeNull();
-        expect(mintExternalPermalinkId({ ProviderIds: { Imdb: 'tt1' } })).toBeNull();
-        expect(mintExternalPermalinkId(null)).toBeNull();
-        expect(mintExternalPermalinkId(undefined)).toBeNull();
-    });
-
-    it('never mints from a malformed provider value', () => {
-        const item = { Type: BaseItemKind.Movie, ProviderIds: { Imdb: 'not-an-imdb-id' } };
-        expect(mintExternalPermalinkId(item)).toBeNull();
+        expect(parsePermalinkId(url.split('/').pop() ?? '')).toEqual({ namespace: 'sloptank', id });
     });
 });
 

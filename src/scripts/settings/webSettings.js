@@ -1,5 +1,6 @@
 import DefaultConfig from '../../config.json';
 import fetchLocal from '../../utils/fetchLocal.ts';
+import { trimTrailingSlashes } from '../../utils/url.ts';
 
 let data;
 
@@ -53,6 +54,30 @@ export function getServers() {
     }).catch(error => {
         console.log('cannot get web config:', error);
         return [];
+    });
+}
+
+/**
+ * The one canonical public origin shared links are built from
+ * (docs/internal/permalink-url-design.md section 3.7).
+ *
+ * A pasteable link needs a host, and `apiClient.serverAddress()` is whatever
+ * connection mode the current session happens to use -- often a LAN address
+ * that means nothing to the recipient. A deployment that is reachable under a
+ * stable public name sets `shareOrigin` in its served `config.json`; anything
+ * else keeps the connected server address, which is the best available answer
+ * and is at least correct for the person sharing.
+ *
+ * @param {string} fallbackOrigin The connected server address to use when no canonical origin is configured.
+ * @returns {Promise<string>} The origin to build share URLs from, without a trailing slash.
+ */
+export function getShareOrigin(fallbackOrigin) {
+    return getConfig().then(config => {
+        const configured = typeof config.shareOrigin === 'string' ? config.shareOrigin.trim() : '';
+        return trimTrailingSlashes(configured || fallbackOrigin || '');
+    }).catch(error => {
+        console.log('cannot get web config:', error);
+        return trimTrailingSlashes(fallbackOrigin || '');
     });
 }
 

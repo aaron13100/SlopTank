@@ -240,12 +240,14 @@ export default function (view, params) {
             }
         }
     });
-    view.querySelector('.manualLoginForm').addEventListener('submit', function (e) {
+    const manualLoginForm = view.querySelector('.manualLoginForm');
+    manualLoginForm.addEventListener('submit', function (e) {
         appSettings.enableAutoLogin(view.querySelector('.chkRememberLogin').checked);
         authenticateUserByName(view, getApiClient(), getTargetUrl(), view.querySelector('#txtManualName').value, view.querySelector('#txtManualPassword').value);
         e.preventDefault();
         return false;
     });
+    manualLoginForm.querySelector('.button-submit').disabled = false;
     view.querySelector('.btnForgotPassword').addEventListener('click', function () {
         Dashboard.navigate('forgotpassword');
     });
@@ -316,4 +318,3 @@ export default function (view, params) {
         libraryMenu.setTransparentMenu(false);
     });
 }
-

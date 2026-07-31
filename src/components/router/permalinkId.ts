@@ -1,13 +1,12 @@
-import { BaseItemKind } from '@jellyfin/sdk/lib/generated-client/models/base-item-kind';
-
-import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base-item-dto';
 import { TICKS_PER_SECOND } from 'constants/time';
+import { trimTrailingSlashes } from 'utils/url';
 
 /**
- * Grammar and mint helpers for the pretty permalink URL scheme
- * (docs/internal/permalink-url-design.md section 3). This module owns
- * parsing and mint-choice only; resolving a parsed id to a real item lives
- * in permalinkResolver.ts.
+ * Grammar and URL construction for the pretty permalink scheme
+ * (docs/internal/permalink-url-design.md section 3). This module owns parsing
+ * and link shapes only. It never decides which id an item should publish --
+ * that is the server's, via `POST /Items/{id}/Permalink` (permalinkApi.ts) --
+ * and it never resolves an id to an item, which lives in permalinkResolver.ts.
  */
 
 export type PermalinkKind = 'info' | 'watch';
@@ -24,7 +23,7 @@ export const PERMALINK_MARKER_SEGMENTS = ['p', 'w'] as const;
 
 const IMDB_ID_PATTERN = /^tt\d+$/;
 const TMDB_ID_PATTERN = /^tm-(mv|tv|ep|se|co)-([1-9]\d*)$/;
-/** 128 random bits as 26 lowercase Crockford-base32 characters. Not yet mintable (no server authority); parsing is still defined so a future sk- link round-trips. */
+/** 128 random bits as 26 lowercase Crockford-base32 characters, minted by the server's identity capsule (design 3.6). */
 const SLOPTANK_ID_PATTERN = /^sk-[0-9a-hjkmnp-tv-z]{26}$/;
 /** Prefixes reserved for future namespaces (TVDB, MusicBrainz, AudioDB). Never resolve; a route or asset must never claim them either. */
 const RESERVED_PREFIX_PATTERN = /^(tv|mb|au)-/;
@@ -65,64 +64,30 @@ export function parsePermalinkId(raw: string): ParsedPermalinkId | null {
     return null;
 }
 
-/** Item kinds eligible for a permalink (docs/internal/permalink-url-design.md 3.6.1). Extras and trailers are never eligible. */
-export const PERMALINK_ELIGIBLE_TYPES: BaseItemKind[] = [
-    BaseItemKind.Movie,
-    BaseItemKind.Episode,
-    BaseItemKind.Video,
-    BaseItemKind.MusicVideo,
-    BaseItemKind.Series,
-    BaseItemKind.Season,
-    BaseItemKind.BoxSet
-];
-
-/** TMDB numbers are scoped per entity type (section 3.2); only these kinds have a defined TMDB qualifier. */
-const TMDB_TYPE_QUALIFIERS: Partial<Record<BaseItemKind, TmdbQualifier>> = {
-    [BaseItemKind.Movie]: 'mv',
-    [BaseItemKind.Series]: 'tv',
-    [BaseItemKind.Episode]: 'ep',
-    [BaseItemKind.Season]: 'se',
-    [BaseItemKind.BoxSet]: 'co'
-};
-
-const TMDB_NUMERIC_ID_PATTERN = /^[1-9]\d*$/;
-
-/** The TMDB qualifier for a given item type, or null when TMDB has no typed namespace for it (e.g. Video, MusicVideo). */
-export function tmdbQualifierForType(type: BaseItemKind): TmdbQualifier | null {
-    return TMDB_TYPE_QUALIFIERS[type] ?? null;
-}
-
-/**
- * Pure, synchronous, best-effort mint from data already present on the item
- * (no network call, no sk- fallback -- that requires the server-side
- * identity capsule this fork has not built yet). Minting order is IMDb,
- * then TMDB. Returns null when the item is ineligible or carries neither.
- */
-export function mintExternalPermalinkId(item: BaseItemDto | null | undefined): string | null {
-    if (!item || !item.Type || item.ExtraType) return null;
-    if (!PERMALINK_ELIGIBLE_TYPES.includes(item.Type)) return null;
-
-    const providerIds = item.ProviderIds;
-    if (!providerIds) return null;
-
-    const imdbId = providerIds.Imdb;
-    if (imdbId && IMDB_ID_PATTERN.test(imdbId)) {
-        return imdbId;
-    }
-
-    const tmdbId = providerIds.Tmdb;
-    const qualifier = TMDB_TYPE_QUALIFIERS[item.Type];
-    if (tmdbId && qualifier && TMDB_NUMERIC_ID_PATTERN.test(tmdbId)) {
-        return `tm-${qualifier}-${tmdbId}`;
-    }
-
-    return null;
+/** The marker segment each route kind publishes under (design 6.1). */
+function markerFor(kind: PermalinkKind): string {
+    return kind === 'info' ? 'p' : 'w';
 }
 
 /** Builds the in-app hash path for a permalink id, e.g. '#/p/tt3522806' or '#/w/tm-mv-4613'. */
 export function buildPermalinkHashPath(kind: PermalinkKind, id: string): string {
-    const marker = kind === 'info' ? 'p' : 'w';
-    return `#/${marker}/${id}`;
+    return `#/${markerFor(kind)}/${id}`;
+}
+
+/**
+ * Builds the absolute, pasteable permalink URL a share or copy action
+ * publishes: the pretty entry form `/web/p/<id>` or `/web/w/<id>` (design
+ * sections 3.1 and 6), which the server's redirect middleware turns into the
+ * hash route. This is a share URL, not an in-app navigation target, so it is
+ * deliberately not what `appRouter.getRouteUrl` returns.
+ *
+ * @param origin The absolute origin the link is published under, without a trailing slash.
+ * @param kind Whether the link opens the info page or the player.
+ * @param id The alias the server persisted for the item.
+ * @returns The absolute URL to publish.
+ */
+export function buildPermalinkShareUrl(origin: string, kind: PermalinkKind, id: string): string {
+    return `${trimTrailingSlashes(origin)}/web/${markerFor(kind)}/${id}`;
 }
 
 /**

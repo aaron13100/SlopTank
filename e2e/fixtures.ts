@@ -67,6 +67,19 @@ export function requireAssSubtitleItemId(): string {
     return requireEnv('E2E_ASS_SUBTITLE_ITEM_ID');
 }
 
+/**
+ * Read the fixture id for a real, eligible library item that carries no
+ * external provider id (docs/internal/permalink-url-design.md section 3.6):
+ * the case the `sk-` fallback identity exists for. Used by permalink specs to
+ * mint and resolve a real `sk-` alias end to end, rather than only through a
+ * mocked transport.
+ *
+ * @returns The configured library item id.
+ */
+export function requireNoProviderItemId(): string {
+    return requireEnv('E2E_NO_PROVIDER_ITEM_ID');
+}
+
 export const test = base.extend<{ config: E2eConfig }>({
     page: async ({ page }, use) => {
         await page.addInitScript(() => {
@@ -146,9 +159,17 @@ export async function onScreenState(page: import('@playwright/test').Page, selec
     }, selector);
 }
 
-export async function login(page: import('@playwright/test').Page, username: string, password: string) {
-    await page.goto('/web/#/login');
-
+/**
+ * Fills and submits the manual login form for whatever page is currently
+ * displayed, without asserting where the app lands afterward -- callers whose
+ * post-login destination isn't `#/home` (e.g. a permalink's return url) need
+ * this without the assertion `login()` bakes in.
+ *
+ * @param page - Page under test, already navigated to a page that renders the login form.
+ * @param username - The account name to authenticate.
+ * @param password - The account password to authenticate.
+ */
+export async function submitManualLogin(page: import('@playwright/test').Page, username: string, password: string) {
     // Wait for the public-user request to finish before changing forms. Clicking
     // Manual Login earlier races loadUserList(), which switches back to the
     // visual form and leaves Playwright targeting a hidden submit button.
@@ -181,7 +202,11 @@ export async function login(page: import('@playwright/test').Page, username: str
     }
 
     await manualForm.locator('.button-submit').click();
+}
 
+export async function login(page: import('@playwright/test').Page, username: string, password: string) {
+    await page.goto('/web/#/login');
+    await submitManualLogin(page, username, password);
     await page.waitForURL(/#\/home/, { timeout: 30_000 });
 }
 

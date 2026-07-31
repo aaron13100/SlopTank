@@ -1,6 +1,7 @@
 {
   "includeCorsCredentials": false,
   "multiserver": false,
+  "shareOrigin": "",
   "themes": [
     {
       "name": "Apple TV",

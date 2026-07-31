@@ -1941,9 +1941,15 @@ export default function (view, params) {
             // instead of playing -- redirect to the watch route so a link
             // someone already shared keeps doing what it always did
             // (docs/internal/permalink-url-design.md section 5 point 2).
+            // The target is the legacy watch route, not a minted #/w/<id>:
+            // choosing a permalink needs the server's ensure round trip
+            // (section 5), and under candidate C the address bar reverts to
+            // the hash form anyway (section 6), so canonicalising here would
+            // buy a failure mode and no visible URL. What the shared link
+            // promised was the action, and the legacy video route is
+            // permanently supported (section 3.8 rule 3).
             if (pageParams.autoplay && item.Id && item.ServerId) {
-                const watchPath = appRouter.getPlaybackPermalinkUrl(item) || ('video?id=' + item.Id + '&serverId=' + item.ServerId);
-                appRouter.replace(watchPath);
+                appRouter.replace('video?id=' + item.Id + '&serverId=' + item.ServerId);
                 return;
             }
 
