@@ -68,6 +68,21 @@ export function requireAssSubtitleItemId(): string {
 }
 
 /**
+ * Read the fixture id for a real TV episode that carries external provider ids.
+ *
+ * Permalink specs use this instead of `config.itemId` wherever a test has to
+ * complete several permalink round trips, because permalink evidence hashes the
+ * whole media file on every call: an episode-sized file keeps that cost from
+ * dominating what the test is actually measuring, while still exercising the
+ * external-id path for real.
+ *
+ * @returns The configured episode item id.
+ */
+export function requireEpisodeItemId(): string {
+    return requireEnv('E2E_EPISODE_ITEM_ID');
+}
+
+/**
  * Read the fixture id for a real, eligible library item that carries no
  * external provider id (docs/internal/permalink-url-design.md section 3.6):
  * the case the `sk-` fallback identity exists for. Used by permalink specs to

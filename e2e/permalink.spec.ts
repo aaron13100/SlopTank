@@ -1,6 +1,6 @@
-import { expect, login, requireNoProviderItemId, submitManualLogin, test } from './fixtures';
+import { expect, login, requireEpisodeItemId, requireNoProviderItemId, submitManualLogin, test } from './fixtures';
 
-test.setTimeout(360_000);
+test.setTimeout(600_000);
 
 /**
  * Budgets for the two server round trips these tests wait on.
@@ -19,8 +19,17 @@ test.setTimeout(360_000);
  */
 const ENSURE_TIMEOUT_MS = 90_000;
 
-/** Discovery plus lease redemption, each a full-file hash for a large item. */
+/** Opening an info link: discovery plus details redemption, each a full-file hash. */
 const RESOLVE_TIMEOUT_MS = 150_000;
+
+/**
+ * Opening a play link, which is far heavier than an info link: discovery, the
+ * playback-lease exchange and the playback redemption are three passes over the
+ * file, and the redemption additionally materializes and hashes the immutable
+ * snapshot. Measured end to end at 156s for an 828 MB episode (25.6 + 31.8 +
+ * 98.8). Also tracked as queue task c91.
+ */
+const PLAYBACK_RESOLVE_TIMEOUT_MS = 300_000;
 
 /**
  * A well-formed IMDb id that no item in any library carries, used to observe the
@@ -123,6 +132,12 @@ async function copyFromItemMenu(
     serverId: string
 ): Promise<string> {
     await page.goto(`/web/#/details?id=${itemId}&serverId=${serverId}`);
+    // Navigating between two hash routes does not reload the document, so the
+    // recorder is not reinstalled. Clear it explicitly rather than let a second
+    // copy in one test read the first one's value.
+    await page.evaluate(() => {
+        delete (window as CopyRecorderWindow).__permalinkCopiedText;
+    });
 
     const moreCommands = page.locator('.btnMoreCommands');
     await expect(moreCommands).toBeVisible({ timeout: 20_000 });
@@ -172,22 +187,24 @@ test.beforeEach(async ({ page }) => {
 
 test.describe('pretty permalinks (docs/internal/permalink-url-design.md)', () => {
     test('an external alias minted from the item page opens its details page through #/p/<id>', async ({ page, context, config }) => {
+        const episodeId = requireEpisodeItemId();
         await login(page, config.username, config.password);
-        const alias = await mintPermalinkId(page, context, config.itemId, config.serverId, 'copy-link');
+        const alias = await mintPermalinkId(page, context, episodeId, config.serverId, 'copy-link');
 
         await page.goto(`/web/#/p/${alias}`);
 
         await page.waitForURL(/#\/details\?id=/, { timeout: RESOLVE_TIMEOUT_MS });
-        expect(new URL(page.url()).hash).toContain(`id=${config.itemId}`);
+        expect(new URL(page.url()).hash).toContain(`id=${episodeId}`);
     });
 
     test('an external alias opens the video route and starts playback through #/w/<id>', async ({ page, context, config }) => {
+        const episodeId = requireEpisodeItemId();
         await login(page, config.username, config.password);
-        const alias = await mintPermalinkId(page, context, config.itemId, config.serverId, 'copy-play-link');
+        const alias = await mintPermalinkId(page, context, episodeId, config.serverId, 'copy-play-link');
 
         await page.goto(`/web/#/w/${alias}`);
 
-        await page.waitForURL(/#\/video\?id=/, { timeout: RESOLVE_TIMEOUT_MS });
+        await page.waitForURL(/#\/video\?id=/, { timeout: PLAYBACK_RESOLVE_TIMEOUT_MS });
         const video = page.locator('video').first();
         await expect(video).toBeVisible({ timeout: 20_000 });
         await expect
@@ -231,7 +248,7 @@ test.describe('pretty permalinks (docs/internal/permalink-url-design.md)', () =>
 
         await page.goto(`/web/#/details?id=${config.itemId}&serverId=${config.serverId}&autoplay=1`);
 
-        await page.waitForURL(/#\/video\?id=/, { timeout: RESOLVE_TIMEOUT_MS });
+        await page.waitForURL(/#\/video\?id=/, { timeout: PLAYBACK_RESOLVE_TIMEOUT_MS });
         const video = page.locator('video').first();
         await expect(video).toBeVisible({ timeout: 20_000 });
         await expect
@@ -242,8 +259,9 @@ test.describe('pretty permalinks (docs/internal/permalink-url-design.md)', () =>
 
 test.describe('candidate C: the bare pretty entry URL (design section 6.2)', () => {
     test('a bare /web/p/<id> URL with no hash redirects through the server middleware to the item', async ({ page, context, config }) => {
+        const episodeId = requireEpisodeItemId();
         await login(page, config.username, config.password);
-        const alias = await mintPermalinkId(page, context, config.itemId, config.serverId, 'copy-link');
+        const alias = await mintPermalinkId(page, context, episodeId, config.serverId, 'copy-link');
 
         // A real top-level navigation, not a hash change: this only resolves if
         // the server's redirect middleware answers with a 302 to the hash form
@@ -251,16 +269,17 @@ test.describe('candidate C: the bare pretty entry URL (design section 6.2)', () 
         await page.goto(`/web/p/${alias}`);
 
         await page.waitForURL(/#\/details\?id=/, { timeout: RESOLVE_TIMEOUT_MS });
-        expect(new URL(page.url()).hash).toContain(`id=${config.itemId}`);
+        expect(new URL(page.url()).hash).toContain(`id=${episodeId}`);
     });
 
     test('a bare /web/w/<id> URL with no hash redirects through the server middleware and starts playback', async ({ page, context, config }) => {
+        const episodeId = requireEpisodeItemId();
         await login(page, config.username, config.password);
-        const alias = await mintPermalinkId(page, context, config.itemId, config.serverId, 'copy-play-link');
+        const alias = await mintPermalinkId(page, context, episodeId, config.serverId, 'copy-play-link');
 
         await page.goto(`/web/w/${alias}`);
 
-        await page.waitForURL(/#\/video\?id=/, { timeout: RESOLVE_TIMEOUT_MS });
+        await page.waitForURL(/#\/video\?id=/, { timeout: PLAYBACK_RESOLVE_TIMEOUT_MS });
         const video = page.locator('video').first();
         await expect(video).toBeVisible({ timeout: 20_000 });
         await expect
@@ -271,15 +290,18 @@ test.describe('candidate C: the bare pretty entry URL (design section 6.2)', () 
 
 test.describe('signed-out access (design section 4.3)', () => {
     test('opening a permalink while signed out redirects to login, then lands on the item after signing in', async ({ page, context, config }) => {
+        const episodeId = requireEpisodeItemId();
         await login(page, config.username, config.password);
-        const alias = await mintPermalinkId(page, context, config.itemId, config.serverId, 'copy-link');
+        const alias = await mintPermalinkId(page, context, episodeId, config.serverId, 'copy-link');
 
-        // Drop the stored session so the next navigation is a genuinely
-        // signed-out visit to a link that already resolves.
+        // Drop the stored session, then enter through the bare pretty URL. That
+        // is a real top-level navigation rather than a hash change, so the app
+        // reboots and actually reads the cleared storage -- clearing it under a
+        // running page leaves the in-memory session signed in.
         await page.evaluate(() => window.localStorage.clear());
         await context.clearCookies();
 
-        await page.goto(`/web/#/p/${alias}`);
+        await page.goto(`/web/p/${alias}`);
 
         // ConnectionRequired encodes the permalink path into the login url
         // before any resolution is attempted, so a signed-out visitor never
@@ -290,7 +312,7 @@ test.describe('signed-out access (design section 4.3)', () => {
         await submitManualLogin(page, config.username, config.password);
 
         await page.waitForURL(/#\/details\?id=/, { timeout: RESOLVE_TIMEOUT_MS });
-        expect(new URL(page.url()).hash).toContain(`id=${config.itemId}`);
+        expect(new URL(page.url()).hash).toContain(`id=${episodeId}`);
     });
 });
 
@@ -305,10 +327,11 @@ test.describe('share and copy links (design section 5): ensure runs before any U
     });
 
     test('Copy Link ensures the item and copies a pretty URL that resolves back to the same item', async ({ page, context, config }) => {
+        const episodeId = requireEpisodeItemId();
         await login(page, config.username, config.password);
         await context.grantPermissions([ 'clipboard-read', 'clipboard-write' ]);
 
-        const copiedUrl = await copyFromItemMenu(page, 'copy-link', config.itemId, config.serverId);
+        const copiedUrl = await copyFromItemMenu(page, 'copy-link', episodeId, config.serverId);
 
         await expect(page.locator('.toastContainer .toast')).toContainText('Permanent link copied successfully.', { timeout: ENSURE_TIMEOUT_MS });
         const origin = new URL(page.url()).origin;
@@ -316,21 +339,22 @@ test.describe('share and copy links (design section 5): ensure runs before any U
 
         await page.goto(copiedUrl);
         await page.waitForURL(/#\/details\?id=/, { timeout: RESOLVE_TIMEOUT_MS });
-        expect(new URL(page.url()).hash).toContain(`id=${config.itemId}`);
+        expect(new URL(page.url()).hash).toContain(`id=${episodeId}`);
     });
 
     test('Copy Play Link ensures the item and copies a URL that starts playback', async ({ page, context, config }) => {
+        const episodeId = requireEpisodeItemId();
         await login(page, config.username, config.password);
         await context.grantPermissions([ 'clipboard-read', 'clipboard-write' ]);
 
-        const copiedUrl = await copyFromItemMenu(page, 'copy-play-link', config.itemId, config.serverId);
+        const copiedUrl = await copyFromItemMenu(page, 'copy-play-link', episodeId, config.serverId);
 
         await expect(page.locator('.toastContainer .toast')).toContainText('Permanent play link copied successfully.', { timeout: ENSURE_TIMEOUT_MS });
         const origin = new URL(page.url()).origin;
         expect(copiedUrl.startsWith(`${origin}/web/w/`), `expected a pretty link under ${origin}, got: ${copiedUrl}`).toBe(true);
 
         await page.goto(copiedUrl);
-        await page.waitForURL(/#\/video\?id=/, { timeout: RESOLVE_TIMEOUT_MS });
+        await page.waitForURL(/#\/video\?id=/, { timeout: PLAYBACK_RESOLVE_TIMEOUT_MS });
         const video = page.locator('video').first();
         await expect(video).toBeVisible({ timeout: 20_000 });
         await expect
