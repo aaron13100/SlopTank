@@ -2039,20 +2039,18 @@ export class HtmlVideoPlayer {
      */
     setAssRendererVerticalPosition(renderer, additionalOffset = 0) {
         const appearance = this.getEffectiveAppearanceSettings();
-        const position = subtitleAppearanceHelper.getSubtitleVerticalPosition(
+        const positionOffsetPercentage =
+            subtitleAppearanceHelper.getAssSubtitleVerticalOffsetPercentage(
             appearance.verticalPosition,
-            appearance.textSize);
-        const bottom = subtitleAppearanceHelper.getSubtitleVerticalPosition(
-            VERTICAL_POSITION_BOTTOM,
             appearance.textSize);
         const renderedHeight = renderer.canvasParent?.getBoundingClientRect().height
             || this.#mediaElement?.getBoundingClientRect().height
             || 0;
-        // The bottom endpoint is the authored composition (no translation).
-        // Moving toward the top translates the complete ASS canvas, retaining
-        // every cue's relative authored alignment and position.
+        // The authored 94% baseline is stable even when the selectable range
+        // changes. Moving toward the top translates the complete ASS canvas,
+        // retaining every cue's relative authored alignment and position.
         const authoredPositionOffset =
-            (position.percentage - bottom.percentage) * renderedHeight / 100;
+            positionOffsetPercentage * renderedHeight / 100;
         const totalOffset = authoredPositionOffset + additionalOffset;
         if (renderer.canvasParent) {
             // SubtitlesOctopus compensates for canvasParent movement during

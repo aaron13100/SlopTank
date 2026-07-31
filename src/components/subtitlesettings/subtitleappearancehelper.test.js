@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     getAssSubtitleBottomPercentage,
+    getAssSubtitleVerticalOffsetPercentage,
     getSecondarySubtitleOffset,
     getStyles,
     getSubtitleFontSize,
@@ -148,6 +149,15 @@ describe('subtitle vertical position', () => {
             .toBe(3.0375);
         expect(getSubtitleVerticalPosition(-20, '2').percentage)
             .toBe(6.075);
+    });
+
+    it('keeps ASS translation anchored to the authored baseline', () => {
+        expect(getAssSubtitleVerticalOffsetPercentage(-20, '1'))
+            .toBe(-90.9625);
+        expect(getAssSubtitleVerticalOffsetPercentage(-5, '1'))
+            .toBeCloseTo(-5.68515625, 12);
+        expect(getAssSubtitleVerticalOffsetPercentage('not-a-position', '1'))
+            .toBeCloseTo(-5.68515625, 12);
     });
 });
 

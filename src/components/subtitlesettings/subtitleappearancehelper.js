@@ -46,6 +46,19 @@ export function getSubtitleVerticalPosition(position, textSize) {
     return { value, fraction, percentage, centerPercentage };
 }
 
+/**
+ * Map a selected position to the translation applied over authored ASS layout.
+ * The authored baseline remains the historical 94% reference so narrowing the
+ * selectable bottom endpoint cannot silently change every ASS position.
+ * @param {string|number} position - Persisted vertical-position setting.
+ * @param {string|number} [textSize] - Effective text-size setting.
+ * @returns {number} Canvas translation as a percentage of rendered height.
+ */
+export function getAssSubtitleVerticalOffsetPercentage(position, textSize) {
+    return getSubtitleVerticalPosition(position, textSize).percentage
+        - VERTICAL_POSITION_BOTTOM_PERCENT;
+}
+
 function splitAssFields(value, fieldCount) {
     const fields = [];
     let remainder = value;
