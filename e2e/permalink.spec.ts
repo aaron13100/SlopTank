@@ -125,12 +125,23 @@ async function readPublishedLink(page: import('@playwright/test').Page): Promise
  * @param serverId - The server the item belongs to.
  * @returns The URL the command copied.
  */
-async function copyFromItemMenu(
+/**
+ * Opens an item's real context menu and clicks one copy command, without
+ * waiting for the resulting ensure/publish call to finish. Split out from
+ * {@link copyFromItemMenu} so a caller can observe in-flight state (the
+ * loading spinner) between the click and the eventual toast.
+ *
+ * @param page - Page under test.
+ * @param commandId - Which copy command to invoke.
+ * @param itemId - The item whose menu is opened.
+ * @param serverId - The server the item belongs to.
+ */
+async function clickItemMenuCommand(
     page: import('@playwright/test').Page,
     commandId: 'copy-link' | 'copy-play-link',
     itemId: string,
     serverId: string
-): Promise<string> {
+): Promise<void> {
     await page.goto(`/web/#/details?id=${itemId}&serverId=${serverId}`);
     // Navigating between two hash routes does not reload the document, so the
     // recorder is not reinstalled. Clear it explicitly rather than let a second
@@ -146,7 +157,15 @@ async function copyFromItemMenu(
     const command = page.locator(`[data-id="${commandId}"]`);
     await expect(command).toBeVisible({ timeout: 10_000 });
     await command.click();
+}
 
+async function copyFromItemMenu(
+    page: import('@playwright/test').Page,
+    commandId: 'copy-link' | 'copy-play-link',
+    itemId: string,
+    serverId: string
+): Promise<string> {
+    await clickItemMenuCommand(page, commandId, itemId, serverId);
     return readPublishedLink(page);
 }
 
@@ -324,6 +343,22 @@ test.describe('share and copy links (design section 5): ensure runs before any U
             // @ts-expect-error -- deliberately removing a capability this command must not depend on
             delete navigator.share;
         });
+    });
+
+    test('Copy Link shows progress immediately instead of silently freezing while ensure runs (regression: no spinner, no disabled state, no toast for ~25s)', async ({ page, context, config }) => {
+        const episodeId = requireEpisodeItemId();
+        await login(page, config.username, config.password);
+        await context.grantPermissions([ 'clipboard-read', 'clipboard-write' ]);
+
+        await clickItemMenuCommand(page, 'copy-link', episodeId, config.serverId);
+
+        // The click kicks off a server-side ensure call whose cost scales with
+        // the media file's size, so the spinner must appear right away rather
+        // than only once ensure happens to finish quickly.
+        await expect(page.locator('.docspinner.mdlSpinnerActive')).toBeVisible({ timeout: 2_000 });
+
+        await expect(page.locator('.toastContainer .toast')).toContainText('Permanent link copied successfully.', { timeout: ENSURE_TIMEOUT_MS });
+        await expect(page.locator('.docspinner.mdlSpinnerActive')).toHaveCount(0);
     });
 
     test('Copy Link ensures the item and copies a pretty URL that resolves back to the same item', async ({ page, context, config }) => {

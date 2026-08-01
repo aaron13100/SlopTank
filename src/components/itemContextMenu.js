@@ -14,6 +14,7 @@ import actionsheet from './actionSheet/actionSheet';
 import { appHost } from './apphost';
 import { appRouter } from './router/appRouter';
 import itemHelper, { canEditPlaylist } from './itemHelper';
+import loading from './loading/loading';
 import { playbackManager } from './playback/playbackmanager';
 import { buildShareUrl } from './router/permalinkShare';
 import toast from './toast/toast';
@@ -438,11 +439,42 @@ function getResolveFunction(resolve, commandId, changed, deleted, itemId) {
 }
 
 /**
+ * Guards the shared loading spinner while a permalink ensure/publish call is
+ * in flight. Ensure's cost scales with the media file's size (tens of
+ * seconds for a multi-GB movie; docs/internal PermalinkEvidence hashing) and
+ * previously gave no feedback at all while it ran, so a user seeing nothing
+ * happen would reasonably invoke Copy Link, Copy Play Link or Share again
+ * before the first call finished. Counting overlapping calls keeps the
+ * spinner visible for the whole span instead of one call hiding it out from
+ * under a sibling call still in flight.
+ */
+let pendingLinkPublishCalls = 0;
+
+function beginLinkPublishProgress() {
+    pendingLinkPublishCalls++;
+    if (pendingLinkPublishCalls === 1) {
+        loading.show();
+    }
+}
+
+function endLinkPublishProgress() {
+    pendingLinkPublishCalls = Math.max(0, pendingLinkPublishCalls - 1);
+    if (pendingLinkPublishCalls === 0) {
+        loading.hide();
+    }
+}
+
+/**
  * Asks the server to persist this item's permalink evidence and returns the
  * URL to publish (docs/internal/permalink-url-design.md section 5). Ensure
  * always runs before any URL is constructed, for every item, so a published
  * link is always one the server has bound to evidence -- or an explicitly
  * temporary legacy link carrying the server's own reason.
+ *
+ * Keeps the shared loading spinner visible for the call's full duration
+ * (`beginLinkPublishProgress`/`endLinkPublishProgress`) so Copy Link, Copy
+ * Play Link and Share all show progress immediately instead of appearing to
+ * do nothing while ensure hashes the file server-side.
  *
  * @param {object} apiClient The legacy api client for the item's server.
  * @param {import('@jellyfin/sdk/lib/api').Api} api The SDK api for the same server.
@@ -451,8 +483,13 @@ function getResolveFunction(resolve, commandId, changed, deleted, itemId) {
  * @returns {Promise<import('./router/permalinkShare').PermalinkShareUrl>} The permanent link, an explicitly temporary one, or the reason no link exists.
  */
 async function publishItemLink(apiClient, api, item, kind) {
-    const origin = await getShareOrigin(apiClient.serverAddress());
-    return buildShareUrl({ api, origin, item, kind });
+    beginLinkPublishProgress();
+    try {
+        const origin = await getShareOrigin(apiClient.serverAddress());
+        return await buildShareUrl({ api, origin, item, kind });
+    } finally {
+        endLinkPublishProgress();
+    }
 }
 
 /**
