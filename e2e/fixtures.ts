@@ -175,6 +175,64 @@ export async function onScreenState(page: import('@playwright/test').Page, selec
 }
 
 /**
+ * Distinguish "the app never got there" from "the server never answered" the
+ * instant a login step stalls, by timing an unauthenticated health check.
+ *
+ * A concurrent real playback session (or any other heavy job) on a
+ * resource-constrained host can starve every response the app is waiting on,
+ * including this one. Left alone, that reads as an anonymous Playwright
+ * timeout indistinguishable from a genuine login/routing regression -- see
+ * the `workers: 1` comment in playwright.config.ts for the host measurement
+ * that motivated this.
+ *
+ * @param page - Page under test, still on the stalled login flow.
+ * @param cause - The timeout being explained.
+ * @returns An error whose message states which side the evidence points to.
+ */
+async function describeLoginFailure(
+    page: import('@playwright/test').Page,
+    cause: Error
+): Promise<Error> {
+    // Fetch from inside the page (not page.request, which is a separate
+    // out-of-process HTTP client that bypasses page.route() and shares none
+    // of the browser's connection state) so the check reflects what the app
+    // itself is experiencing, and stays mockable the same way every other
+    // spec in this suite fakes server behavior.
+    const healthCheckStart = Date.now(); // allow-direct-time: e2e diagnostic timing for a failure message only, not production logic, never asserted on for determinism
+    let verdict: string;
+    try {
+        const result = await page.evaluate(async () => {
+            const controller = new AbortController();
+            const abortTimer = setTimeout(() => controller.abort(), 5_000);
+            try {
+                const response = await fetch('/System/Info/Public', { signal: controller.signal }); // allow-direct-network: e2e diagnostic-only browser-context probe, not a production API client
+                return { ok: response.ok, status: response.status };
+            } finally {
+                clearTimeout(abortTimer);
+            }
+        });
+        const elapsedMs = Date.now() - healthCheckStart; // allow-direct-time: e2e diagnostic timing for a failure message only, not production logic, never asserted on for determinism
+        verdict = result.ok && elapsedMs < 3_000 ?
+            'an unauthenticated health check answered in '
+                + `${elapsedMs}ms, so the server looks healthy -- this is likely a real `
+                + 'login/navigation regression, not host contention' :
+            `an unauthenticated health check answered in ${elapsedMs}ms `
+                + `(HTTP ${result.status}) -- this looks like the Jellyfin host is `
+                + 'overloaded (e.g. a concurrent local e2e worker or another playback '
+                + 'session), not a UI regression';
+    } catch (healthCheckError) {
+        verdict = 'an unauthenticated health check itself failed '
+            + `(${healthCheckError instanceof Error ? healthCheckError.message : String(healthCheckError)}) -- `
+            + 'this looks like the Jellyfin host is overloaded or unreachable, not a UI regression';
+    }
+
+    return new Error( // allow-raw-error: test setup fast-fail, not user-facing production code
+        `Login did not complete: ${verdict}. Original error: ${cause.message}`,
+        { cause }
+    );
+}
+
+/**
  * Fills and submits the manual login form for whatever page is currently
  * displayed, without asserting where the app lands afterward -- callers whose
  * post-login destination isn't `#/home` (e.g. a permalink's return url) need
@@ -185,44 +243,52 @@ export async function onScreenState(page: import('@playwright/test').Page, selec
  * @param password - The account password to authenticate.
  */
 export async function submitManualLogin(page: import('@playwright/test').Page, username: string, password: string) {
-    // Wait for the public-user request to finish before changing forms. Clicking
-    // Manual Login earlier races loadUserList(), which switches back to the
-    // visual form and leaves Playwright targeting a hidden submit button.
-    const userButton = page.getByRole('button', { name: username, exact: true });
-    const selectServerHeading = page.getByRole('heading', { name: 'Select Server' });
-    await expect(userButton.or(selectServerHeading)).toBeVisible({ timeout: 30_000 });
+    try {
+        // Wait for the public-user request to finish before changing forms. Clicking
+        // Manual Login earlier races loadUserList(), which switches back to the
+        // visual form and leaves Playwright targeting a hidden submit button.
+        const userButton = page.getByRole('button', { name: username, exact: true });
+        const selectServerHeading = page.getByRole('heading', { name: 'Select Server' });
+        await expect(userButton.or(selectServerHeading)).toBeVisible({ timeout: 30_000 });
 
-    // A clean production build has no server baked into config.json. Connect
-    // through the same UI a first-time user sees, using the origin under test.
-    if (await selectServerHeading.isVisible()) {
-        await page.getByText('Add Server', { exact: true }).click();
-        await page.getByLabel('Host').fill(new URL(page.url()).origin);
-        await page.getByText('Connect', { exact: true }).click();
-        await expect(userButton).toBeVisible({ timeout: 30_000 });
+        // A clean production build has no server baked into config.json. Connect
+        // through the same UI a first-time user sees, using the origin under test.
+        if (await selectServerHeading.isVisible()) {
+            await page.getByText('Add Server', { exact: true }).click();
+            await page.getByLabel('Host').fill(new URL(page.url()).origin);
+            await page.getByText('Connect', { exact: true }).click();
+            await expect(userButton).toBeVisible({ timeout: 30_000 });
+        }
+
+        await userButton.click();
+
+        const manualForm = page.locator('.manualLoginForm:visible');
+        await expect(manualForm).toBeVisible();
+        await manualForm.locator('#txtManualName').fill(username);
+        await manualForm.locator('#txtManualPassword').fill(password);
+
+        // The app's global loading spinner is a full-page overlay (see
+        // components/loading/loading.ts) that can still cover the submit button
+        // even after the form itself is visible and fillable.
+        const spinner = page.locator('.docspinner.mdlSpinnerActive');
+        if (await spinner.count() > 0) {
+            await spinner.waitFor({ state: 'hidden', timeout: 15_000 });
+        }
+
+        await manualForm.locator('.button-submit').click();
+    } catch (cause) {
+        throw await describeLoginFailure(page, cause as Error);
     }
-
-    await userButton.click();
-
-    const manualForm = page.locator('.manualLoginForm:visible');
-    await expect(manualForm).toBeVisible();
-    await manualForm.locator('#txtManualName').fill(username);
-    await manualForm.locator('#txtManualPassword').fill(password);
-
-    // The app's global loading spinner is a full-page overlay (see
-    // components/loading/loading.ts) that can still cover the submit button
-    // even after the form itself is visible and fillable.
-    const spinner = page.locator('.docspinner.mdlSpinnerActive');
-    if (await spinner.count() > 0) {
-        await spinner.waitFor({ state: 'hidden', timeout: 15_000 });
-    }
-
-    await manualForm.locator('.button-submit').click();
 }
 
 export async function login(page: import('@playwright/test').Page, username: string, password: string) {
     await page.goto('/web/#/login');
     await submitManualLogin(page, username, password);
-    await page.waitForURL(/#\/home/, { timeout: 30_000 });
+    try {
+        await page.waitForURL(/#\/home/, { timeout: 30_000 });
+    } catch (cause) {
+        throw await describeLoginFailure(page, cause as Error);
+    }
 }
 
 export { expect };

@@ -103,3 +103,49 @@ security finding, or postmortem), not theoretical risk.
   client, different subsystem): only a single `ensureWebSocket()` call, no
   unbounded fatal-retry loop. No other unbounded fatal-error retry loops
   found in `src/`.
+
+### 4.4 Local test config defaults to unbounded parallelism against a shared, resource-constrained real backend
+
+- **Shape:** a local test config leaves worker/thread parallelism unbounded
+  (`workers: process.env.CI ? 1 : undefined`) while every test drives one
+  real, shared, CPU-constrained backend (a real Jellyfin server on a 2-core
+  host, not a mock). Concurrent workers contend for that host's CPU/IO, and
+  the resulting slowness surfaces as ordinary-looking failures in whatever
+  application-level assertion happened to be waiting at the time (a login
+  timeout, an OSD control never becoming visible, a quality cap silently not
+  taking effect) instead of as an obvious capacity signal. The failure
+  therefore reads as a regression in whatever feature the running spec
+  happened to cover, not as infra contention.
+- **Fix pattern:** measure the host's actual concurrent-session capacity
+  before choosing a fix (here: 2 workers made every test 2-4x slower and
+  force-killed a worker stuck mid-transcode after a 300s stop timeout);
+  when the host cannot sustain concurrency, pin `workers` to a fixed low
+  number unconditionally (not `CI ? 1 : undefined`) so the config stops
+  implying local parallelism is safe, and make the most common stall point
+  self-describing by racing an independent, mockable health check against
+  the stall so the failure states whether the backend was slow to answer
+  (`describeLoginFailure`, `e2e/fixtures.ts`) instead of surfacing an
+  anonymous timeout.
+- **Evidence:** task description (t_260724_052250_914) cites a live incident
+  from 2026-07-24: during an unrelated subtitle-size fix, `--repeat-each=3`
+  produced 3 passed / 3 failed, all three failures inside `login()`, while
+  the same tests were 6/6 green at `--workers=1` -- "an agent that trusted
+  the first result would have 'diagnosed' a subtitle bug that did not
+  exist." Reproduced directly 2026-08-01: a 2-worker run of
+  `e2e/player-settings.spec.ts` (this host's own default parallelism, no
+  flag needed) made every test 2-4x slower than solo, failed one test on an
+  OSD control that never became visible after a 180s timeout, and
+  force-killed a worker stuck mid-transcode after Playwright's 300s stop
+  timeout. A second, unrelated test failure ("Direct playing" instead of
+  "Transcoding") traced to orphaned transcoding sessions the killed worker
+  left active on the real server (confirmed via `/Sessions`), consuming CPU
+  until stopped through the API -- the same host-contention shape
+  compounding itself.
+- **Sibling search:** grepped this repo for other `workers:`/parallelism
+  config: only `playwright.config.ts` (fixed here). Found three other
+  `playwright.config.ts` files under the parent `mediaserver` repo's `tmp/`
+  (`t_260720_024948_414-coverage`, `t_260718_hostile_web`,
+  `t_260718_hostile_web_modern`) -- all one-off scratch artifacts from past
+  tasks, not active/maintained configs; left untouched. No other test suite
+  in this repo drives a live, resource-constrained shared backend under
+  unbounded default worker parallelism.
