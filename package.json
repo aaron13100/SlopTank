@@ -178,6 +178,7 @@
     "depcruise:baseline": "depcruise --config .dependency-cruiser.js --output-type baseline src > .dependency-cruiser-known-violations.json",
     "modularity:baseline": "node scripts/modularity-baseline.mjs",
     "modularity:baseline:check": "node scripts/modularity-baseline.mjs --check",
+    "postinstall": "node scripts/patch-jellyfin-apiclient.mjs",
     "lint": "eslint",
     "test": "vitest --watch=false --config vite.config.ts",
     "test:coverage": "vitest run --coverage --config vite.config.ts",
