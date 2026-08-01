@@ -3,33 +3,113 @@ import { expect, login, requireEpisodeItemId, requireNoProviderItemId, submitMan
 test.setTimeout(600_000);
 
 /**
- * Budgets for the two server round trips these tests wait on.
+ * Budgets for the server round trips these tests wait on.
  *
- * Permalink evidence is a SHA-256 over the whole media file, recomputed on
- * every call (PermalinkEvidence.cs), so each operation costs roughly one full
- * read of the item. Measured on this library on an idle box: ~28s to mint and
- * ~30s to discover a 2.0 GB movie, ~5s for a short episode. Opening a link
- * therefore costs discovery plus redemption.
+ * Permalink evidence is a SHA-256 over the whole media file. Since
+ * SlopTank-server 3fc58b5 that digest is cached against a filesystem change
+ * token, so only the FIRST call for an item pays the full read and every
+ * repeat is effectively free. Measured against the live server on 2026-08-01
+ * (t_260720_015135_519), 868 MB episode: ensure 34.1s cold then 0.147s and
+ * 0.132s warm; discovery 0.54s; details redemption 2.4s.
  *
- * These are deliberately generous rather than tight: a timeout tuned to the
- * fast case fails as "nothing was copied" or "never navigated" for an
- * operation that was simply still running, which hides real regressions behind
- * a latency budget. Tracked for repair as queue task c91; when that lands,
- * these come back down.
+ * The budgets stay sized for the cold call rather than the warm one, because
+ * which call is cold depends on what ran before -- a fresh item, a rescan or a
+ * server restart puts any test back on the 34s path. They are deliberately
+ * generous rather than tight: a timeout tuned to the warm case fails as
+ * "nothing was copied" or "never navigated" for an operation that was simply
+ * still running, which hides real regressions behind a latency budget.
  */
 const ENSURE_TIMEOUT_MS = 90_000;
 
-/** Opening an info link: discovery plus details redemption, each a full-file hash. */
+/** Opening an info link: discovery plus details redemption. */
 const RESOLVE_TIMEOUT_MS = 150_000;
 
 /**
- * Opening a play link, which is far heavier than an info link: discovery, the
- * playback-lease exchange and the playback redemption are three passes over the
- * file, and the redemption additionally materializes and hashes the immutable
- * snapshot. Measured end to end at 156s for an 828 MB episode (25.6 + 31.8 +
- * 98.8). Also tracked as queue task c91.
+ * Opening a play link, which is heavier than an info link: discovery, the
+ * playback-lease exchange and the playback redemption, and the redemption
+ * additionally materializes and hashes the immutable snapshot.
  */
 const PLAYBACK_RESOLVE_TIMEOUT_MS = 300_000;
+
+/**
+ * Landing on the video route only means resolution finished; the player still
+ * has to fetch playback info, pick a media source and build its element. That
+ * preparation is visible to the user as "Preparing video...", and on this
+ * 2-core host it competes with whatever else is running.
+ *
+ * Measured 2026-08-01 (t_260720_015135_519): the same assertion that passes in
+ * about 2 minutes with the box near idle (15-minute loadavg 4.4) exceeded a
+ * 20s element wait when the suite itself had driven the 15-minute loadavg to
+ * 16.9. Playback was not broken in that run -- the page was sitting on
+ * "Preparing video..." with the OSD already up -- so a 20s budget was reporting
+ * host contention as "the watch link never started playback", which is the
+ * failure this whole file exists to detect. Sized the same way as the round
+ * trip budgets above: generous enough that only a real stall trips it.
+ */
+const PLAYER_READY_TIMEOUT_MS = 60_000;
+
+/**
+ * Waits for a permalink route to reach its target, using the Retry affordance
+ * when the server reports the designed transient conflict.
+ *
+ * Ensure commits the item's durable identity mutation, and a link opened in the
+ * same breath can reach discovery while that mutation is still settling. The
+ * server answers 409 `identity-mutation-pending` and the route renders it with
+ * a Retry button rather than guessing -- observed live on 2026-08-01
+ * (t_260720_015135_519) opening `#/w/<alias>` immediately after minting it.
+ *
+ * Clicking Retry is what a real user does with that screen, so driving it here
+ * covers the conflict path that nothing else exercised, while still failing if
+ * the link never resolves. It never masks a permanent failure: the retries are
+ * bounded, and any other permalink state (not found, evidence required,
+ * invalid) has no Retry button and falls straight through to the URL wait.
+ *
+ * @param page - Page under test, already navigated to the permalink route.
+ * @param targetUrl - The legacy route the permalink must land on.
+ * @param timeoutMs - Budget for the whole resolution, retries included.
+ */
+async function waitForPermalinkTarget(
+    page: import('@playwright/test').Page,
+    targetUrl: RegExp,
+    timeoutMs: number
+) {
+    const retryButton = page.locator('#permalinkRetryButton');
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+        const landed = await page.waitForURL(targetUrl, { timeout: timeoutMs / 5 }).then(() => true, () => false);
+        if (landed) return;
+
+        if (await retryButton.isVisible().catch(() => false)) {
+            await retryButton.click();
+            continue;
+        }
+
+        // No Retry offered means this is not the transient state; stop
+        // absorbing time and let the real wait report what the page shows.
+        break;
+    }
+
+    await page.waitForURL(targetUrl, { timeout: timeoutMs });
+}
+
+/**
+ * Asserts that the player actually started, not merely that the route changed.
+ *
+ * Every watch-link test ends this way, so the wait lives here rather than
+ * repeated inline: a per-site budget is exactly what drifted out of sync with
+ * the measured host and turned contention into a false regression report.
+ *
+ * @param page - Page under test, already on the video route.
+ */
+async function expectPlaybackStarted(page: import('@playwright/test').Page) {
+    const video = page.locator('video').first();
+    await expect(video).toBeVisible({ timeout: PLAYER_READY_TIMEOUT_MS });
+    // readyState >= HAVE_CURRENT_DATA: the element exists AND has decoded a
+    // frame, so this fails if the player renders but never receives media.
+    await expect
+        .poll(async () => video.evaluate((el: HTMLVideoElement) => el.readyState), { timeout: PLAYER_READY_TIMEOUT_MS })
+        .toBeGreaterThanOrEqual(2);
+}
 
 /**
  * A well-formed IMDb id that no item in any library carries, used to observe the
@@ -212,7 +292,7 @@ test.describe('pretty permalinks (docs/internal/permalink-url-design.md)', () =>
 
         await page.goto(`/web/#/p/${alias}`);
 
-        await page.waitForURL(/#\/details\?id=/, { timeout: RESOLVE_TIMEOUT_MS });
+        await waitForPermalinkTarget(page, /#\/details\?id=/, RESOLVE_TIMEOUT_MS);
         expect(new URL(page.url()).hash).toContain(`id=${episodeId}`);
     });
 
@@ -223,12 +303,8 @@ test.describe('pretty permalinks (docs/internal/permalink-url-design.md)', () =>
 
         await page.goto(`/web/#/w/${alias}`);
 
-        await page.waitForURL(/#\/video\?id=/, { timeout: PLAYBACK_RESOLVE_TIMEOUT_MS });
-        const video = page.locator('video').first();
-        await expect(video).toBeVisible({ timeout: 20_000 });
-        await expect
-            .poll(async () => video.evaluate((el: HTMLVideoElement) => el.readyState), { timeout: 20_000 })
-            .toBeGreaterThanOrEqual(2);
+        await waitForPermalinkTarget(page, /#\/video\?id=/, PLAYBACK_RESOLVE_TIMEOUT_MS);
+        await expectPlaybackStarted(page);
     });
 
     test('an external alias the server holds no evidence for says so, quoting the server, and never guesses an item', async ({ page, config }) => {
@@ -267,12 +343,8 @@ test.describe('pretty permalinks (docs/internal/permalink-url-design.md)', () =>
 
         await page.goto(`/web/#/details?id=${config.itemId}&serverId=${config.serverId}&autoplay=1`);
 
-        await page.waitForURL(/#\/video\?id=/, { timeout: PLAYBACK_RESOLVE_TIMEOUT_MS });
-        const video = page.locator('video').first();
-        await expect(video).toBeVisible({ timeout: 20_000 });
-        await expect
-            .poll(async () => video.evaluate((el: HTMLVideoElement) => el.readyState), { timeout: 20_000 })
-            .toBeGreaterThanOrEqual(2);
+        await waitForPermalinkTarget(page, /#\/video\?id=/, PLAYBACK_RESOLVE_TIMEOUT_MS);
+        await expectPlaybackStarted(page);
     });
 });
 
@@ -287,7 +359,7 @@ test.describe('candidate C: the bare pretty entry URL (design section 6.2)', () 
         // before the SPA ever loads.
         await page.goto(`/web/p/${alias}`);
 
-        await page.waitForURL(/#\/details\?id=/, { timeout: RESOLVE_TIMEOUT_MS });
+        await waitForPermalinkTarget(page, /#\/details\?id=/, RESOLVE_TIMEOUT_MS);
         expect(new URL(page.url()).hash).toContain(`id=${episodeId}`);
     });
 
@@ -298,12 +370,8 @@ test.describe('candidate C: the bare pretty entry URL (design section 6.2)', () 
 
         await page.goto(`/web/w/${alias}`);
 
-        await page.waitForURL(/#\/video\?id=/, { timeout: PLAYBACK_RESOLVE_TIMEOUT_MS });
-        const video = page.locator('video').first();
-        await expect(video).toBeVisible({ timeout: 20_000 });
-        await expect
-            .poll(async () => video.evaluate((el: HTMLVideoElement) => el.readyState), { timeout: 20_000 })
-            .toBeGreaterThanOrEqual(2);
+        await waitForPermalinkTarget(page, /#\/video\?id=/, PLAYBACK_RESOLVE_TIMEOUT_MS);
+        await expectPlaybackStarted(page);
     });
 });
 
@@ -330,7 +398,7 @@ test.describe('signed-out access (design section 4.3)', () => {
 
         await submitManualLogin(page, config.username, config.password);
 
-        await page.waitForURL(/#\/details\?id=/, { timeout: RESOLVE_TIMEOUT_MS });
+        await waitForPermalinkTarget(page, /#\/details\?id=/, RESOLVE_TIMEOUT_MS);
         expect(new URL(page.url()).hash).toContain(`id=${episodeId}`);
     });
 });
@@ -350,12 +418,35 @@ test.describe('share and copy links (design section 5): ensure runs before any U
         await login(page, config.username, config.password);
         await context.grantPermissions([ 'clipboard-read', 'clipboard-write' ]);
 
+        // Hold the ensure response open so the in-flight state is observable.
+        //
+        // This is what the test is actually about, and it must not depend on
+        // the server being slow. The regression it guards shipped when ensure
+        // took ~25s for every call; since SlopTank-server 3fc58b5 cached the
+        // content digest a warm ensure answers in ~0.13s, which is faster than
+        // any assertion can sample -- so against the real server this test
+        // started reporting "no spinner" for a command that had already
+        // finished. Delaying the response reproduces the slow case on demand,
+        // which is the only way to assert the in-flight contract for both a
+        // cold multi-GB item and a warm one.
+        let releaseEnsure: () => void = () => { /* replaced before the click below */ };
+        const ensureHeld = new Promise<void>(resolve => {
+            releaseEnsure = resolve;
+        });
+        await page.route(`**/Items/${episodeId}/Permalink`, async route => {
+            await ensureHeld;
+            await route.continue();
+        });
+
         await clickItemMenuCommand(page, 'copy-link', episodeId, config.serverId);
 
-        // The click kicks off a server-side ensure call whose cost scales with
-        // the media file's size, so the spinner must appear right away rather
-        // than only once ensure happens to finish quickly.
-        await expect(page.locator('.docspinner.mdlSpinnerActive')).toBeVisible({ timeout: 2_000 });
+        // Held mid-flight: the command must already be showing progress rather
+        // than leaving the UI looking like nothing happened.
+        await expect(page.locator('.docspinner.mdlSpinnerActive')).toBeVisible({ timeout: 10_000 });
+        // ...and it must still be showing it a beat later, not flash once.
+        await expect(page.locator('.toastContainer .toast')).toHaveCount(0);
+
+        releaseEnsure();
 
         await expect(page.locator('.toastContainer .toast')).toContainText('Permanent link copied successfully.', { timeout: ENSURE_TIMEOUT_MS });
         await expect(page.locator('.docspinner.mdlSpinnerActive')).toHaveCount(0);
@@ -373,7 +464,7 @@ test.describe('share and copy links (design section 5): ensure runs before any U
         expect(copiedUrl.startsWith(`${origin}/web/p/`), `expected a pretty link under ${origin}, got: ${copiedUrl}`).toBe(true);
 
         await page.goto(copiedUrl);
-        await page.waitForURL(/#\/details\?id=/, { timeout: RESOLVE_TIMEOUT_MS });
+        await waitForPermalinkTarget(page, /#\/details\?id=/, RESOLVE_TIMEOUT_MS);
         expect(new URL(page.url()).hash).toContain(`id=${episodeId}`);
     });
 
@@ -389,12 +480,8 @@ test.describe('share and copy links (design section 5): ensure runs before any U
         expect(copiedUrl.startsWith(`${origin}/web/w/`), `expected a pretty link under ${origin}, got: ${copiedUrl}`).toBe(true);
 
         await page.goto(copiedUrl);
-        await page.waitForURL(/#\/video\?id=/, { timeout: PLAYBACK_RESOLVE_TIMEOUT_MS });
-        const video = page.locator('video').first();
-        await expect(video).toBeVisible({ timeout: 20_000 });
-        await expect
-            .poll(async () => video.evaluate((el: HTMLVideoElement) => el.readyState), { timeout: 20_000 })
-            .toBeGreaterThanOrEqual(2);
+        await waitForPermalinkTarget(page, /#\/video\?id=/, PLAYBACK_RESOLVE_TIMEOUT_MS);
+        await expectPlaybackStarted(page);
     });
 
     test('a real item with no provider id mints and resolves an sk- alias through Copy Link', async ({ page, context, config }) => {
@@ -408,7 +495,7 @@ test.describe('share and copy links (design section 5): ensure runs before any U
         expect(copiedUrl).toMatch(/\/web\/p\/sk-[0-9a-hjkmnp-tv-z]{26}$/);
 
         await page.goto(copiedUrl);
-        await page.waitForURL(/#\/details\?id=/, { timeout: RESOLVE_TIMEOUT_MS });
+        await waitForPermalinkTarget(page, /#\/details\?id=/, RESOLVE_TIMEOUT_MS);
         expect(new URL(page.url()).hash).toContain(`id=${noProviderItemId}`);
     });
 });
