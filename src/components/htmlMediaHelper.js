@@ -102,7 +102,7 @@ export function handleHlsJsMediaError(instance, reject) {
         console.error('cannot recover, last media error recovery failed ...');
 
         if (reject) {
-            reject();
+            reject(MediaError.FATAL_HLS_ERROR);
         } else {
             onErrorInternal(instance, MediaError.FATAL_HLS_ERROR);
         }
@@ -361,7 +361,7 @@ export function bindEventsToHlsPlayer(instance, hls, elem, onErrorFn, resolve, r
                     hls.destroy();
 
                     if (rejectStartup) {
-                        rejectStartup();
+                        rejectStartup(MediaError.FATAL_HLS_ERROR);
                         rejectStartup = null;
                     } else {
                         onErrorInternal(instance, MediaError.FATAL_HLS_ERROR);

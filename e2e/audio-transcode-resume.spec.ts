@@ -29,7 +29,13 @@
 import type { Page } from '@playwright/test';
 import { expect, login, test } from './fixtures';
 
-test.setTimeout(180_000);
+// This host's live transcoding is slow (see docs/streaming-format-policy in
+// the parent mediaserver project): each fatal-error fallback in the second
+// spec below forces a real ffmpeg transcode restart, observed taking up to
+// ~90s per restart across three chained restarts. 180s was too tight and
+// failed the assertion mid-restart even though the underlying fix worked;
+// 300s gives headroom without masking a genuine hang.
+test.setTimeout(300_000);
 
 const RESUME_POSITION_TICKS = 6_000_000_000; // 10 minutes
 
@@ -280,7 +286,7 @@ test('fatal hls.js network errors surface a playback error instead of freezing t
             ),
             {
                 message: `HLS generation ${currentGeneration} should buffer media before its steady-state failure`,
-                timeout: 60_000
+                timeout: 90_000
             }
         ).toBe(true);
         await emitFatalHlsTimeoutSequence(page);
@@ -301,7 +307,7 @@ test('fatal hls.js network errors surface a playback error instead of freezing t
             },
             {
                 message: `terminal HLS failure ${terminalFailure + 1} should surface or enter playbackManager fallback`,
-                timeout: 60_000
+                timeout: 90_000
             }
         ).toBe(true);
     }
