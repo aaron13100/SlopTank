@@ -7,6 +7,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const { DefinePlugin, IgnorePlugin } = require('webpack');
 const packageJson = require('./package.json');
+const ThirdPartyNoticesPlugin = require('./scripts/webpack/third-party-notices-plugin');
 
 const Assets = [
     'native-promise-only/npo.js',
@@ -112,6 +113,14 @@ const config = {
                 return '[name].[contenthash].css';
             },
             chunkFilename: '[name].[contenthash].css'
+        }),
+        // GPLv2 Sections 1 and 3 compliance: ship the project license and an
+        // aggregate third-party notices file alongside the bundle. See
+        // deliverables/gpl-license-boundary-audit-t_260730_175528_423.md
+        // Part 2.3.
+        new ThirdPartyNoticesPlugin({
+            licenseFile: path.resolve(__dirname, 'LICENSE'),
+            licenseTextsDir: path.resolve(__dirname, 'scripts/license-texts')
         })
     ],
     output: {

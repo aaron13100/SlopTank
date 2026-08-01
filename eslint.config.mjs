@@ -196,6 +196,7 @@ export default tseslint.config(
             'playwright.config.ts',
             '**/*.test.js',
             '**/*.test.jsx',
+            '**/*.test.mjs',
             '**/*.test.ts',
             '**/*.test.tsx'
         ],
