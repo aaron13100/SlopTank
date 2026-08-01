@@ -1,4 +1,4 @@
-import { expect, login, test } from './fixtures';
+import { expect, login, onScreenState, test } from './fixtures';
 
 test.setTimeout(120_000);
 
@@ -33,6 +33,98 @@ async function expectPlaybackToAdvance(video: import('@playwright/test').Locator
         .poll(async () => video.evaluate((el: HTMLVideoElement) => el.currentTime), { timeout })
         .toBeGreaterThan(initialTime + 0.5);
 }
+
+async function startEpisodePlayback(page: import('@playwright/test').Page, config: {
+    episodeId: string;
+    serverId: string;
+}) {
+    await page.goto(`/web/#/details?id=${config.episodeId}&serverId=${config.serverId}`);
+    await page.locator('.mainDetailButtons .btnPlay').click();
+    await page.waitForURL(/#\/video\?id=/, { timeout: 60_000 });
+    const video = page.locator('video').first();
+    await expectPlaybackToAdvance(video, 20_000);
+    await page.mouse.move(20, 20);
+    await page.mouse.move(100, 100);
+    return video;
+}
+
+async function fetchEpisode(page: import('@playwright/test').Page, episodeId: string) {
+    return page.evaluate(async id => {
+        const api = (window as unknown as {
+            ApiClient: {
+                getCurrentUserId(): string;
+                getItem(userId: string, itemId: string): Promise<Record<string, unknown>>;
+            };
+        }).ApiClient;
+        return api.getItem(api.getCurrentUserId(), id);
+    }, episodeId);
+}
+
+test('Episodes opens a reachable series list and switches the playing episode', async ({ page, config }) => {
+    const episodeId = requireEpisodeItemId();
+    await login(page, config.username, config.password);
+    const video = await startEpisodePlayback(page, { episodeId, serverId: config.serverId });
+
+    const episodesButton = page.locator('.videoOsdBottom-maincontrols .btnEpisodes');
+    await expect(episodesButton).toBeVisible({ timeout: 20_000 });
+    await episodesButton.click();
+    await expect.poll(
+        () => onScreenState(page, '.episodePlaybackMenu'),
+        { message: 'expected the episode list to be fully on screen and reachable' }
+    ).toMatchObject({ found: true, insideViewport: true, reachable: true });
+
+    const rows = page.locator('.episodePlaybackMenu-item');
+    await expect.poll(() => rows.count()).toBeGreaterThan(1);
+    await expect(page.locator('.episodePlaybackMenu-item[aria-current="true"]')).toHaveCount(1);
+    await expect(rows.first().locator('.episodePlaybackMenu-title')).not.toBeEmpty();
+    await expect(rows.first().locator('.episodePlaybackMenu-summary')).not.toBeEmpty();
+    await expect(rows.first().locator('.episodePlaybackMenu-watchedState')).not.toBeEmpty();
+    await expect(rows.first().locator('[role="progressbar"]')).toHaveAttribute('aria-valuenow', /\d+/);
+
+    const nextRow = page.locator('.episodePlaybackMenu-item:not([aria-current="true"])').first();
+    const nextEpisodeId = await nextRow.getAttribute('data-item-id');
+    expect(nextEpisodeId).toBeTruthy();
+    await nextRow.click();
+
+    await expect(page.locator('.episodePlaybackMenu')).toBeHidden();
+    await expect.poll(() => page.url(), { timeout: 30_000 }).toContain(`id=${nextEpisodeId}`);
+    await expectPlaybackToAdvance(video, 30_000);
+});
+
+test('Episodes fails closed with the server error visible when its series request fails', async ({ page, config }) => {
+    const episodeId = requireEpisodeItemId();
+    await login(page, config.username, config.password);
+    await page.route(/\/Shows\/[^/]+\/Episodes\?.*Fields=Overview/i, route => route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'episode catalogue unavailable' })
+    }));
+
+    await startEpisodePlayback(page, { episodeId, serverId: config.serverId });
+
+    await expect(page.locator('.videoOsdBottom-maincontrols .btnEpisodes')).toBeHidden();
+    const toast = page.locator('.toast');
+    await expect(toast).toContainText('Could not load episodes', { timeout: 20_000 });
+    await expect(toast).toContainText('500');
+});
+
+test('Episodes stays omitted when the series has only one playable episode', async ({ page, config }) => {
+    const episodeId = requireEpisodeItemId();
+    await login(page, config.username, config.password);
+    const episode = await fetchEpisode(page, episodeId);
+    const episodeResponse = page.waitForResponse(/\/Shows\/[^/]+\/Episodes\?.*fields=Overview/i);
+    await page.route(/\/Shows\/[^/]+\/Episodes\?.*fields=Overview/i, route => route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ Items: [ episode ], TotalRecordCount: 1 })
+    }));
+
+    await startEpisodePlayback(page, { episodeId, serverId: config.serverId });
+    await episodeResponse;
+
+    await expect(page.locator('.videoOsdBottom-maincontrols .btnEpisodes')).toBeHidden();
+    await expect(page.locator('.episodePlaybackMenu-item')).toHaveCount(0);
+});
 
 // Regression coverage for the appRouter history fix (commit 5ec2da7e33):
 // an in-player item change (next episode) must replace the /video history

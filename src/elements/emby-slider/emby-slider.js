@@ -9,6 +9,8 @@ import 'webcomponents.js/webcomponents-lite';
 import '../emby-input/emby-input';
 import globalize from '../../lib/globalize';
 import { decimalCount } from '../../utils/number';
+import { bindVerticalPointerInput, getKeyboardStepDirection, mapClientToSliderFraction,
+    normalizeSliderStep, positionSliderBubble, setSliderProgress } from './sliderOrientation';
 
 const EmbySliderPrototype = Object.create(HTMLInputElement.prototype);
 
@@ -37,52 +39,6 @@ let supportsValueAutoSnap = false;
     if (!supportsValueAutoSnap) {
         console.debug('[EmbySlider] HTMLInputElement doesn\'t snap value - use workaround.');
     }
-}
-
-/**
- * Returns normalized slider step.
- *
- * @param {HTMLInputElement} range slider itself
- * @param {number|undefined} step step
- * @returns {number} normalized slider step.
- */
-function normalizeSliderStep(range, step) {
-    if (step > 0) {
-        return step;
-    }
-
-    step = parseFloat(range.step);
-
-    if (step > 0) {
-        return step;
-    }
-
-    return 1;
-}
-
-/**
-     * Returns slider fraction corresponding to client position.
-     *
-     * @param {Object} range slider itself
-     * @param {number} clientX client X-coordinate
-     * @return {number} slider fraction
-     */
-function mapClientToFraction(range, clientX) {
-    const rect = range.sliderBubbleTrack.getBoundingClientRect();
-
-    let fraction = (clientX - rect.left) / rect.width;
-    if (globalize.getIsElementRTL(range)) {
-        fraction = (rect.right - clientX) / rect.width;
-    }
-
-    // Snap to step
-    const valueRange = range.max - range.min;
-    if (range.step !== 'any' && valueRange !== 0) {
-        const step = normalizeSliderStep(range) / valueRange;
-        fraction = Math.round(fraction / step) * step;
-    }
-
-    return Math.min(Math.max(fraction, 0), 1);
 }
 
 /**
@@ -187,7 +143,7 @@ function updateValues(isValueSet) {
             let fraction = (value - range.min) / (range.max - range.min);
 
             fraction *= 100;
-            backgroundLower.style.width = fraction + '%';
+            setSliderProgress(range, backgroundLower, fraction);
         }
 
         if (range.markerContainerElement) {
@@ -198,16 +154,7 @@ function updateValues(isValueSet) {
 
 function updateBubble(range, percent, value, bubble) {
     requestAnimationFrame(function () {
-        const bubbleTrackRect = range.sliderBubbleTrack.getBoundingClientRect();
-        const bubbleRect = bubble.getBoundingClientRect();
-
-        let bubblePos = bubbleTrackRect.width * percent / 100;
-        if (globalize.getIsElementRTL(range)) {
-            bubblePos = bubbleTrackRect.width - bubblePos;
-        }
-        bubblePos = Math.min(Math.max(bubblePos, bubbleRect.width / 2), bubbleTrackRect.width - bubbleRect.width / 2);
-
-        bubble.style.left = bubblePos + 'px';
+        positionSliderBubble(range, bubble, percent, globalize.getIsElementRTL(range));
 
         let html;
 
@@ -310,6 +257,9 @@ EmbySliderPrototype.attachedCallback = function () {
 
     const containerElement = this.parentNode;
     containerElement.classList.add('mdl-slider-container');
+    if (this.dataset.sliderOrientation === 'vertical') {
+        containerElement.classList.add('mdl-slider-container-vertical');
+    }
 
     let htmlToInsert = '';
 
@@ -334,6 +284,7 @@ EmbySliderPrototype.attachedCallback = function () {
     this.backgroundLower = containerElement.querySelector('.mdl-slider-background-lower');
     this.backgroundUpper = containerElement.querySelector('.mdl-slider-background-upper');
     const sliderBubble = containerElement.querySelector('.sliderBubble');
+    bindVerticalPointerInput(this, mapFractionToValue, () => globalize.getIsElementRTL(this));
 
     let hasHideBubbleClass = sliderBubble.classList.contains('hide');
 
@@ -373,7 +324,7 @@ EmbySliderPrototype.attachedCallback = function () {
     /* eslint-disable-next-line compat/compat */
     dom.addEventListener(this, (window.PointerEvent ? 'pointermove' : 'mousemove'), function (e) {
         if (!this.dragging) {
-            const fraction = mapClientToFraction(this, e.clientX);
+            const fraction = mapClientToSliderFraction(this, e.clientX, e.clientY, globalize.getIsElementRTL(this));
             const percent = fraction * 100;
             const value = mapFractionToValue(this, fraction);
 
@@ -405,7 +356,7 @@ EmbySliderPrototype.attachedCallback = function () {
 
             this.touched = true;
 
-            const fraction = mapClientToFraction(this, e.targetTouches[0].clientX);
+            const fraction = mapClientToSliderFraction(this, e.targetTouches[0].clientX, e.targetTouches[0].clientY, globalize.getIsElementRTL(this));
             this.value = mapFractionToValue(this, fraction);
 
             this.dispatchEvent(new Event('input', {
@@ -425,7 +376,7 @@ EmbySliderPrototype.attachedCallback = function () {
                 return;
             }
 
-            const fraction = mapClientToFraction(this, e.targetTouches[0].clientX);
+            const fraction = mapClientToSliderFraction(this, e.targetTouches[0].clientX, e.targetTouches[0].clientY, globalize.getIsElementRTL(this));
             this.value = mapFractionToValue(this, fraction);
 
             this.dispatchEvent(new Event('input', {
@@ -526,26 +477,17 @@ function stepKeyboard(elem, delta) {
      * Handle KeyDown event
      */
 function onKeyDown(e) {
-    switch (keyboardnavigation.getKeyName(e)) {
-        case 'ArrowLeft':
-        case 'Left':
-            stepKeyboard(this, -normalizeSliderStep(this, this.keyboardStepDown));
-            e.preventDefault();
-            e.stopPropagation();
-            break;
-        case 'ArrowRight':
-        case 'Right':
-            stepKeyboard(this, normalizeSliderStep(this, this.keyboardStepUp));
-            e.preventDefault();
-            e.stopPropagation();
-            break;
-        case 'Enter':
-            if (this.keyboardDragging) {
-                finishKeyboardDragging(this);
-                e.preventDefault();
-                e.stopPropagation();
-            }
-            break;
+    const key = keyboardnavigation.getKeyName(e);
+    const direction = getKeyboardStepDirection(this, key);
+    if (direction) {
+        const configuredStep = direction < 0 ? this.keyboardStepDown : this.keyboardStepUp;
+        stepKeyboard(this, direction * normalizeSliderStep(this, configuredStep));
+        e.preventDefault();
+        e.stopPropagation();
+    } else if (key === 'Enter' && this.keyboardDragging) {
+        finishKeyboardDragging(this);
+        e.preventDefault();
+        e.stopPropagation();
     }
 }
 
@@ -652,4 +594,3 @@ document.registerElement('emby-slider', {
     prototype: EmbySliderPrototype,
     extends: 'input'
 });
-

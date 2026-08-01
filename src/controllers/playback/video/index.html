@@ -80,12 +80,15 @@
                 <button is="paper-icon-button-light" class="btnAudio hide autoSize" title="${Audio}">
                     <span class="xlargePaperIconButton material-icons audiotrack" aria-hidden="true"></span>
                 </button>
+                <button is="paper-icon-button-light" class="btnEpisodes hide autoSize" title="${Episodes}" aria-label="${Episodes}" aria-expanded="false" aria-controls="episodePlaybackMenu">
+                    <span class="xlargePaperIconButton material-icons video_library" aria-hidden="true"></span>
+                </button>
                 <div class="volumeButtons hide-mouse-idle-tv">
                     <button is="paper-icon-button-light" class="buttonMute autoSize" title="${Mute} (M)" aria-label="${Mute}">
                         <span class="xlargePaperIconButton material-icons volume_up" aria-hidden="true"></span>
                     </button>
                     <div class="sliderContainer osdVolumeSliderContainer">
-                        <input is="emby-slider" type="range" step="1" min="0" max="100" value="0" class="osdVolumeSlider" />
+                        <input is="emby-slider" type="range" step="1" min="0" max="100" value="0" class="osdVolumeSlider" data-slider-orientation="vertical" aria-label="${Volume}" />
                     </div>
                 </div>
                 <button is="paper-icon-button-light" class="btnVideoOsdSettings autoSize" title="${Settings}">
@@ -100,6 +103,15 @@
                 <button is="paper-icon-button-light" class="btnFullscreen hide autoSize" title="${Fullscreen} (F)" aria-label="${Fullscreen}">
                     <span class="xlargePaperIconButton material-icons fullscreen" aria-hidden="true"></span>
                 </button>
+                <section id="episodePlaybackMenu" class="episodePlaybackMenu hide" role="dialog" aria-label="${Episodes}">
+                    <div class="episodePlaybackMenu-header">
+                        <h3>${Episodes}</h3>
+                        <button is="paper-icon-button-light" type="button" class="episodePlaybackMenu-closeButton autoSize" title="${ButtonClose}" aria-label="${ButtonClose}">
+                            <span class="material-icons close" aria-hidden="true"></span>
+                        </button>
+                    </div>
+                    <div class="episodePlaybackMenu-list" role="list"></div>
+                </section>
             </div>
         </div>
     </div>

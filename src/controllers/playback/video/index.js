@@ -1,4 +1,6 @@
 import escapeHtml from 'escape-html';
+import { ItemFields } from '@jellyfin/sdk/lib/generated-client/models/item-fields';
+import { getTvShowsApi } from '@jellyfin/sdk/lib/utils/api/tv-shows-api';
 
 import { PlayerEvent } from 'apps/stable/features/playback/constants/playerEvent';
 import { AppFeature } from 'constants/appFeature';
@@ -34,8 +36,12 @@ import { setBackdropTransparency, TRANSPARENCY_LEVEL } from '../../../components
 import { pluginManager } from '../../../components/pluginManager';
 import { PluginType } from '../../../types/plugin.ts';
 import { getParameterByName } from '../../../utils/url.ts';
+import { toApi } from '../../../utils/jellyfin-apiclient/compat';
 import { permalinkStartSecondsToTicks } from '../../../components/router/permalinkId.ts';
 import SubtitleTrackMenu from './SubtitleTrackMenu';
+import EpisodePlaybackMenu from './EpisodePlaybackMenu';
+import VolumeControl from './VolumeControl';
+import TransportControl from './TransportControl';
 import { selectTrickplayResolution, TrickplayDiscovery } from './trickplayDiscovery';
 
 function getOpenedDialog() {
@@ -206,7 +212,7 @@ export default function (view) {
             updateRecordingButton(null);
             LibraryMenu.setTitle('');
             Events.trigger(document, EventType.VIDEO_TITLE_CHANGE, [ '' ]);
-            nowPlayingVolumeSlider.disabled = true;
+            volumeControl.setDisabled(true);
             nowPlayingPositionSlider.disabled = true;
             btnFastForward.disabled = true;
             btnRewind.disabled = true;
@@ -214,12 +220,14 @@ export default function (view) {
             view.querySelector('.btnAudio').classList.add('hide');
             view.querySelector('.osdTitle').innerHTML = '';
             view.querySelector('.osdMediaInfo').innerHTML = '';
+            episodePlaybackMenu.update(null);
             return;
         }
 
         enableProgressByTimeOfDay = shouldEnableProgressByTimeOfDay(item);
+        episodePlaybackMenu.update(item);
         getDisplayItem(item).then(updateDisplayItem);
-        nowPlayingVolumeSlider.disabled = false;
+        volumeControl.setDisabled(false);
         nowPlayingPositionSlider.disabled = false;
         btnFastForward.disabled = false;
         btnRewind.disabled = false;
@@ -561,15 +569,15 @@ export default function (view) {
         if (state.NowPlayingItem) {
             isEnabled = true;
             updatePlayerStateInternal(event, player, state);
-            updatePlaylist();
+            transportControl.updatePlaylist();
             enableStopOnBack(true);
-            updatePlaybackRate(player);
+            transportControl.restorePlaybackRate(player, sessionStorage.getItem('playbackRateSpeed'));
         }
     }
 
     function onPlayPauseStateChanged() {
         if (isEnabled) {
-            updatePlayPauseState(this.paused());
+            transportControl.updatePlayPauseState(this.paused());
             resetIdle();
         }
     }
@@ -577,7 +585,8 @@ export default function (view) {
     function onVolumeChanged() {
         if (isEnabled) {
             const player = this;
-            updatePlayerVolumeState(player, player.isMuted(), player.getVolume());
+            volumeControl.update({ isMuted: player.isMuted(),
+                supportedCommands: playbackManager.getSupportedCommands(player), volumeLevel: player.getVolume() });
         }
     }
 
@@ -585,6 +594,7 @@ export default function (view) {
         // A same-player next-item transition emits no playerchange; a size
         // overlay left open would preview onto the new item.
         subtitleTrackMenu.closeOverlays();
+        episodePlaybackMenu.close();
         console.debug('nowplaying event: ' + e.type);
         const player = this;
         onStateChanged.call(player, e, state);
@@ -726,6 +736,7 @@ export default function (view) {
         destroyStats();
         destroySubtitleSync();
         subtitleTrackMenu.closeOverlays();
+        episodePlaybackMenu.close();
         resetUpNextDialog();
         const player = currentPlayer;
 
@@ -836,33 +847,15 @@ export default function (view) {
         }
     }
 
-    function updatePlayPauseState(isPaused) {
-        const btnPlayPause = view.querySelector('.btnPause');
-        const btnPlayPauseIcon = btnPlayPause.querySelector('.material-icons');
-
-        btnPlayPauseIcon.classList.remove('play_arrow', 'pause');
-
-        let icon;
-        let title;
-
-        if (isPaused) {
-            icon = 'play_arrow';
-            title = globalize.translate('Play');
-        } else {
-            icon = 'pause';
-            title = globalize.translate('ButtonPause');
-        }
-
-        btnPlayPauseIcon.classList.add(icon);
-        dom.setElementTitle(btnPlayPause, title + ' (K)', title);
-    }
-
     function updatePlayerStateInternal(event, player, state) {
         const playState = state.PlayState || {};
-        updatePlayPauseState(playState.IsPaused);
+        transportControl.updatePlayPauseState(playState.IsPaused);
         const supportedCommands = playbackManager.getSupportedCommands(player);
-        currentPlayerSupportedCommands = supportedCommands;
-        updatePlayerVolumeState(player, playState.IsMuted, playState.VolumeLevel);
+        volumeControl.update({
+            isMuted: playState.IsMuted,
+            supportedCommands,
+            volumeLevel: playState.VolumeLevel
+        });
 
         if (nowPlayingPositionSlider && !nowPlayingPositionSlider.dragging) {
             nowPlayingPositionSlider.disabled = !playState.CanSeek;
@@ -976,73 +969,6 @@ export default function (view) {
                 updateTimeText(nowPlayingDurationText, runtimeTicks);
                 nowPlayingDurationText.classList.remove('hide');
             }
-        }
-    }
-
-    function updatePlayerVolumeState(player, isMuted, volumeLevel) {
-        const supportedCommands = currentPlayerSupportedCommands;
-        let showMuteButton = true;
-        let showVolumeSlider = true;
-
-        if (supportedCommands.indexOf('Mute') === -1) {
-            showMuteButton = false;
-        }
-
-        if (supportedCommands.indexOf('SetVolume') === -1) {
-            showVolumeSlider = false;
-        }
-
-        if (player.isLocalPlayer && appHost.supports(AppFeature.PhysicalVolumeControl)) {
-            showMuteButton = false;
-            showVolumeSlider = false;
-        }
-
-        const buttonMute = view.querySelector('.buttonMute');
-        const buttonMuteIcon = buttonMute.querySelector('.material-icons');
-
-        buttonMuteIcon.classList.remove('volume_off', 'volume_up');
-
-        if (isMuted) {
-            buttonMute.setAttribute('title', globalize.translate('Unmute') + ' (M)');
-            buttonMuteIcon.classList.add('volume_off');
-        } else {
-            buttonMute.setAttribute('title', globalize.translate('Mute') + ' (M)');
-            buttonMuteIcon.classList.add('volume_up');
-        }
-
-        if (showMuteButton) {
-            buttonMute.classList.remove('hide');
-        } else {
-            buttonMute.classList.add('hide');
-        }
-
-        if (nowPlayingVolumeSlider) {
-            if (showVolumeSlider) {
-                nowPlayingVolumeSliderContainer.classList.remove('hide');
-            } else {
-                nowPlayingVolumeSliderContainer.classList.add('hide');
-            }
-
-            if (!nowPlayingVolumeSlider.dragging) {
-                nowPlayingVolumeSlider.value = volumeLevel || 0;
-            }
-        }
-    }
-
-    async function updatePlaylist() {
-        try {
-            const playlist = await playbackManager.getPlaylist();
-
-            if (playlist && playlist.length > 1) {
-                const btnPreviousTrack = view.querySelector('.btnPreviousTrack');
-                const btnNextTrack = view.querySelector('.btnNextTrack');
-                btnPreviousTrack.classList.remove('hide');
-                btnNextTrack.classList.remove('hide');
-                btnPreviousTrack.disabled = false;
-                btnNextTrack.disabled = false;
-            }
-        } catch (err) {
-            console.error('[VideoPlayer] failed to get playlist', err);
         }
     }
 
@@ -1627,14 +1553,6 @@ export default function (view) {
         }
     }
 
-    function updatePlaybackRate(player) {
-        // Restore playback speed control, if it exists in the session.
-        const playbackRateSpeed = sessionStorage.getItem('playbackRateSpeed');
-        if (playbackRateSpeed !== null) {
-            player.setPlaybackRate(playbackRateSpeed);
-        }
-    }
-
     shell.enableFullscreen();
 
     let currentPlayer;
@@ -1649,7 +1567,6 @@ export default function (view) {
     let osdHideTimeout;
     let lastPointerMoveData;
     const self = this;
-    let currentPlayerSupportedCommands = [];
     let currentRuntimeTicks = 0;
     let lastUpdateTime = 0;
     let programStartDateMs = 0;
@@ -1660,8 +1577,6 @@ export default function (view) {
     const trickplayDiscovery = new TrickplayDiscovery();
     let permalinkResumePromise;
     let isViewSetup = false;
-    const nowPlayingVolumeSlider = view.querySelector('.osdVolumeSlider');
-    const nowPlayingVolumeSliderContainer = view.querySelector('.osdVolumeSliderContainer');
     const nowPlayingPositionSlider = view.querySelector('.osdPositionSlider');
     const nowPlayingPositionText = view.querySelector('.osdPositionText');
     const nowPlayingDurationText = view.querySelector('.osdDurationText');
@@ -1673,6 +1588,8 @@ export default function (view) {
     const transitionEndEventName = dom.whichTransitionEvent();
     const headerElement = document.querySelector('.skinHeader');
     const osdBottomElement = view.querySelector('.videoOsdBottom-maincontrols');
+    const transportControl = new TransportControl({ playback: playbackManager,
+        setElementTitle: dom.setElementTitle, translate: globalize.translate, view });
     const subtitleTrackMenu = new SubtitleTrackMenu({
         button: view.querySelector('.btnSubtitles'),
         getPlayer: () => currentPlayer,
@@ -1689,9 +1606,45 @@ export default function (view) {
         translate: globalize.translate,
         toggleSubtitleSync
     });
+    const volumeControl = new VolumeControl({
+        container: view.querySelector('.volumeButtons'), getPlayer: () => currentPlayer,
+        hasPhysicalVolumeControl: player => player.isLocalPlayer
+            && appHost.supports(AppFeature.PhysicalVolumeControl),
+        playback: playbackManager, translate: globalize.translate
+    });
+    const episodePlaybackMenu = new EpisodePlaybackMenu({
+        button: view.querySelector('.btnEpisodes'),
+        panel: view.querySelector('.episodePlaybackMenu'),
+        canPlay: item => playbackManager.canPlay(item),
+        loadEpisodes: item => {
+            const apiClient = ServerConnections.getApiClient(item.ServerId);
+            return getTvShowsApi(toApi(apiClient)).getEpisodes({
+                seriesId: item.SeriesId,
+                userId: apiClient.getCurrentUserId(),
+                fields: [ ItemFields.Overview ], isMissing: false, enableUserData: true
+            }).then(response => response.data.Items || []);
+        },
+        onClose: resetIdle,
+        onOpen: stopOsdHideTimer,
+        onOutsideDismiss: showOsd,
+        playEpisode: item => playbackManager.play({
+            items: [ item ],
+            startPositionTicks: item.UserData?.PlaybackPositionTicks || 0,
+            fullscreen: true
+        }),
+        reportError: (translationKey, error) => {
+            const status = error?.response?.status || error?.status;
+            const rawDetail = error instanceof Error ? error.message : String(error);
+            const detail = status && !rawDetail.includes(String(status)) ? `HTTP ${status}: ${rawDetail}` : rawDetail;
+            const message = `${globalize.translate(translationKey)} (${detail})`;
+            console.error(`[EpisodePlaybackMenu] ${message}`, error);
+            import('../../../components/toast/toast').then(({ default: toast }) => toast(message))
+                .catch(toastError => console.error('[EpisodePlaybackMenu] failed to show error toast', toastError));
+        },
+        translate: globalize.translate
+    });
 
     nowPlayingPositionSlider.enableKeyboardDragging();
-    nowPlayingVolumeSlider.enableKeyboardDragging();
 
     if (layoutManager.tv) {
         nowPlayingPositionSlider.classList.add('focusable');
@@ -1848,6 +1801,8 @@ export default function (view) {
         destroyStats();
         destroySubtitleSync();
         subtitleTrackMenu.destroy();
+        episodePlaybackMenu.destroy();
+        volumeControl.destroy();
     });
     let lastPointerDown = 0;
     /* eslint-disable-next-line compat/compat */
@@ -1896,14 +1851,6 @@ export default function (view) {
     dom.addEventListener(view, 'dblclick', (e) => {
         if (e.target !== view) return;
         playbackManager.toggleFullscreen(currentPlayer);
-    });
-
-    view.querySelector('.buttonMute').addEventListener('click', function () {
-        playbackManager.toggleMute(currentPlayer);
-    });
-
-    nowPlayingVolumeSlider.addEventListener('input', (e) => {
-        playbackManager.setVolume(e.target.value, currentPlayer);
     });
 
     nowPlayingPositionSlider.addEventListener('change', function () {

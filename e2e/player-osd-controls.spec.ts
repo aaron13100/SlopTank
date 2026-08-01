@@ -109,11 +109,25 @@ async function dragRangeTo(page: Page, slider: Locator, targetFraction: number) 
         value: Number(el.value)
     }));
     const currentFraction = (range.value - range.min) / (range.max - range.min);
-    const y = sliderBox.y + sliderBox.height / 2;
+    const vertical = await slider.getAttribute('data-slider-orientation') === 'vertical';
+    const currentPoint = vertical ? {
+        x: sliderBox.x + sliderBox.width / 2,
+        y: trackBox.y + trackBox.height * (1 - currentFraction)
+    } : {
+        x: trackBox.x + trackBox.width * currentFraction,
+        y: sliderBox.y + sliderBox.height / 2
+    };
+    const targetPoint = vertical ? {
+        x: sliderBox.x + sliderBox.width / 2,
+        y: trackBox.y + trackBox.height * (1 - targetFraction)
+    } : {
+        x: trackBox.x + trackBox.width * targetFraction,
+        y: sliderBox.y + sliderBox.height / 2
+    };
 
-    await page.mouse.move(trackBox.x + trackBox.width * currentFraction, y);
+    await page.mouse.move(currentPoint.x, currentPoint.y);
     await page.mouse.down();
-    await page.mouse.move(trackBox.x + trackBox.width * targetFraction, y, { steps: 10 });
+    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 10 });
     await page.mouse.up();
 }
 
@@ -259,7 +273,16 @@ test('volume slider and mute button change the real video state', async ({ page,
     const video = await startPlayback(page, config);
 
     await openOsd(page);
+    const muteButton = page.locator('.videoOsdBottom-maincontrols .buttonMute');
+    await muteButton.focus();
     const volumeSlider = page.locator('.videoOsdBottom-maincontrols .osdVolumeSlider');
+    await expect.poll(
+        () => onScreenState(page, '.videoOsdBottom-maincontrols .osdVolumeSliderContainer'),
+        { message: 'expected the vertical volume popover to be fully on screen and reachable' }
+    ).toMatchObject({ found: true, insideViewport: true, reachable: true });
+    const volumeBox = await volumeSlider.boundingBox();
+    expect(volumeBox, 'vertical volume slider should have a layout box').not.toBeNull();
+    expect(volumeBox?.height).toBeGreaterThan((volumeBox?.width || 0) * 3);
 
     await dragRangeTo(page, volumeSlider, 0);
     await expect.poll(() => volumeSlider.inputValue()).toBe('0');
@@ -269,8 +292,15 @@ test('volume slider and mute button change the real video state', async ({ page,
     await expect.poll(() => volumeSlider.inputValue()).toBe('100');
     await expect(video).toHaveJSProperty('volume', 1);
 
-    const muteButton = page.locator('.videoOsdBottom-maincontrols .buttonMute');
     const muteIcon = muteButton.locator('.material-icons');
+
+    await volumeSlider.focus();
+    await volumeSlider.press('ArrowDown');
+    await expect.poll(() => volumeSlider.inputValue()).toBe('99');
+    await expect(video).toHaveJSProperty('volume', 0.970299);
+    await volumeSlider.press('ArrowUp');
+    await expect.poll(() => volumeSlider.inputValue()).toBe('100');
+    await expect(video).toHaveJSProperty('volume', 1);
 
     await expect(video).toHaveJSProperty('muted', false);
     await muteButton.click();
@@ -280,6 +310,60 @@ test('volume slider and mute button change the real video state', async ({ page,
     await muteButton.click();
     await expect(video).toHaveJSProperty('muted', false);
     await expect(muteIcon).toHaveClass(/volume_up/);
+
+    await expect(page.locator('.videoOsdBottom-maincontrols .btnEpisodes')).toBeHidden();
+});
+
+test('volume slider accepts real touch input across the track', async ({ browser, config }) => {
+    const context = await browser.newContext({
+        baseURL: String(test.info().project.use.baseURL),
+        hasTouch: true,
+        viewport: { width: 1280, height: 720 }
+    });
+    const page = await context.newPage();
+    await page.addInitScript(() => {
+        const removeWebpackOverlay = () => {
+            document.querySelector('#webpack-dev-server-client-overlay')?.remove();
+        };
+        new MutationObserver(removeWebpackOverlay).observe(document, {
+            childList: true,
+            subtree: true
+        });
+        removeWebpackOverlay();
+    });
+
+    try {
+        await login(page, config.username, config.password);
+        const video = await startPlayback(page, config);
+        await openOsd(page);
+
+        const muteButton = page.locator('.videoOsdBottom-maincontrols .buttonMute');
+        await muteButton.tap();
+        await expect(video).toHaveJSProperty('muted', true);
+
+        const volumeSlider = page.locator('.videoOsdBottom-maincontrols .osdVolumeSlider');
+        const trackBox = await volumeSlider.locator('xpath=..').locator('.sliderBubbleTrack').boundingBox();
+        if (!trackBox) {
+            throw new Error('Touch volume track has no layout box.'); // allow-raw-error: test fixture invariant
+        }
+
+        await page.touchscreen.tap(trackBox.x + trackBox.width / 2, trackBox.y + trackBox.height - 1);
+        await expect.poll(async () => Number(await volumeSlider.inputValue())).toBeLessThanOrEqual(1);
+        await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.volume)).toBeLessThanOrEqual(0.0000011);
+
+        await openOsd(page);
+        await muteButton.tap();
+        await expect(video).toHaveJSProperty('muted', false);
+        const reopenedTrackBox = await volumeSlider.locator('xpath=..').locator('.sliderBubbleTrack').boundingBox();
+        if (!reopenedTrackBox) {
+            throw new Error('Reopened touch volume track has no layout box.'); // allow-raw-error: test fixture invariant
+        }
+        await page.touchscreen.tap(reopenedTrackBox.x + reopenedTrackBox.width / 2, reopenedTrackBox.y + 1);
+        await expect.poll(async () => Number(await volumeSlider.inputValue())).toBeGreaterThanOrEqual(99);
+        await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.volume)).toBeGreaterThanOrEqual(0.970299);
+    } finally {
+        await context.close();
+    }
 });
 
 test('seek position slider drags to a real playback position', async ({ page, config }) => {

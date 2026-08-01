@@ -164,6 +164,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    position: relative;
 
     [dir="rtl"] & {
         flex-direction: row-reverse;
@@ -171,14 +172,148 @@
 }
 
 .osdVolumeSliderContainer {
-    width: 9em;
-    flex-grow: 1;
+    position: absolute;
+    z-index: 3;
+    bottom: calc(100% - 0.35em);
+    left: 50%;
+    width: 3.25em;
+    height: 10em;
+    padding: 0.8em 1em;
+    box-sizing: border-box;
+    border-radius: 0.4em;
+    background: rgba(20, 20, 20, 0.94);
+    box-shadow: 0 0.35em 1.2em rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(0.35em);
+    transition: opacity 0.15s ease-out, transform 0.15s ease-out, visibility 0.15s;
 }
 
 .osdMediaInfo,
 .volumeButtons {
     display: flex;
     align-items: center;
+    position: relative;
+}
+
+.volumeButtons:hover .osdVolumeSliderContainer,
+.volumeButtons:focus-within .osdVolumeSliderContainer {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+}
+
+.episodePlaybackMenu {
+    position: absolute;
+    right: 0.8em;
+    bottom: calc(100% + 0.5em);
+    z-index: 4;
+    width: min(36em, calc(100vw - 1.6em));
+    max-height: min(60vh, 32em);
+    box-sizing: border-box;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 0.5em;
+    background: rgba(20, 20, 20, 0.97);
+    box-shadow: 0 0.5em 1.8em rgba(0, 0, 0, 0.55);
+    color: #fff;
+}
+
+.episodePlaybackMenu-header {
+    display: flex;
+    align-items: center;
+    padding: 0.35em 0.5em 0.35em 1em;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.episodePlaybackMenu-header h3 {
+    margin: 0;
+    flex-grow: 1;
+}
+
+.episodePlaybackMenu-list {
+    max-height: calc(min(60vh, 32em) - 4em);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.episodePlaybackMenu-item {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35em;
+    padding: 0.8em 1em;
+    border: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.episodePlaybackMenu-item:hover,
+.episodePlaybackMenu-item:focus {
+    outline: 0;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.episodePlaybackMenu-item[aria-current='true'] {
+    background: rgba(0, 164, 220, 0.16);
+    cursor: default;
+}
+
+.episodePlaybackMenu-heading,
+.episodePlaybackMenu-status {
+    display: flex;
+    align-items: center;
+    gap: 0.75em;
+}
+
+.episodePlaybackMenu-title {
+    font-weight: 600;
+}
+
+.episodePlaybackMenu-current,
+.episodePlaybackMenu-watchedState {
+    font-size: 0.8em;
+    opacity: 0.82;
+}
+
+.episodePlaybackMenu-current {
+    margin-left: auto;
+    color: #00a4dc;
+}
+
+.episodePlaybackMenu-summary {
+    display: -webkit-box;
+    overflow: hidden;
+    opacity: 0.78;
+    font-size: 0.9em;
+    line-height: 1.35;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.episodePlaybackMenu-progressText {
+    margin-left: auto;
+    font-size: 0.8em;
+    opacity: 0.82;
+}
+
+.episodePlaybackMenu-progress {
+    height: 0.2em;
+    overflow: hidden;
+    border-radius: 0.1em;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.episodePlaybackMenu-progressValue {
+    height: 100%;
+    display: block;
+    background: #00a4dc;
 }
 
 .volumeButtons {
