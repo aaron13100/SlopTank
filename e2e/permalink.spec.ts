@@ -347,7 +347,7 @@ test.describe('pretty permalinks (docs/internal/permalink-url-design.md)', () =>
 
         await page.goto(`/web/#/details?id=${config.itemId}&serverId=${config.serverId}&autoplay=1`);
 
-        await waitForPermalinkTarget(page, /\/w\/(?:tt\d+|tm-(?:mv|tv|ep|se|co)-\d+|sk-[0-9a-hjkmnp-tv-z]{26})$/, PLAYBACK_RESOLVE_TIMEOUT_MS);
+        await waitForPermalinkTarget(page, /\/w\/(?:tt\d+|(?:tm|tv)-(?:mv|tv|ep|se|co)-\d+|sk-[0-9a-hjkmnp-tv-z]{26})$/, PLAYBACK_RESOLVE_TIMEOUT_MS);
         await expectPlaybackStarted(page);
     });
 });
@@ -460,7 +460,7 @@ test.describe('share and copy links (design section 5): ensure runs before any U
 
         await expect(page.locator('.toastContainer .toast')).toContainText('Permanent link copied successfully.', { timeout: ENSURE_TIMEOUT_MS });
         const origin = new URL(page.url()).origin;
-        expect(copiedUrl).toMatch(new RegExp(`^${origin}/(?:tt\\d+|tm-(?:mv|tv|ep|se|co)-\\d+|sk-[0-9a-hjkmnp-tv-z]{26})$`));
+        expect(copiedUrl).toMatch(new RegExp(`^${origin}/(?:tt\\d+|(?:tm|tv)-(?:mv|tv|ep|se|co)-\\d+|sk-[0-9a-hjkmnp-tv-z]{26})$`));
 
         await page.goto(copiedUrl);
         await waitForPermalinkTarget(page, new RegExp(`${new URL(copiedUrl).pathname}$`), RESOLVE_TIMEOUT_MS);
@@ -475,7 +475,7 @@ test.describe('share and copy links (design section 5): ensure runs before any U
 
         await expect(page.locator('.toastContainer .toast')).toContainText('Permanent play link copied successfully.', { timeout: ENSURE_TIMEOUT_MS });
         const origin = new URL(page.url()).origin;
-        expect(copiedUrl).toMatch(new RegExp(`^${origin}/w/(?:tt\\d+|tm-(?:mv|tv|ep|se|co)-\\d+|sk-[0-9a-hjkmnp-tv-z]{26})$`));
+        expect(copiedUrl).toMatch(new RegExp(`^${origin}/w/(?:tt\\d+|(?:tm|tv)-(?:mv|tv|ep|se|co)-\\d+|sk-[0-9a-hjkmnp-tv-z]{26})$`));
 
         await page.goto(copiedUrl);
         await waitForPermalinkTarget(page, new RegExp(`${new URL(copiedUrl).pathname}$`), PLAYBACK_RESOLVE_TIMEOUT_MS);

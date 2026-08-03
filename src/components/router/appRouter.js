@@ -453,30 +453,30 @@ export class AppRouter {
 
         if (context !== 'folders' && !itemHelper.isLocalItem(item)) {
             if (item.CollectionType == CollectionType.Movies) {
-                url = `/web/movies?topParentId=${item.Id}&collectionType=${item.CollectionType}`;
+                url = '/movies';
 
                 if (options && options.section === 'latest') {
-                    url += '&tab=1';
+                    url += '?tab=1';
                 }
 
                 return url;
             }
 
             if (item.CollectionType == CollectionType.Tvshows) {
-                url = `/web/tv?topParentId=${item.Id}&collectionType=${item.CollectionType}`;
+                url = '/tv';
 
                 if (options && options.section === 'latest') {
-                    url += '&tab=1';
+                    url += '?tab=1';
                 }
 
                 return url;
             }
 
             if (item.CollectionType == CollectionType.Music) {
-                url = `/web/music?topParentId=${item.Id}&collectionType=${item.CollectionType}`;
+                url = '/music';
 
                 if (options?.section === 'latest') {
-                    url += '&tab=1';
+                    url += '?tab=1';
                 }
 
                 return url;
@@ -485,7 +485,7 @@ export class AppRouter {
             const layoutMode = localStorage.getItem('layout');
 
             if (layoutMode === LayoutMode.Experimental && item.CollectionType == CollectionType.Homevideos) {
-                url = '/web/homevideos?topParentId=' + item.Id;
+                url = '/homevideos';
 
                 return url;
             }

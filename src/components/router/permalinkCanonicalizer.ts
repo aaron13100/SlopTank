@@ -5,6 +5,7 @@ import { withDeploymentBase } from './browserBase';
 import { ensurePermalinkIds } from './permalinkApi';
 import {
     buildPermalinkPath,
+    getExternalPermalinkId,
     permalinkStartSecondsToTicks,
     type PermalinkKind
 } from './permalinkId';
@@ -24,8 +25,15 @@ export async function canonicalizeLegacyGuidRoute({ api, item, kind }: {
     if (!itemId) return false;
 
     const legacyRoute = kind === 'info' ? 'details' : 'video';
-    if (window.location.pathname !== withDeploymentBase(`/web/${legacyRoute}`)) {
+    const legacyPath = withDeploymentBase(`/web/${legacyRoute}`);
+    if (window.location.pathname !== legacyPath) {
         return false;
+    }
+
+    const externalId = getExternalPermalinkId(item);
+    if (externalId) {
+        rememberPermalinkAlias(item.ServerId, itemId, externalId);
+        replaceAddressBar(kind, externalId);
     }
 
     try {
@@ -34,20 +42,13 @@ export async function canonicalizeLegacyGuidRoute({ api, item, kind }: {
 
         // A background ensure may finish after the user has already left the
         // GUID entry. Never let that stale completion rewrite a newer route.
-        if (window.location.pathname !== withDeploymentBase(`/web/${legacyRoute}`)) {
+        const expectedPath = externalId ?
+            withDeploymentBase(buildPermalinkPath(kind, externalId)) :
+            legacyPath;
+        if (window.location.pathname !== expectedPath) {
             return false;
         }
-
-        let search = '';
-        if (kind === 'watch') {
-            const startSeconds = new URLSearchParams(window.location.search).get('t');
-            if (permalinkStartSecondsToTicks(startSeconds) !== null) {
-                search = `?t=${startSeconds}`;
-            }
-        }
-
-        const path = withDeploymentBase(buildPermalinkPath(kind, aliases.canonicalId));
-        window.history.replaceState(window.history.state, '', `${path}${search}`);
+        replaceAddressBar(kind, aliases.canonicalId);
         return true;
     } catch (error) {
         // The GUID route is still a valid fallback. Canonicalisation is a
@@ -55,4 +56,17 @@ export async function canonicalizeLegacyGuidRoute({ api, item, kind }: {
         console.warn('[permalink] unable to canonicalize legacy item route:', error);
         return false;
     }
+}
+
+function replaceAddressBar(kind: PermalinkKind, permalinkId: string) {
+    let search = '';
+    if (kind === 'watch') {
+        const startSeconds = new URLSearchParams(window.location.search).get('t');
+        if (permalinkStartSecondsToTicks(startSeconds) !== null) {
+            search = `?t=${startSeconds}`;
+        }
+    }
+
+    const path = withDeploymentBase(buildPermalinkPath(kind, permalinkId));
+    window.history.replaceState(window.history.state, '', `${path}${search}`);
 }

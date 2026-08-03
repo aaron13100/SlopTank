@@ -111,3 +111,24 @@ describe('appRouter never mints a permalink itself', () => {
         expect(appRouter.getRouteUrl(item, { permalink: true })).toBe('/web/details?id=item1&serverId=s1');
     });
 });
+
+describe('appRouter canonical library navigation', () => {
+    it.each([
+        [ 'movies', '/movies' ],
+        [ 'tvshows', '/tv' ],
+        [ 'music', '/music' ]
+    ])('keeps the %s collection id out of the URL', (collectionType, expected) => {
+        const { appRouter } = createHarness(['/web/home']);
+        const view = {
+            Id: 'd4f1aeb3b8343a7c04f02bd596d038f3',
+            Name: 'Library',
+            Type: 'CollectionFolder',
+            CollectionType: collectionType,
+            ServerId: 's1'
+        };
+
+        expect(appRouter.getRouteUrl(view, { context: collectionType })).toBe(expected);
+        expect(appRouter.getRouteUrl(view, { context: collectionType, section: 'latest' }))
+            .toBe(`${expected}?tab=1`);
+    });
+});

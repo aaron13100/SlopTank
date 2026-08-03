@@ -3,8 +3,9 @@
   "patterns": {
     "imdb": "^tt[0-9]+$",
     "tmdb": "^tm-(mv|tv|ep|se|co)-[1-9][0-9]*$",
+    "tvdb": "^tv-(mv|tv|ep|se|co)-[1-9][0-9]*$",
     "sloptank": "^sk-[0-9a-hjkmnp-tv-z]{26}$",
-    "reserved": "^(tv|mb|au)-"
+    "reserved": "^(mb|au)-"
   },
   "valid": [
     "tt0",
@@ -14,6 +15,9 @@
     "tm-ep-90210",
     "tm-se-12",
     "tm-co-99",
+    "tv-tv-401147",
+    "tv-se-2043488",
+    "tv-ep-10285912",
     "sk-2f3k2m9qbd8x4w1r0ehtyc5vnz"
   ],
   "invalid": [
@@ -25,13 +29,15 @@
     "tm-xx-4613",
     "tm-mv-0",
     "tm-mv-01",
+    "tv-76290",
+    "tv-se-0",
+    "tv-se-01",
     "sk-tooshort",
     "sk-2f3k2m9qbd8x4w1r0ehtyclvnz",
     "SK-2f3k2m9qbd8x4w1r0ehtyc5vnz",
     "not-an-id"
   ],
   "reserved": [
-    "tv-76290",
     "mb-some-id",
     "au-some-id"
   ]

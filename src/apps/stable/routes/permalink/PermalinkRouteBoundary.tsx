@@ -48,6 +48,6 @@ export const PermalinkCompatibilityRoute: FC<{ purpose: PermalinkPurpose }> = ({
 
 export const LegacyRootRoute: FC = () => {
     const location = useLocation();
-    const pathname = location.pathname === '/' ? '/home' : location.pathname;
-    return <Navigate replace to={{ ...location, pathname: `/web${pathname}` }} />;
+    const pathname = location.pathname === '/' ? 'home' : location.pathname.replace(/^\//, '');
+    return <Navigate replace to={{ ...location, pathname: `/web/${pathname}` }} />;
 };

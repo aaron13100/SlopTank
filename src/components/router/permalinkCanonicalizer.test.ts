@@ -80,6 +80,45 @@ describe('canonicalizeLegacyGuidRoute', () => {
             .toBe('/sloptank/w/sk-2f3k2m9qbd8x4w1r0ehtyc5vnz?t=0');
     });
 
+    it('shows a safe external URL before durable ensure finishes', async () => {
+        let releaseResponse: (() => void) | undefined;
+        const responseGate = new Promise<void>(resolve => {
+            releaseResponse = resolve;
+        });
+        const adapter: AxiosAdapter = async (config: AxiosRequestConfig) => {
+            await responseGate;
+            return {
+                data: { CanonicalId: 'tv-se-2043488' },
+                status: 200,
+                statusText: '',
+                headers: {},
+                config: config as never
+            } as AxiosResponse;
+        };
+        const api = {
+            axiosInstance: axios.create({ adapter }),
+            basePath: 'https://media.example',
+            authorizationHeader: 'MediaBrowser Token="abc"'
+        } as unknown as Api;
+        window.history.replaceState(null, '', '/web/details?id=season-2&serverId=server-1');
+
+        const canonicalizing = canonicalizeLegacyGuidRoute({
+            api,
+            item: {
+                Id: 'season-2',
+                ServerId: 'server-1',
+                Type: 'Season',
+                ProviderIds: { Tvdb: '2043488' }
+            },
+            kind: 'info'
+        });
+
+        expect(window.location.pathname).toBe('/tv-se-2043488');
+        expect(getRememberedPermalinkAlias('server-1', 'season-2')).toBe('tv-se-2043488');
+        releaseResponse?.();
+        await expect(canonicalizing).resolves.toBe(true);
+    });
+
     it('does not ensure an item that is already on a canonical route', async () => {
         const { api, calls } = createApi();
         window.history.replaceState(null, '', '/tt0062622');

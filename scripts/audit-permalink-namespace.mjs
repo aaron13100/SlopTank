@@ -11,7 +11,7 @@ const patterns = Object.values(grammar.patterns).map(pattern => new RegExp(patte
 const extensions = new Set([ '.html', '.js', '.json', '.jsx', '.ts', '.tsx' ]);
 const legacyRoutePattern = /#(!?)\//;
 // eslint-disable-next-line sonarjs/regex-complexity -- This finite alternation is the explicit ordinary-route denylist.
-const unprefixedRoutePattern = /(["'`])\/(addserver|dashboard|details|forgotpassword|forgotpasswordpin|home|homevideos|list|livetv|login|lyrics|metadata|movies|music|mypreferencesmenu|queue|quickconnect|search|selectserver|tv|userprofile|video|wizardstart)(?=[/?"'`])/;
+const unprefixedRoutePattern = /(["'`])\/(addserver|dashboard|details|forgotpassword|forgotpasswordpin|home|list|livetv|login|lyrics|metadata|mypreferencesmenu|queue|quickconnect|search|selectserver|userprofile|video|wizardstart)(?=[/?"'`])/;
 
 function walk(directory) {
     return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {

@@ -55,9 +55,11 @@ const getCurrentUserView = (
 const UserViewNav = () => {
     const location = useLocation();
     const [ searchParams ] = useSearchParams();
-    const libraryId = searchParams.get('topParentId') || searchParams.get('parentId');
     const collectionType = searchParams.get('collectionType');
-    const { activeTab } = useCurrentTab();
+    const { activeTab, libraryId: currentTabLibraryId } = useCurrentTab();
+    const libraryId = searchParams.get('topParentId')
+        || searchParams.get('parentId')
+        || currentTabLibraryId;
     const webConfig = useWebConfig();
 
     const isExtraLargeScreen = useMediaQuery((t: Theme) => t.breakpoints.up('xl'));

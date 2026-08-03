@@ -59,7 +59,7 @@ test('video url becomes a durable permalink that survives a reload', async ({ pa
     await video.evaluate(el => el.setAttribute('data-e2e-player-identity', 'original'));
 
     releaseEnsure();
-    await page.waitForURL(/\/w\/(?:tt\d+|tm-(?:mv|tv|ep|se|co)-\d+|sk-[0-9a-hjkmnp-tv-z]{26})$/, { timeout: 90_000 });
+    await page.waitForURL(/\/w\/(?:tt\d+|(?:tm|tv)-(?:mv|tv|ep|se|co)-\d+|sk-[0-9a-hjkmnp-tv-z]{26})$/, { timeout: 90_000 });
     await expect(video).toHaveAttribute('data-e2e-player-identity', 'original');
     await page.unroute('**/Items/*/Permalink');
 
@@ -77,7 +77,7 @@ test('video url becomes a durable permalink that survives a reload', async ({ pa
     await expectPlaybackToAdvance(video, 20_000);
 
     const urlAfterPlay = new URL(page.url());
-    expect(urlAfterPlay.pathname).toMatch(/\/w\/(?:tt\d+|tm-(?:mv|tv|ep|se|co)-\d+|sk-[0-9a-hjkmnp-tv-z]{26})$/);
+    expect(urlAfterPlay.pathname).toMatch(/\/w\/(?:tt\d+|(?:tm|tv)-(?:mv|tv|ep|se|co)-\d+|sk-[0-9a-hjkmnp-tv-z]{26})$/);
     expect(urlAfterPlay.hash).toBe('');
 
     // Make both preparation phases deterministic. Completing PlaybackInfo is
@@ -119,7 +119,7 @@ test('video url becomes a durable permalink that survives a reload', async ({ pa
     // would send us back to /web/home within a couple of seconds. Give it a
     // moment to happen, then assert we're still on the video route.
     await page.waitForTimeout(3_000);
-    expect(new URL(page.url()).pathname).toMatch(/\/w\/(?:tt\d+|tm-(?:mv|tv|ep|se|co)-\d+|sk-[0-9a-hjkmnp-tv-z]{26})$/);
+    expect(new URL(page.url()).pathname).toMatch(/\/w\/(?:tt\d+|(?:tm|tv)-(?:mv|tv|ep|se|co)-\d+|sk-[0-9a-hjkmnp-tv-z]{26})$/);
 
     await expectPlaybackToAdvance(video, 20_000).finally(async () => {
         await test.info().attach('browser-diagnostics', {

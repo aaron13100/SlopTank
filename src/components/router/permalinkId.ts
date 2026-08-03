@@ -1,5 +1,6 @@
 import { TICKS_PER_SECOND } from 'constants/time';
 import { trimTrailingSlashes } from 'utils/url';
+import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base-item-dto';
 
 /**
  * Grammar and URL construction for the pretty permalink scheme
@@ -16,6 +17,7 @@ export type TmdbQualifier = 'mv' | 'tv' | 'ep' | 'se' | 'co';
 export type ParsedPermalinkId =
     | { namespace: 'imdb', id: string }
     | { namespace: 'tmdb', qualifier: TmdbQualifier, numericId: string, id: string }
+    | { namespace: 'tvdb', qualifier: TmdbQualifier, numericId: string, id: string }
     | { namespace: 'sloptank', id: string };
 
 /** Compatibility marker segments accepted from the previously shipped URL form. */
@@ -23,10 +25,11 @@ export const PERMALINK_MARKER_SEGMENTS = ['p', 'w'] as const;
 
 const IMDB_ID_PATTERN = /^tt\d+$/;
 const TMDB_ID_PATTERN = /^tm-(mv|tv|ep|se|co)-([1-9]\d*)$/;
+const TVDB_ID_PATTERN = /^tv-(mv|tv|ep|se|co)-([1-9]\d*)$/;
 /** 128 random bits as 26 lowercase Crockford-base32 characters, minted by the server's identity capsule (design 3.6). */
 const SLOPTANK_ID_PATTERN = /^sk-[0-9a-hjkmnp-tv-z]{26}$/;
-/** Prefixes reserved for future namespaces (TVDB, MusicBrainz, AudioDB). Never resolve; a route or asset must never claim them either. */
-const RESERVED_PREFIX_PATTERN = /^(tv|mb|au)-/;
+/** Prefixes reserved for future namespaces (MusicBrainz, AudioDB). Never resolve; a route or asset must never claim them either. */
+const RESERVED_PREFIX_PATTERN = /^(mb|au)-/;
 
 /**
  * Parses a single path segment as a permalink id. Returns null when the
@@ -50,6 +53,16 @@ export function parsePermalinkId(raw: string): ParsedPermalinkId | null {
         };
     }
 
+    const tvdbMatch = TVDB_ID_PATTERN.exec(raw);
+    if (tvdbMatch) {
+        return {
+            namespace: 'tvdb',
+            qualifier: tvdbMatch[1] as TmdbQualifier,
+            numericId: tvdbMatch[2],
+            id: raw
+        };
+    }
+
     if (SLOPTANK_ID_PATTERN.test(raw)) {
         return { namespace: 'sloptank', id: raw };
     }
@@ -60,6 +73,42 @@ export function parsePermalinkId(raw: string): ParsedPermalinkId | null {
     if (RESERVED_PREFIX_PATTERN.test(raw)) {
         return null;
     }
+
+    return null;
+}
+
+function qualifierForItemType(type: string | null | undefined): TmdbQualifier | null {
+    switch (type) {
+        case 'Movie': return 'mv';
+        case 'Series': return 'tv';
+        case 'Episode': return 'ep';
+        case 'Season': return 'se';
+        case 'BoxSet': return 'co';
+        default: return null;
+    }
+}
+
+function validNumericProviderId(value: string | null | undefined): value is string {
+    return !!value && /^[1-9]\d*$/.test(value);
+}
+
+/**
+ * Returns the provider permalink that the server deterministically elects
+ * for an item. This is safe to use for immediate address-bar presentation;
+ * durable issuance and fallback `sk-` allocation remain server-owned.
+ */
+export function getExternalPermalinkId(item: Pick<BaseItemDto, 'Type' | 'ProviderIds'>): string | null {
+    const imdb = item.ProviderIds?.Imdb;
+    if (imdb && IMDB_ID_PATTERN.test(imdb)) return imdb;
+
+    const qualifier = qualifierForItemType(item.Type);
+    if (!qualifier) return null;
+
+    const tmdb = item.ProviderIds?.Tmdb;
+    if (validNumericProviderId(tmdb)) return `tm-${qualifier}-${tmdb}`;
+
+    const tvdb = item.ProviderIds?.Tvdb;
+    if (validNumericProviderId(tvdb)) return `tv-${qualifier}-${tvdb}`;
 
     return null;
 }

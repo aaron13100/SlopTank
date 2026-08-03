@@ -2,11 +2,21 @@ import * as userSettings from 'scripts/settings/userSettings';
 
 import { LibraryRoutes } from '../constants/libraryRoutes';
 
+const webLibraryPath = (path: string) => {
+    switch (path) {
+        case '/movies': return '/web/movies';
+        case '/music': return '/web/music';
+        case '/tv': return '/web/tv';
+        case '/homevideos': return '/web/homevideos';
+        default: return path;
+    }
+};
+
 /**
  * Utility function to check if a path is a library path.
  */
 export const isLibraryPath = (path: string) => (
-    LibraryRoutes.some(route => route.path === path)
+    LibraryRoutes.some(route => route.path === webLibraryPath(path))
 );
 
 /**
@@ -15,7 +25,7 @@ export const isLibraryPath = (path: string) => (
 export const getDefaultViewIndex = (path: string, libraryId?: string | null) => {
     if (!libraryId) return 0;
 
-    const views = LibraryRoutes.find(route => route.path === path)?.views ?? [];
+    const views = LibraryRoutes.find(route => route.path === webLibraryPath(path))?.views ?? [];
     const defaultView = userSettings.get('landing-' + libraryId, false);
 
     return views.find(view => view.view === defaultView)?.index

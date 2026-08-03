@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     buildPermalinkPath,
     buildPermalinkShareUrl,
+    getExternalPermalinkId,
     parsePermalinkId,
     permalinkStartSecondsToTicks
 } from './permalinkId';
@@ -26,16 +27,29 @@ describe('parsePermalinkId', () => {
             numericId: '4613',
             id: 'tm-tv-4613'
         });
+        expect(parsePermalinkId('tv-se-2043488')).toEqual({
+            namespace: 'tvdb',
+            qualifier: 'se',
+            numericId: '2043488',
+            id: 'tv-se-2043488'
+        });
         expect(parsePermalinkId('sk-2f3k2m9qbd8x4w1r0ehtyc5vnz')).toEqual({
             namespace: 'sloptank',
             id: 'sk-2f3k2m9qbd8x4w1r0ehtyc5vnz'
         });
     });
 
-    it('round trips every tmdb qualifier', () => {
-        for (const qualifier of ['mv', 'tv', 'ep', 'se', 'co']) {
-            const id = `tm-${qualifier}-4613`;
-            expect(parsePermalinkId(id)).toEqual({ namespace: 'tmdb', qualifier, numericId: '4613', id });
+    it('round trips every qualified numeric provider namespace', () => {
+        for (const namespace of [ 'tm', 'tv' ]) {
+            for (const qualifier of [ 'mv', 'tv', 'ep', 'se', 'co' ]) {
+                const id = `${namespace}-${qualifier}-4613`;
+                expect(parsePermalinkId(id)).toEqual({
+                    namespace: namespace === 'tm' ? 'tmdb' : 'tvdb',
+                    qualifier,
+                    numericId: '4613',
+                    id
+                });
+            }
         }
     });
 
@@ -69,12 +83,27 @@ describe('parsePermalinkId', () => {
     });
 });
 
-// The client used to mint an external id from an item's own ProviderIds here.
-// That is gone on purpose: an alias the server has not bound to durable
-// evidence does not resolve, so publishing one ships a dead link. Choosing the
-// id is now `POST /Items/{id}/Permalink` (permalinkApi.ts), exercised through
-// the real copy/share entry point in itemContextMenu.permalink.test.js, and
-// this module only shapes the URL around whatever alias came back.
+describe('getExternalPermalinkId', () => {
+    it('matches the server election order and qualifies numeric namespaces', () => {
+        expect(getExternalPermalinkId({
+            Type: 'Series',
+            ProviderIds: { Imdb: 'tt14531842', Tmdb: '47907', Tvdb: '401147' }
+        })).toBe('tt14531842');
+        expect(getExternalPermalinkId({
+            Type: 'Season',
+            ProviderIds: { Tvdb: '2043488' }
+        })).toBe('tv-se-2043488');
+        expect(getExternalPermalinkId({
+            Type: 'Episode',
+            ProviderIds: { Tmdb: '1234', Tvdb: '10285912' }
+        })).toBe('tm-ep-1234');
+    });
+
+    it('refuses malformed ids and unsupported item types', () => {
+        expect(getExternalPermalinkId({ Type: 'Season', ProviderIds: { Tvdb: '01' } })).toBeNull();
+        expect(getExternalPermalinkId({ Type: 'Audio', ProviderIds: { Tvdb: '42' } })).toBeNull();
+    });
+});
 
 describe('buildPermalinkShareUrl', () => {
     it('builds the pasteable pretty entry URL for each kind', () => {
