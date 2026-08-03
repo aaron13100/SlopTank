@@ -12,6 +12,7 @@ import autoFocuser from './components/autoFocuser';
 import loading from 'components/loading/loading';
 import { pluginManager } from './components/pluginManager';
 import { appRouter } from './components/router/appRouter';
+import { clearRememberedPermalinkAliases } from './components/router/permalinkSession';
 import { AppFeature } from 'constants/appFeature';
 import globalize from './lib/globalize';
 import { loadCoreDictionary } from 'lib/globalize/loader';
@@ -83,6 +84,8 @@ build: ${__JF_BUILD_VERSION__}`);
     // Update localization on user changes
     Events.on(ServerConnections, 'localusersignedin', globalize.updateCurrentCulture);
     Events.on(ServerConnections, 'localusersignedout', globalize.updateCurrentCulture);
+    Events.on(ServerConnections, 'localusersignedin', clearRememberedPermalinkAliases);
+    Events.on(ServerConnections, 'localusersignedout', clearRememberedPermalinkAliases);
 
     // Load the font styles
     loadFonts();
@@ -190,7 +193,12 @@ function loadPlatformFeatures() {
 
 function registerServiceWorker() {
     if (navigator.serviceWorker && window.appMode !== 'cordova' && window.appMode !== 'android') {
-        navigator.serviceWorker.register('serviceworker.js').then(() =>
+        const webBase = new URL(document.baseURI);
+        const deploymentScope = new URL('../', webBase).pathname;
+        navigator.serviceWorker.register(
+            new URL('serviceworker.js', webBase),
+            { scope: deploymentScope }
+        ).then(() =>
             console.log('serviceWorker registered')
         ).catch(error =>
             console.log('error registering serviceWorker: ' + error)

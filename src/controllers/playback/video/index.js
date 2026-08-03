@@ -30,6 +30,7 @@ import '../../../styles/videoosd.scss';
 import shell from '../../../scripts/shell';
 import SubtitleSync from '../../../components/subtitlesync/subtitlesync';
 import { appRouter } from '../../../components/router/appRouter';
+import { canonicalizeLegacyGuidRoute } from '../../../components/router/permalinkCanonicalizer';
 import { ServerConnections } from 'lib/jellyfin-apiclient';
 import LibraryMenu from '../../../scripts/libraryMenu';
 import { setBackdropTransparency, TRANSPARENCY_LEVEL } from '../../../components/backdrop/backdrop';
@@ -208,6 +209,7 @@ export default function (view) {
         const item = state.NowPlayingItem;
 
         currentItem = item;
+        canonicalizeVideoRoute(item);
         if (!item) {
             updateRecordingButton(null);
             LibraryMenu.setTitle('');
@@ -660,9 +662,9 @@ export default function (view) {
             return;
         }
 
-        // A permalink watch link (#/w/<id>?t=<seconds>, see
+        // A permalink watch link (/web/w/<id>?t=<seconds>, see
         // permalinkId.permalinkStartSecondsToTicks) resolves to this same
-        // #/video route with a 't' query param appended; it always wins
+        // /web/video route with a 't' query param appended; it always wins
         // over the server-saved resume position when present and valid.
         const requestedStartTicks = permalinkStartSecondsToTicks(getParameterByName('t'));
 
@@ -670,6 +672,8 @@ export default function (view) {
         setPermalinkPreparing(true);
 
         permalinkResumePromise = apiClient.getItem(apiClient.getCurrentUserId(), id).then((item) => {
+            canonicalizeVideoRoute(item);
+
             if (playbackManager.getCurrentPlayer() || !playbackManager.canPlay(item)) {
                 setPermalinkPreparing(false);
                 return;
@@ -698,6 +702,23 @@ export default function (view) {
         });
 
         return permalinkResumePromise;
+    }
+
+    function canonicalizeVideoRoute(item) {
+        if (!window.location.pathname.endsWith('/web/video')
+            || !item?.Id
+            || !item.ServerId
+            || canonicalizingItemId === item.Id) {
+            return;
+        }
+
+        canonicalizingItemId = item.Id;
+        const apiClient = ServerConnections.getApiClient(item.ServerId);
+        void canonicalizeLegacyGuidRoute({
+            api: toApi(apiClient),
+            item,
+            kind: 'watch'
+        });
     }
 
     function bindToPlayer(player) {
@@ -1576,6 +1597,7 @@ export default function (view) {
     let trickplayResolution = null;
     const trickplayDiscovery = new TrickplayDiscovery();
     let permalinkResumePromise;
+    let canonicalizingItemId;
     let isViewSetup = false;
     const nowPlayingPositionSlider = view.querySelector('.osdPositionSlider');
     const nowPlayingPositionText = view.querySelector('.osdPositionText');

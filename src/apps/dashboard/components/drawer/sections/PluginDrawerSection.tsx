@@ -31,12 +31,12 @@ const PluginDrawerSection = () => {
             }
         >
             <ListItemLink
-                to='/dashboard/plugins'
+                to='/web/dashboard/plugins'
                 includePaths={[
-                    '/configurationpage',
-                    '/dashboard/plugins/repositories'
+                    '/web/configurationpage',
+                    '/web/dashboard/plugins/repositories'
                 ]}
-                excludePaths={pagesInfo?.map(p => `/${Dashboard.getPluginUrl(p.Name)}`)}
+                excludePaths={pagesInfo?.map(p => `/web/${Dashboard.getPluginUrl(p.Name)}`)}
             >
                 <ListItemIcon>
                     <Extension />
@@ -47,7 +47,7 @@ const PluginDrawerSection = () => {
             {pagesInfo?.map(pageInfo => (
                 <ListItemLink
                     key={pageInfo.PluginId}
-                    to={`/${Dashboard.getPluginUrl(pageInfo.Name)}`}
+                    to={`/web/${Dashboard.getPluginUrl(pageInfo.Name)}`}
                 >
                     <ListItemIcon>
                         {/* TODO: Support different icons? */}

@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "patterns": {
+    "imdb": "^tt[0-9]+$",
+    "tmdb": "^tm-(mv|tv|ep|se|co)-[1-9][0-9]*$",
+    "sloptank": "^sk-[0-9a-hjkmnp-tv-z]{26}$",
+    "reserved": "^(tv|mb|au)-"
+  },
+  "valid": [
+    "tt0",
+    "tt0062622",
+    "tm-mv-1",
+    "tm-tv-4613",
+    "tm-ep-90210",
+    "tm-se-12",
+    "tm-co-99",
+    "sk-2f3k2m9qbd8x4w1r0ehtyc5vnz"
+  ],
+  "invalid": [
+    "",
+    "tt",
+    "ttabc",
+    "TT0062622",
+    "tm-4613",
+    "tm-xx-4613",
+    "tm-mv-0",
+    "tm-mv-01",
+    "sk-tooshort",
+    "sk-2f3k2m9qbd8x4w1r0ehtyclvnz",
+    "SK-2f3k2m9qbd8x4w1r0ehtyc5vnz",
+    "not-an-id"
+  ],
+  "reserved": [
+    "tv-76290",
+    "mb-some-id",
+    "au-some-id"
+  ]
+}

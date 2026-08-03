@@ -81,7 +81,7 @@ const AppUserMenu: FC<AppUserMenuProps> = ({
         >
             <MenuItem
                 component={Link}
-                to={`/userprofile?userId=${user?.Id}`}
+                to={`/web/userprofile?userId=${user?.Id}`}
                 onClick={onMenuClose}
             >
                 <ListItemIcon>
@@ -93,7 +93,7 @@ const AppUserMenu: FC<AppUserMenuProps> = ({
             </MenuItem>
             <MenuItem
                 component={Link}
-                to='/mypreferencesmenu'
+                to='/web/mypreferencesmenu'
                 onClick={onMenuClose}
             >
                 <ListItemIcon>
@@ -140,7 +140,7 @@ const AppUserMenu: FC<AppUserMenuProps> = ({
                 <MenuItem
                     key='admin-dashboard-link'
                     component={Link}
-                    to='/dashboard'
+                    to='/web/dashboard'
                     onClick={onMenuClose}
                 >
 
@@ -152,7 +152,7 @@ const AppUserMenu: FC<AppUserMenuProps> = ({
                 <MenuItem
                     key='admin-metadata-link'
                     component={Link}
-                    to='/metadata'
+                    to='/web/metadata'
                     onClick={onMenuClose}
                 >
                     <ListItemIcon>
@@ -166,7 +166,7 @@ const AppUserMenu: FC<AppUserMenuProps> = ({
             {isQuickConnectEnabled && (
                 <MenuItem
                     component={Link}
-                    to='/quickconnect'
+                    to='/web/quickconnect'
                     onClick={onMenuClose}
                 >
                     <ListItemIcon>

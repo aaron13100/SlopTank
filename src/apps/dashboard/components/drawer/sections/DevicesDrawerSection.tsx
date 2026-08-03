@@ -21,7 +21,7 @@ const DevicesDrawerSection = () => {
             }
         >
             <ListItem disablePadding>
-                <ListItemLink to='/dashboard/devices'>
+                <ListItemLink to='/web/dashboard/devices'>
                     <ListItemIcon>
                         <Devices />
                     </ListItemIcon>
@@ -29,7 +29,7 @@ const DevicesDrawerSection = () => {
                 </ListItemLink>
             </ListItem>
             <ListItem disablePadding>
-                <ListItemLink to='/dashboard/activity'>
+                <ListItemLink to='/web/dashboard/activity'>
                     <ListItemIcon>
                         <Analytics />
                     </ListItemIcon>

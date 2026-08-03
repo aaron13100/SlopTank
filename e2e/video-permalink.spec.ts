@@ -1,6 +1,6 @@
 import { expect, login, test } from './fixtures';
 
-test.setTimeout(120_000);
+test.setTimeout(300_000);
 
 async function expectPlaybackToAdvance(video: import('@playwright/test').Locator, timeout: number) {
     await expect(video).toBeVisible({ timeout });
@@ -19,8 +19,8 @@ async function expectPlaybackToAdvance(video: import('@playwright/test').Locator
 
 // Regression coverage for the durable video permalink feature and the two
 // bugs found while building it this session (commit 634485a0de):
-//   - appRouter.showVideoOsd(item) must encode id/serverId in the /video url
-//     as soon as playback starts, with no user action required.
+//   - appRouter.showVideoOsd(item) must enter the GUID /web/video route when
+//     no issued alias is cached, then replace it with /w/<alias> in place.
 //   - reloading that url must resume playback, not bounce to /home.
 // @covers video.permalink.reload.resumes_playback
 test('video url becomes a durable permalink that survives a reload', async ({ page, config }) => {
@@ -37,16 +37,31 @@ test('video url becomes a durable permalink that survives a reload', async ({ pa
 
     await login(page, config.username, config.password);
 
-    await page.goto(`/web/#/details?id=${config.itemId}&serverId=${config.serverId}`);
+    let releaseEnsure: () => void = () => { /* assigned below */ };
+    const ensureGate = new Promise<void>(resolve => {
+        releaseEnsure = resolve;
+    });
+    await page.route('**/Items/*/Permalink', async route => {
+        await ensureGate;
+        await route.continue();
+    });
+
+    await page.goto(`/web/details?id=${config.itemId}&serverId=${config.serverId}`);
 
     // The details page always renders one .btnPlay in .mainDetailButtons;
     // its title toggles between Play/Resume via JS, the class never changes.
     const playButton = page.locator('.mainDetailButtons .btnPlay');
     await playButton.click();
 
-    await page.waitForURL(/#\/video\?id=/, { timeout: 60_000 });
+    await page.waitForURL(/\/web\/video\?id=/, { timeout: 60_000 });
     const video = page.locator('video').first();
     await expectPlaybackToAdvance(video, 20_000);
+    await video.evaluate(el => el.setAttribute('data-e2e-player-identity', 'original'));
+
+    releaseEnsure();
+    await page.waitForURL(/\/w\/(?:tt\d+|tm-(?:mv|tv|ep|se|co)-\d+|sk-[0-9a-hjkmnp-tv-z]{26})$/, { timeout: 90_000 });
+    await expect(video).toHaveAttribute('data-e2e-player-identity', 'original');
+    await page.unroute('**/Items/*/Permalink');
 
     // Exercise the real OSD controls. A paused or autoplay-blocked video must
     // retain a visible Play button instead of looking like a frozen page.
@@ -62,8 +77,8 @@ test('video url becomes a durable permalink that survives a reload', async ({ pa
     await expectPlaybackToAdvance(video, 20_000);
 
     const urlAfterPlay = new URL(page.url());
-    expect(urlAfterPlay.hash).toContain(`id=${config.itemId}`);
-    expect(urlAfterPlay.hash).toContain(`serverId=${config.serverId}`);
+    expect(urlAfterPlay.pathname).toMatch(/\/w\/(?:tt\d+|tm-(?:mv|tv|ep|se|co)-\d+|sk-[0-9a-hjkmnp-tv-z]{26})$/);
+    expect(urlAfterPlay.hash).toBe('');
 
     // Make both preparation phases deterministic. Completing PlaybackInfo is
     // not enough to hide the message: it must remain until the browser can
@@ -101,10 +116,10 @@ test('video url becomes a durable permalink that survives a reload', async ({ pa
     await expect(videoContainer).not.toHaveClass(/videoPlayerContainer-onTop/);
 
     // The reload-redirects-home bug (bindToPlayer(null) double-call crash)
-    // would send us back to #/home within a couple of seconds. Give it a
+    // would send us back to /web/home within a couple of seconds. Give it a
     // moment to happen, then assert we're still on the video route.
     await page.waitForTimeout(3_000);
-    expect(page.url()).toContain(`#/video?id=${config.itemId}`);
+    expect(new URL(page.url()).pathname).toMatch(/\/w\/(?:tt\d+|tm-(?:mv|tv|ep|se|co)-\d+|sk-[0-9a-hjkmnp-tv-z]{26})$/);
 
     await expectPlaybackToAdvance(video, 20_000).finally(async () => {
         await test.info().attach('browser-diagnostics', {

@@ -17,6 +17,13 @@ export const trimTrailingSlashes = (value: string): string => {
     return value.slice(0, end);
 };
 
+let routeSearchOverride: string | null = null;
+
+/** Supplies verified parameters to legacy controllers while a canonical route owns the URL. */
+export const setRouteSearchOverride = (search: string | null) => {
+    routeSearchOverride = search;
+};
+
 /**
  * Gets the url search string.
  * This function should be used instead of location.search alone, because the app router
@@ -24,6 +31,9 @@ export const trimTrailingSlashes = (value: string): string => {
  * @returns The url search string.
  */
 export const getLocationSearch = () => {
+    if (routeSearchOverride !== null) {
+        return routeSearchOverride;
+    }
     // Check location.hash for a search string (this should be the case for our routing library)
     let index = window.location.hash.indexOf('?');
     if (index !== -1) {

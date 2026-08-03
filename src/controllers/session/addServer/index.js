@@ -19,7 +19,7 @@ function handleConnectionResult(page, result) {
             if (result.SystemInfo.StartupWizardCompleted) {
                 Dashboard.navigate('login?serverid=' + result.Servers[0].Id, false, 'none');
             } else {
-                Dashboard.navigate('/wizard/start');
+                Dashboard.navigate('/web/wizard/start');
             }
             break;
         case ConnectionState.ServerSelection:
@@ -73,4 +73,3 @@ export default function(view) {
         });
     }
 }
-

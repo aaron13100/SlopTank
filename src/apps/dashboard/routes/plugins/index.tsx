@@ -121,7 +121,7 @@ export const Component = () => {
 
                         <Button
                             component={Link}
-                            to='/dashboard/plugins/repositories'
+                            to='/web/dashboard/plugins/repositories'
                             variant='outlined'
                             sx={{
                                 marginLeft: 2

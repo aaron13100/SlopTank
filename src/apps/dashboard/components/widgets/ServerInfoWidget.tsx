@@ -29,7 +29,7 @@ const ServerInfoWidget = ({
     return (
         <Widget
             title={globalize.translate('TabServer')}
-            href='/dashboard/settings'
+            href='/web/dashboard/settings'
         >
             <Stack spacing={2}>
                 <Paper sx={{

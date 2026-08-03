@@ -7,6 +7,7 @@ import type { RestoreViewFailResponse } from 'types/viewManager';
 
 import viewManager from './viewManager';
 import { AppType } from 'constants/appType';
+import { setRouteSearchOverride } from 'utils/url';
 
 export interface ViewManagerPageProps {
     appType?: AppType
@@ -17,6 +18,8 @@ export interface ViewManagerPageProps {
     isNowPlayingBarEnabled?: boolean
     isThemeMediaSupported?: boolean
     transition?: string
+    /** Verified route parameters supplied by a canonical permalink adapter. */
+    routeParameters?: URLSearchParams | string
 }
 
 interface ViewOptions {
@@ -87,15 +90,21 @@ const ViewManagerPage: FunctionComponent<ViewManagerPageProps> = ({
     isFullscreen = false,
     isNowPlayingBarEnabled = true,
     isThemeMediaSupported = false,
-    transition
+    transition,
+    routeParameters
 }) => {
     const location = useLocation();
     const navigationType = useNavigationType();
 
     useEffect(() => {
         const loadPage = () => {
+            const explicitSearch = typeof routeParameters === 'string' ?
+                routeParameters : routeParameters?.toString();
+            const effectiveSearch = explicitSearch ?
+                `?${explicitSearch.replace(/^\?/, '')}` : location.search;
+            setRouteSearchOverride(explicitSearch ? effectiveSearch : null);
             const viewOptions = {
-                url: location.pathname + location.search,
+                url: location.pathname + effectiveSearch,
                 type,
                 state: location.state,
                 autoFocus: false,
@@ -123,6 +132,7 @@ const ViewManagerPage: FunctionComponent<ViewManagerPageProps> = ({
         };
 
         loadPage();
+        return () => setRouteSearchOverride(null);
     },
     // location.state and navigationType are NOT included as dependencies here since dialogs will update state while the current view stays the same
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -134,6 +144,7 @@ const ViewManagerPage: FunctionComponent<ViewManagerPageProps> = ({
         isNowPlayingBarEnabled,
         isThemeMediaSupported,
         transition,
+        routeParameters,
         location.pathname,
         location.search
     ]);

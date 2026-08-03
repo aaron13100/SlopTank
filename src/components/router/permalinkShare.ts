@@ -5,6 +5,7 @@ import { trimTrailingSlashes } from 'utils/url';
 
 import { ensurePermalinkIds, isPermalinkRequestError } from './permalinkApi';
 import { buildPermalinkShareUrl, type PermalinkKind } from './permalinkId';
+import { rememberPermalinkAlias } from './permalinkSession';
 
 /**
  * Decides which URL a share or copy action publishes for one item
@@ -47,7 +48,7 @@ export type PermalinkShareUrl =
 function legacyShareUrl(origin: string, itemId: string, serverId: string | null | undefined, kind: PermalinkKind): string {
     const route = kind === 'info' ? 'details' : 'video';
     const server = serverId ? `&serverId=${encodeURIComponent(serverId)}` : '';
-    return `${trimTrailingSlashes(origin)}/web/#/${route}?id=${encodeURIComponent(itemId)}${server}`;
+    return `${trimTrailingSlashes(origin)}/web/${route}?id=${encodeURIComponent(itemId)}${server}`;
 }
 
 function describeFailure(error: unknown): string {
@@ -85,6 +86,7 @@ export async function buildShareUrl({ api, origin, item, kind }: {
 
     try {
         const aliases = await ensurePermalinkIds({ api, itemId });
+        rememberPermalinkAlias(item.ServerId, itemId, aliases.canonicalId);
         return {
             status: 'permanent',
             url: buildPermalinkShareUrl(origin, kind, aliases.canonicalId)

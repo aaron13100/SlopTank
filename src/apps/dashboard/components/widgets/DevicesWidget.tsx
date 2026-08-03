@@ -11,7 +11,7 @@ const DevicesWidget = () => {
     return (
         <Widget
             title={globalize.translate('HeaderDevices')}
-            href='/dashboard/devices'
+            href='/web/dashboard/devices'
         >
             <Stack direction='row' flexWrap='wrap' gap={2}>
                 {devices?.map(device => (

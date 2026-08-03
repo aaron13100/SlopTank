@@ -27,8 +27,8 @@ const MAX_USER_VIEWS_XL = 8;
 
 const OVERFLOW_MENU_ID = 'user-view-overflow-menu';
 
-const HOME_PATH = '/home';
-const LIST_PATH = '/list';
+const HOME_PATH = '/web/home';
+const LIST_PATH = '/web/list';
 
 const getCurrentUserView = (
     userViews: BaseItemDto[] | undefined,
@@ -110,7 +110,7 @@ const UserViewNav = () => {
                 color={(currentUserView?.Id === MetaView.Favorites.Id) ? 'primary' : 'inherit'}
                 startIcon={<Favorite />}
                 component={Link}
-                to='/home?tab=1'
+                to='/web/home?tab=1'
             >
                 {globalize.translate(MetaView.Favorites.Name)}
             </Button>

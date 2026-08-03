@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import axios, { AxiosError, type AxiosAdapter, type AxiosRequestConfig, type AxiosResponse } from 'axios';
-import React from 'react';
+import React, { type FC } from 'react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
@@ -10,8 +10,15 @@ import type { UserDto } from '@jellyfin/sdk/lib/generated-client';
 
 import globalize from 'lib/globalize';
 import { ApiContext } from 'hooks/useApi';
+import type { ViewManagerPageProps } from 'components/viewManager/ViewManagerPage';
 
 import PermalinkRedirectPage, { type PermalinkPurpose } from './PermalinkRedirectPage';
+
+const LandingViewPage: FC<ViewManagerPageProps> = ({ controller, routeParameters }) => (
+    <div data-testid='landing'>
+        {`${controller === 'itemDetails/index' ? '/web/details' : '/web/video'}?${routeParameters?.toString()}`}
+    </div>
+);
 
 /**
  * Entry-point tests for the two permalink routes a shared link actually lands
@@ -130,9 +137,17 @@ function renderPermalink(
             <ApiContext.Provider value={context}>
                 <MemoryRouter initialEntries={[ path ]}>
                     <Routes>
-                        <Route path={`/${marker}/:permalinkId`} element={<PermalinkRedirectPage purpose={purpose} />} />
-                        <Route path='/details' element={<LandingProbe />} />
-                        <Route path='/video' element={<LandingProbe />} />
+                        <Route
+                            path={`/${marker}/:permalinkId`}
+                            element={(
+                                <PermalinkRedirectPage
+                                    purpose={purpose}
+                                    viewPageComponent={LandingViewPage}
+                                />
+                            )}
+                        />
+                        <Route path='/web/details' element={<LandingProbe />} />
+                        <Route path='/web/video' element={<LandingProbe />} />
                         <Route path='/elsewhere' element={<div data-testid='elsewhere' />} />
                     </Routes>
                 </MemoryRouter>
@@ -189,7 +204,7 @@ describe('permalink info route (#/p/:permalinkId)', () => {
 
         renderPermalink(server, 'info', '/p/tt0062622');
 
-        expect(await landingText()).toBe('/details?id=item-1&serverId=server-1');
+        expect(await landingText()).toBe('/web/details?id=item-1&serverId=server-1');
         expect(server.calls).toEqual([
             'GET /Permalinks/tt0062622/Items',
             'POST /Permalinks/Candidates/handle-1/Details'
@@ -204,7 +219,7 @@ describe('permalink info route (#/p/:permalinkId)', () => {
 
         renderPermalink(server, 'info', `/p/${SK_MOVIE_ID}`);
 
-        expect(await landingText()).toBe('/details?id=item-9&serverId=server-1');
+        expect(await landingText()).toBe('/web/details?id=item-9&serverId=server-1');
         expect(server.calls.some(call => call.includes('/Items?')) || server.calls.some(call => call.startsWith('GET /Items'))).toBe(false);
     });
 
@@ -216,7 +231,7 @@ describe('permalink info route (#/p/:permalinkId)', () => {
 
         renderPermalink(server, 'info', `/p/${SK_SERIES_ID}`);
 
-        expect(await landingText()).toBe('/details?id=series-3&serverId=server-1');
+        expect(await landingText()).toBe('/web/details?id=series-3&serverId=server-1');
     });
 
     it('uses the server id the redeemed item reports, not the one the session happened to hold', async () => {
@@ -227,7 +242,7 @@ describe('permalink info route (#/p/:permalinkId)', () => {
 
         renderPermalink(server, 'info', '/p/tt0062622');
 
-        expect(await landingText()).toBe('/details?id=item-1&serverId=server-other');
+        expect(await landingText()).toBe('/web/details?id=item-1&serverId=server-other');
     });
 
     it('lists every candidate in a chooser and auto-picks none when the same work exists twice', async () => {
@@ -240,10 +255,10 @@ describe('permalink info route (#/p/:permalinkId)', () => {
         renderPermalink(server, 'info', '/p/tt0062622');
 
         await waitFor(() => expect(document.querySelector('#permalinkChooserPage')).not.toBeNull(), { timeout: 5000 });
-        const links = Array.from(document.querySelectorAll('#permalinkChooserPage a'))
-            .map(anchor => anchor.getAttribute('href'));
-        expect(links).toContain('#/details?id=item-1&serverId=server-1');
-        expect(links).toContain('#/details?id=item-2&serverId=server-1');
+        const choices = Array.from(document.querySelectorAll('#permalinkChooserPage button'));
+        expect(choices).toHaveLength(2);
+        expect(document.querySelector('#permalinkChooserPage')?.textContent).toContain('1968');
+        expect(document.querySelector('#permalinkChooserPage')?.textContent).toContain('2001');
         expect(screen.queryByTestId('landing')).toBeNull();
     });
 
@@ -325,7 +340,7 @@ describe('permalink info route (#/p/:permalinkId)', () => {
         const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
         const first = renderPermalink(beforeRename, 'info', `/p/${SK_MOVIE_ID}`, queryClient);
-        expect(await landingText()).toBe('/details?id=item-9&serverId=server-1');
+        expect(await landingText()).toBe('/web/details?id=item-9&serverId=server-1');
         first.unmount();
         cleanup();
 
@@ -340,7 +355,8 @@ describe('permalink info route (#/p/:permalinkId)', () => {
 
         renderPermalink(afterRename, 'info', `/p/${SK_MOVIE_ID}`, queryClient);
 
-        expect(await landingText()).toBe('/details?id=item-renamed&serverId=server-1');
+        await waitFor(() => expect(screen.getByTestId('landing').textContent)
+            .toBe('/web/details?id=item-renamed&serverId=server-1'));
         expect(afterRename.calls).toEqual([
             `GET /Permalinks/${SK_MOVIE_ID}/Items`,
             'POST /Permalinks/Candidates/handle-r/Details'
@@ -406,7 +422,7 @@ describe('permalink watch route (#/w/:permalinkId)', () => {
 
         renderPermalink(server, 'watch', '/w/tt0062622');
 
-        expect(await landingText()).toBe('/video?id=item-1&serverId=server-1');
+        expect(await landingText()).toBe('/web/video?id=item-1&serverId=server-1');
         expect(server.calls).toEqual([
             'GET /Permalinks/tt0062622/Items',
             'POST /Permalinks/Candidates/handle-1/PlaybackLease',
@@ -429,7 +445,7 @@ describe('permalink watch route (#/w/:permalinkId)', () => {
 
         renderPermalink(server, 'watch', '/w/tt0062622?t=90');
 
-        expect(await landingText()).toBe('/video?id=item-1&serverId=server-1&t=90');
+        expect(await landingText()).toBe('/web/video?id=item-1&serverId=server-1&t=90');
     });
 
     it('drops a malformed start offset rather than guessing a position', async () => {
@@ -447,7 +463,7 @@ describe('permalink watch route (#/w/:permalinkId)', () => {
 
         renderPermalink(server, 'watch', '/w/tt0062622?t=-5');
 
-        expect(await landingText()).toBe('/video?id=item-1&serverId=server-1');
+        expect(await landingText()).toBe('/web/video?id=item-1&serverId=server-1');
     });
 
     it('surfaces a replacement race as a retriable conflict rather than playing the replaced file', async () => {
@@ -500,7 +516,7 @@ describe('permalink watch route (#/w/:permalinkId)', () => {
         const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
         const first = renderPermalink(beforeGrowth, 'watch', `/w/${SK_SERIES_ID}`, queryClient);
-        expect(await landingText()).toBe('/video?id=episode-1&serverId=server-1');
+        expect(await landingText()).toBe('/web/video?id=episode-1&serverId=server-1');
         first.unmount();
         cleanup();
 
@@ -521,7 +537,7 @@ describe('permalink watch route (#/w/:permalinkId)', () => {
 
         renderPermalink(afterGrowth, 'watch', `/w/${SK_SERIES_ID}`, queryClient);
 
-        expect(await landingText()).toBe('/video?id=episode-1&serverId=server-1');
+        expect(await landingText()).toBe('/web/video?id=episode-1&serverId=server-1');
         expect(afterGrowth.calls).toEqual([
             `GET /Permalinks/${SK_SERIES_ID}/Items`,
             'POST /Permalinks/Candidates/handle-3/PlaybackLease',
@@ -544,6 +560,6 @@ describe('permalink watch route (#/w/:permalinkId)', () => {
 
         renderPermalink(server, 'watch', `/w/${SK_MOVIE_ID}`);
 
-        expect(await landingText()).toBe('/video?id=item-9&serverId=server-1');
+        expect(await landingText()).toBe('/web/video?id=item-9&serverId=server-1');
     });
 });

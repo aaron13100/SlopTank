@@ -23,7 +23,7 @@ const AlertsLogWidget = () => {
     return (
         <Widget
             title={globalize.translate('Alerts')}
-            href='/dashboard/activity?useractivity=false'
+            href='/web/dashboard/activity?useractivity=false'
         >
             <List sx={{ bgcolor: 'background.paper' }}>
                 {alerts?.Items?.map(entry => (
@@ -31,7 +31,7 @@ const AlertsLogWidget = () => {
                         key={entry.Id}
                         item={entry}
                         displayShortOverview={false}
-                        to='/dashboard/activity?useractivity=false'
+                        to='/web/dashboard/activity?useractivity=false'
                     />
                 ))}
             </List>

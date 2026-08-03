@@ -16,8 +16,9 @@ const FallbackRoute = () => {
         };
 
         // Redirect old wizard paths
-        if (RegExp(/^\/wizard[a-z]+\.html/i).test(location.pathname)) {
-            return { ..._to, pathname: `/wizard/${location.pathname.slice(7, -5)}` };
+        const wizardMatch = /^\/web\/wizard([a-z]+)\.html$/i.exec(location.pathname);
+        if (wizardMatch) {
+            return { ..._to, pathname: `/web/wizard/${wizardMatch[1]}` };
         }
 
         // If a path ends in ".html", redirect to the path with it removed
@@ -49,7 +50,7 @@ const FallbackRoute = () => {
                 <p>{globalize.translate('PageNotFound')}</p>
                 <LinkButton
                     className='button-link'
-                    href='#/home'
+                    href='/web/home'
                 >
                     {globalize.translate('GoHome')}
                 </LinkButton>

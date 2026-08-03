@@ -23,7 +23,7 @@ const ActivityLogWidget = () => {
     return (
         <Widget
             title={globalize.translate('HeaderActivity')}
-            href='/dashboard/activity?useractivity=true'
+            href='/web/dashboard/activity?useractivity=true'
         >
             {isPending ? (
                 <Stack spacing={2}>
@@ -39,7 +39,7 @@ const ActivityLogWidget = () => {
                             key={entry.Id}
                             item={entry}
                             displayShortOverview={true}
-                            to='/dashboard/activity?useractivity=true'
+                            to='/web/dashboard/activity?useractivity=true'
                         />
                     ))}
                 </List>

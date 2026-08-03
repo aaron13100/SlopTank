@@ -27,7 +27,7 @@ const TunerDeviceCard = ({ tunerHost }: TunerDeviceCardProps) => {
     const deleteTuner = useDeleteTuner();
 
     const navigateToEditPage = useCallback(() => {
-        navigate(`/dashboard/livetv/tuner?id=${tunerHost.Id}`);
+        navigate(`/web/dashboard/livetv/tuner?id=${tunerHost.Id}`);
     }, [ navigate, tunerHost ]);
 
     const onDelete = useCallback(() => {

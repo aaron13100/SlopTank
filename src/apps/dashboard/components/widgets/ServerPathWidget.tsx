@@ -11,7 +11,7 @@ const ServerPathWidget = () => {
     return (
         <Widget
             title={globalize.translate('HeaderPaths')}
-            href='/dashboard/settings'
+            href='/web/dashboard/settings'
         >
             <List sx={{ bgcolor: 'background.paper' }}>
                 <StorageListItem

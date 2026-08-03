@@ -17,10 +17,10 @@ function useNavigate(url: string): () => void {
 }
 
 const SectionTabs: FunctionComponent<IProps> = ({ activeTab }: IProps) => {
-    const onClickProfile = useNavigate('/dashboard/users/profile');
-    const onClickAccess = useNavigate('/dashboard/users/access');
-    const onClickParentalControl = useNavigate('/dashboard/users/parentalcontrol');
-    const clickPassword = useNavigate('/dashboard/users/password');
+    const onClickProfile = useNavigate('/web/dashboard/users/profile');
+    const onClickAccess = useNavigate('/web/dashboard/users/access');
+    const onClickParentalControl = useNavigate('/web/dashboard/users/parentalcontrol');
+    const clickPassword = useNavigate('/web/dashboard/users/password');
     return (
         <div
             data-role='controlgroup'

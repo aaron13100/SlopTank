@@ -31,11 +31,11 @@ const SearchButton: FC = () => {
     const location = useLocation();
     const [searchParams] = useSearchParams();
 
-    const isSearchPath = location.pathname === '/search';
+    const isSearchPath = location.pathname === '/web/search';
     const search = createSearchParams(getUrlParams(searchParams));
     const createSearchLink =
         {
-            pathname: '/search',
+            pathname: '/web/search',
             search: search ? `?${search}` : undefined
         };
 

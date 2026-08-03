@@ -1,13 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-    buildPermalinkHashPath,
+    buildPermalinkPath,
     buildPermalinkShareUrl,
     parsePermalinkId,
     permalinkStartSecondsToTicks
 } from './permalinkId';
+import grammar from './permalink-grammar-v1.json';
 
 describe('parsePermalinkId', () => {
+    it('conforms to the versioned cross-stack grammar vectors', () => {
+        expect(grammar.version).toBe(1);
+        for (const id of grammar.valid) expect(parsePermalinkId(id)).not.toBeNull();
+        for (const id of [ ...grammar.invalid, ...grammar.reserved ]) {
+            expect(parsePermalinkId(id)).toBeNull();
+        }
+    });
+
     it('parses every namespace', () => {
         expect(parsePermalinkId('tt3522806')).toEqual({ namespace: 'imdb', id: 'tt3522806' });
         expect(parsePermalinkId('tt0')).toEqual({ namespace: 'imdb', id: 'tt0' });
@@ -70,14 +79,14 @@ describe('parsePermalinkId', () => {
 describe('buildPermalinkShareUrl', () => {
     it('builds the pasteable pretty entry URL for each kind', () => {
         expect(buildPermalinkShareUrl('https://media.example', 'info', 'tt3522806'))
-            .toBe('https://media.example/web/p/tt3522806');
+            .toBe('https://media.example/tt3522806');
         expect(buildPermalinkShareUrl('https://media.example', 'watch', 'tm-mv-4613'))
-            .toBe('https://media.example/web/w/tm-mv-4613');
+            .toBe('https://media.example/w/tm-mv-4613');
     });
 
     it('never doubles the separator when the origin carries trailing slashes', () => {
         expect(buildPermalinkShareUrl('https://media.example//', 'info', 'tt3522806'))
-            .toBe('https://media.example/web/p/tt3522806');
+            .toBe('https://media.example/tt3522806');
     });
 
     it('round trips its own output back through the parser', () => {
@@ -88,10 +97,10 @@ describe('buildPermalinkShareUrl', () => {
     });
 });
 
-describe('buildPermalinkHashPath', () => {
-    it('builds the info and watch marker paths', () => {
-        expect(buildPermalinkHashPath('info', 'tt3522806')).toBe('#/p/tt3522806');
-        expect(buildPermalinkHashPath('watch', 'tt3522806')).toBe('#/w/tt3522806');
+describe('buildPermalinkPath', () => {
+    it('builds the canonical root info and watch paths', () => {
+        expect(buildPermalinkPath('info', 'tt3522806')).toBe('/tt3522806');
+        expect(buildPermalinkPath('watch', 'tt3522806')).toBe('/w/tt3522806');
     });
 });
 

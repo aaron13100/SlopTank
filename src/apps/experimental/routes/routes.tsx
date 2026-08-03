@@ -13,10 +13,10 @@ import VideoPage from './video';
 
 export const EXPERIMENTAL_APP_ROUTES: RouteObject[] = [
     {
-        path: '/*',
+        path: '*',
         lazy: () => import('../AppLayout'),
         children: [
-            { index: true, element: <Navigate replace to='/home' /> },
+            { index: true, element: <Navigate replace to='/web/home' /> },
 
             {
                 /* User routes */

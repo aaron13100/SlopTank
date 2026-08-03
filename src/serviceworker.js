@@ -4,6 +4,11 @@ function getApiClient(serverId) {
     return Promise.resolve(window.connectionManager.getApiClient(serverId));
 }
 
+function openApp() {
+    /* eslint-disable-next-line no-restricted-globals -- service-worker globals are intentional here. */
+    return clients.openWindow(self.registration.scope + 'web/');
+}
+
 function executeAction(action, data, serverId) {
     return getApiClient(serverId).then(function (apiClient) {
         switch (action) {
@@ -12,8 +17,7 @@ function executeAction(action, data, serverId) {
             case 'restart':
                 return apiClient.restartServer();
             default:
-                clients.openWindow('/');
-                return Promise.resolve();
+                return openApp();
         }
     });
 }
@@ -28,8 +32,7 @@ self.addEventListener('notificationclick', function (event) {
     const action = event.action;
 
     if (!action) {
-        clients.openWindow('/');
-        event.waitUntil(Promise.resolve());
+        event.waitUntil(openApp());
         return;
     }
 

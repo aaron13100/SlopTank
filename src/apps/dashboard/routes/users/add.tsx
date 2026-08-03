@@ -160,7 +160,7 @@ const UserNew = () => {
                         userPolicy: user.Policy
                     }, {
                         onSuccess: () => {
-                            navigate(`/dashboard/users/profile?userId=${user.Id}`);
+                            navigate(`/web/dashboard/users/profile?userId=${user.Id}`);
                         },
                         onError: () => {
                             console.error('[usernew] failed to update user policy');

@@ -75,7 +75,7 @@ const UserSettingsPage: FC = () => {
                         </h2>
 
                         <LinkButton
-                            href={`#/userprofile?userId=${userId}`}
+                            href={`/web/userprofile?userId=${userId}`}
                             className='lnkUserProfile listItem-border'
                             style={{
                                 display: 'block',
@@ -95,7 +95,7 @@ const UserSettingsPage: FC = () => {
 
                         {isQuickConnectEnabled && (
                             <LinkButton
-                                href={`#/quickconnect?userId=${userId}`}
+                                href={`/web/quickconnect?userId=${userId}`}
                                 className='lnkQuickConnectPreferences listItem-border'
                                 style={{
                                     display: 'block',
@@ -115,7 +115,7 @@ const UserSettingsPage: FC = () => {
                         )}
 
                         <LinkButton
-                            href={`#/mypreferencesdisplay?userId=${userId}`}
+                            href={`/web/mypreferencesdisplay?userId=${userId}`}
                             className='lnkDisplayPreferences listItem-border'
                             style={{
                                 display: 'block',
@@ -134,7 +134,7 @@ const UserSettingsPage: FC = () => {
                         </LinkButton>
 
                         <LinkButton
-                            href={`#/mypreferenceshome?userId=${userId}`}
+                            href={`/web/mypreferenceshome?userId=${userId}`}
                             className='lnkHomePreferences listItem-border'
                             style={{
                                 display: 'block',
@@ -153,7 +153,7 @@ const UserSettingsPage: FC = () => {
                         </LinkButton>
 
                         <LinkButton
-                            href={`#/mypreferencesplayback?userId=${userId}`}
+                            href={`/web/mypreferencesplayback?userId=${userId}`}
                             className='lnkPlaybackPreferences listItem-border'
                             style={{
                                 display: 'block',
@@ -172,7 +172,7 @@ const UserSettingsPage: FC = () => {
                         </LinkButton>
 
                         <LinkButton
-                            href={`#/mypreferencessubtitles?userId=${userId}`}
+                            href={`/web/mypreferencessubtitles?userId=${userId}`}
                             className='lnkSubtitlePreferences listItem-border'
                             style={{
                                 display: 'block',
@@ -234,7 +234,7 @@ const UserSettingsPage: FC = () => {
 
                         {isLoggedInUser && !browser.mobile && !isControlsPageEmpty && (
                             <LinkButton
-                                href={`#/mypreferencescontrols?userId=${userId}`}
+                                href={`/web/mypreferencescontrols?userId=${userId}`}
                                 className='lnkControlsPreferences listItem-border'
                                 style={{
                                     display: 'block',
@@ -266,7 +266,7 @@ const UserSettingsPage: FC = () => {
                             </h2>
 
                             <LinkButton
-                                href='#/dashboard'
+                                href='/web/dashboard'
                                 className='listItem-border'
                                 style={{
                                     display: 'block',
@@ -285,7 +285,7 @@ const UserSettingsPage: FC = () => {
                             </LinkButton>
 
                             <LinkButton
-                                href='#/metadata'
+                                href='/web/metadata'
                                 className='listItem-border'
                                 style={{
                                     display: 'block',

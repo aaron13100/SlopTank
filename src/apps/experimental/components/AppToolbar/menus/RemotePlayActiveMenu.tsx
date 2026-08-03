@@ -133,7 +133,7 @@ const RemotePlayActiveMenu: FC<RemotePlayActiveMenuProps> = ({
 
             <MenuItem
                 component={Link}
-                to='/queue'
+                to='/web/queue'
                 onClick={onMenuClose}
             >
                 <ListItemIcon>

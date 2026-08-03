@@ -1,54 +1,54 @@
 export const HelpLinks = [
     {
-        paths: ['/dashboard/devices'],
+        paths: ['/web/dashboard/devices'],
         url: 'https://jellyfin.org/docs/general/server/devices'
     }, {
-        paths: ['/dashboard/libraries'],
+        paths: ['/web/dashboard/libraries'],
         url: 'https://jellyfin.org/docs/general/server/libraries'
     }, {
         paths: [
-            '/dashboard/livetv',
-            '/dashboard/livetv/tuner',
-            '/dashboard/recordings'
+            '/web/dashboard/livetv',
+            '/web/dashboard/livetv/tuner',
+            '/web/dashboard/recordings'
         ],
         url: 'https://jellyfin.org/docs/general/server/live-tv/'
     }, {
-        paths: ['/dashboard/livetv/guide'],
+        paths: ['/web/dashboard/livetv/guide'],
         url: 'https://jellyfin.org/docs/general/server/live-tv/setup-guide#adding-guide-data'
     }, {
-        paths: ['/dashboard/networking'],
+        paths: ['/web/dashboard/networking'],
         url: 'https://jellyfin.org/docs/general/networking/'
     }, {
-        paths: ['/dashboard/playback/transcoding'],
+        paths: ['/web/dashboard/playback/transcoding'],
         url: 'https://jellyfin.org/docs/general/server/transcoding'
     }, {
-        paths: ['/dashboard/plugins'],
+        paths: ['/web/dashboard/plugins'],
         url: 'https://jellyfin.org/docs/general/server/plugins/'
     }, {
-        paths: ['/dashboard/plugins/repositories'],
+        paths: ['/web/dashboard/plugins/repositories'],
         url: 'https://jellyfin.org/docs/general/server/plugins/#repositories'
     }, {
         paths: [
-            '/dashboard/branding',
-            '/dashboard/settings'
+            '/web/dashboard/branding',
+            '/web/dashboard/settings'
         ],
         url: 'https://jellyfin.org/docs/general/server/settings'
     }, {
-        paths: ['/dashboard/tasks'],
+        paths: ['/web/dashboard/tasks'],
         url: 'https://jellyfin.org/docs/general/server/tasks'
     }, {
-        paths: ['/dashboard/users'],
+        paths: ['/web/dashboard/users'],
         url: 'https://jellyfin.org/docs/general/server/users/adding-managing-users'
     }, {
         paths: [
-            '/dashboard/users/access',
-            '/dashboard/users/parentalcontrol',
-            '/dashboard/users/password',
-            '/dashboard/users/profile'
+            '/web/dashboard/users/access',
+            '/web/dashboard/users/parentalcontrol',
+            '/web/dashboard/users/password',
+            '/web/dashboard/users/profile'
         ],
         url: 'https://jellyfin.org/docs/general/server/users/'
     }, {
-        paths: ['/dashboard/backups'],
+        paths: ['/web/dashboard/backups'],
         url: 'https://jellyfin.org/docs/general/administration/backup-and-restore/'
     }
 ];

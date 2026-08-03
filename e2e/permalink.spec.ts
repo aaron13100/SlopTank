@@ -65,7 +65,7 @@ const PLAYER_READY_TIMEOUT_MS = 60_000;
  * invalid) has no Retry button and falls straight through to the URL wait.
  *
  * @param page - Page under test, already navigated to the permalink route.
- * @param targetUrl - The legacy route the permalink must land on.
+ * @param targetUrl - The canonical route that must remain in the address bar.
  * @param timeoutMs - Budget for the whole resolution, retries included.
  */
 async function waitForPermalinkTarget(
@@ -74,10 +74,15 @@ async function waitForPermalinkTarget(
     timeoutMs: number
 ) {
     const retryButton = page.locator('#permalinkRetryButton');
+    const resolvedPresentation = page.locator('.btnMoreCommands:visible, video:visible').first();
 
     for (let attempt = 0; attempt < 5; attempt++) {
-        const landed = await page.waitForURL(targetUrl, { timeout: timeoutMs / 5 }).then(() => true, () => false);
-        if (landed) return;
+        const landed = await resolvedPresentation.waitFor({ state: 'visible', timeout: timeoutMs / 5 })
+            .then(() => true, () => false);
+        if (landed) {
+            await expect(page).toHaveURL(targetUrl);
+            return;
+        }
 
         if (await retryButton.isVisible().catch(() => false)) {
             await retryButton.click();
@@ -89,7 +94,8 @@ async function waitForPermalinkTarget(
         break;
     }
 
-    await page.waitForURL(targetUrl, { timeout: timeoutMs });
+    await resolvedPresentation.waitFor({ state: 'visible', timeout: timeoutMs });
+    await expect(page).toHaveURL(targetUrl);
 }
 
 /**
@@ -222,10 +228,9 @@ async function clickItemMenuCommand(
     itemId: string,
     serverId: string
 ): Promise<void> {
-    await page.goto(`/web/#/details?id=${itemId}&serverId=${serverId}`);
-    // Navigating between two hash routes does not reload the document, so the
-    // recorder is not reinstalled. Clear it explicitly rather than let a second
-    // copy in one test read the first one's value.
+    await page.goto(`/web/details?id=${itemId}&serverId=${serverId}`);
+    // Clear the previous recording explicitly rather than let a second copy in
+    // one test read the first one's value.
     await page.evaluate(() => {
         delete (window as CopyRecorderWindow).__permalinkCopiedText;
     });
@@ -285,32 +290,31 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe('pretty permalinks (docs/internal/permalink-url-design.md)', () => {
-    test('an external alias minted from the item page opens its details page through #/p/<id>', async ({ page, context, config }) => {
+    test('a legacy #/p/<id> link canonicalizes and renders details at /<id>', async ({ page, context, config }) => {
         const episodeId = requireEpisodeItemId();
         await login(page, config.username, config.password);
         const alias = await mintPermalinkId(page, context, episodeId, config.serverId, 'copy-link');
 
         await page.goto(`/web/#/p/${alias}`);
 
-        await waitForPermalinkTarget(page, /#\/details\?id=/, RESOLVE_TIMEOUT_MS);
-        expect(new URL(page.url()).hash).toContain(`id=${episodeId}`);
+        await waitForPermalinkTarget(page, new RegExp(`/${alias}$`), RESOLVE_TIMEOUT_MS);
     });
 
-    test('an external alias opens the video route and starts playback through #/w/<id>', async ({ page, context, config }) => {
+    test('a legacy #/w/<id> link canonicalizes to /w/<id> and starts playback', async ({ page, context, config }) => {
         const episodeId = requireEpisodeItemId();
         await login(page, config.username, config.password);
         const alias = await mintPermalinkId(page, context, episodeId, config.serverId, 'copy-play-link');
 
         await page.goto(`/web/#/w/${alias}`);
 
-        await waitForPermalinkTarget(page, /#\/video\?id=/, PLAYBACK_RESOLVE_TIMEOUT_MS);
+        await waitForPermalinkTarget(page, new RegExp(`/w/${alias}$`), PLAYBACK_RESOLVE_TIMEOUT_MS);
         await expectPlaybackStarted(page);
     });
 
     test('an external alias the server holds no evidence for says so, quoting the server, and never guesses an item', async ({ page, config }) => {
         await login(page, config.username, config.password);
 
-        await page.goto(`/web/#/p/${UNMINTED_IMDB_ID}`);
+        await page.goto(`/${UNMINTED_IMDB_ID}`);
 
         const message = page.locator('#permalinkMessagePage');
         await expect(message).toBeVisible({ timeout: 20_000 });
@@ -318,13 +322,13 @@ test.describe('pretty permalinks (docs/internal/permalink-url-design.md)', () =>
         // this is what a bundle that loses typed failures collapses away.
         await expect(message).toContainText('Open the item on this server and use Copy Link once');
         await expect(message).toContainText('EvidenceRequired');
-        await expect(page).not.toHaveURL(/#\/details\?id=/);
+        await expect(page).toHaveURL(new RegExp(`/${UNMINTED_IMDB_ID}$`));
     });
 
     test('a well-formed sk- alias the server never issued shows a not-found message, never a guess', async ({ page, config }) => {
         await login(page, config.username, config.password);
 
-        await page.goto(`/web/#/p/${UNKNOWN_SLOPTANK_ID}`);
+        await page.goto(`/${UNKNOWN_SLOPTANK_ID}`);
 
         await expect(page.locator('#permalinkMessagePage')).toBeVisible({ timeout: 20_000 });
         await expect(page.locator('#permalinkMessagePage')).toContainText(UNKNOWN_SLOPTANK_ID);
@@ -333,9 +337,9 @@ test.describe('pretty permalinks (docs/internal/permalink-url-design.md)', () =>
     test('a malformed permalink id shows an invalid-link message without any network lookup', async ({ page, config }) => {
         await login(page, config.username, config.password);
 
-        await page.goto('/web/#/p/not-a-real-permalink');
+        await page.goto('/not-a-real-permalink');
 
-        await expect(page.locator('#permalinkMessagePage')).toBeVisible({ timeout: 20_000 });
+        await expect(page.locator('#fallbackPage')).toBeVisible({ timeout: 20_000 });
     });
 
     test('a previously shared #/details?...&autoplay=1 link still starts playback (regression: autoplay was silently dropped when the video route became the durable permalink)', async ({ page, config }) => {
@@ -343,34 +347,30 @@ test.describe('pretty permalinks (docs/internal/permalink-url-design.md)', () =>
 
         await page.goto(`/web/#/details?id=${config.itemId}&serverId=${config.serverId}&autoplay=1`);
 
-        await waitForPermalinkTarget(page, /#\/video\?id=/, PLAYBACK_RESOLVE_TIMEOUT_MS);
+        await waitForPermalinkTarget(page, /\/w\/(?:tt\d+|tm-(?:mv|tv|ep|se|co)-\d+|sk-[0-9a-hjkmnp-tv-z]{26})$/, PLAYBACK_RESOLVE_TIMEOUT_MS);
         await expectPlaybackStarted(page);
     });
 });
 
-test.describe('candidate C: the bare pretty entry URL (design section 6.2)', () => {
-    test('a bare /web/p/<id> URL with no hash redirects through the server middleware to the item', async ({ page, context, config }) => {
+test.describe('browser-path compatibility (design section 6.2)', () => {
+    test('/web/p/<id> replaces itself with the canonical info route', async ({ page, context, config }) => {
         const episodeId = requireEpisodeItemId();
         await login(page, config.username, config.password);
         const alias = await mintPermalinkId(page, context, episodeId, config.serverId, 'copy-link');
 
-        // A real top-level navigation, not a hash change: this only resolves if
-        // the server's redirect middleware answers with a 302 to the hash form
-        // before the SPA ever loads.
         await page.goto(`/web/p/${alias}`);
 
-        await waitForPermalinkTarget(page, /#\/details\?id=/, RESOLVE_TIMEOUT_MS);
-        expect(new URL(page.url()).hash).toContain(`id=${episodeId}`);
+        await waitForPermalinkTarget(page, new RegExp(`/${alias}$`), RESOLVE_TIMEOUT_MS);
     });
 
-    test('a bare /web/w/<id> URL with no hash redirects through the server middleware and starts playback', async ({ page, context, config }) => {
+    test('/web/w/<id> replaces itself with the canonical watch route and starts playback', async ({ page, context, config }) => {
         const episodeId = requireEpisodeItemId();
         await login(page, config.username, config.password);
         const alias = await mintPermalinkId(page, context, episodeId, config.serverId, 'copy-play-link');
 
         await page.goto(`/web/w/${alias}`);
 
-        await waitForPermalinkTarget(page, /#\/video\?id=/, PLAYBACK_RESOLVE_TIMEOUT_MS);
+        await waitForPermalinkTarget(page, new RegExp(`/w/${alias}$`), PLAYBACK_RESOLVE_TIMEOUT_MS);
         await expectPlaybackStarted(page);
     });
 });
@@ -388,18 +388,17 @@ test.describe('signed-out access (design section 4.3)', () => {
         await page.evaluate(() => window.localStorage.clear());
         await context.clearCookies();
 
-        await page.goto(`/web/p/${alias}`);
+        await page.goto(`/${alias}`);
 
         // ConnectionRequired encodes the permalink path into the login url
         // before any resolution is attempted, so a signed-out visitor never
         // sees a bare "not found" for a link they simply have not opened yet.
-        await page.waitForURL(/#\/login\?/, { timeout: 20_000 });
-        expect(new URL(page.url()).hash).toContain(encodeURIComponent(`/p/${alias}`));
+        await page.waitForURL(/\/web\/login\?/, { timeout: 20_000 });
+        expect(new URL(page.url()).search).toContain(encodeURIComponent(`/${alias}`));
 
         await submitManualLogin(page, config.username, config.password);
 
-        await waitForPermalinkTarget(page, /#\/details\?id=/, RESOLVE_TIMEOUT_MS);
-        expect(new URL(page.url()).hash).toContain(`id=${episodeId}`);
+        await waitForPermalinkTarget(page, new RegExp(`/${alias}$`), RESOLVE_TIMEOUT_MS);
     });
 });
 
@@ -461,11 +460,10 @@ test.describe('share and copy links (design section 5): ensure runs before any U
 
         await expect(page.locator('.toastContainer .toast')).toContainText('Permanent link copied successfully.', { timeout: ENSURE_TIMEOUT_MS });
         const origin = new URL(page.url()).origin;
-        expect(copiedUrl.startsWith(`${origin}/web/p/`), `expected a pretty link under ${origin}, got: ${copiedUrl}`).toBe(true);
+        expect(copiedUrl).toMatch(new RegExp(`^${origin}/(?:tt\\d+|tm-(?:mv|tv|ep|se|co)-\\d+|sk-[0-9a-hjkmnp-tv-z]{26})$`));
 
         await page.goto(copiedUrl);
-        await waitForPermalinkTarget(page, /#\/details\?id=/, RESOLVE_TIMEOUT_MS);
-        expect(new URL(page.url()).hash).toContain(`id=${episodeId}`);
+        await waitForPermalinkTarget(page, new RegExp(`${new URL(copiedUrl).pathname}$`), RESOLVE_TIMEOUT_MS);
     });
 
     test('Copy Play Link ensures the item and copies a URL that starts playback', async ({ page, context, config }) => {
@@ -477,10 +475,10 @@ test.describe('share and copy links (design section 5): ensure runs before any U
 
         await expect(page.locator('.toastContainer .toast')).toContainText('Permanent play link copied successfully.', { timeout: ENSURE_TIMEOUT_MS });
         const origin = new URL(page.url()).origin;
-        expect(copiedUrl.startsWith(`${origin}/web/w/`), `expected a pretty link under ${origin}, got: ${copiedUrl}`).toBe(true);
+        expect(copiedUrl).toMatch(new RegExp(`^${origin}/w/(?:tt\\d+|tm-(?:mv|tv|ep|se|co)-\\d+|sk-[0-9a-hjkmnp-tv-z]{26})$`));
 
         await page.goto(copiedUrl);
-        await waitForPermalinkTarget(page, /#\/video\?id=/, PLAYBACK_RESOLVE_TIMEOUT_MS);
+        await waitForPermalinkTarget(page, new RegExp(`${new URL(copiedUrl).pathname}$`), PLAYBACK_RESOLVE_TIMEOUT_MS);
         await expectPlaybackStarted(page);
     });
 
@@ -492,10 +490,9 @@ test.describe('share and copy links (design section 5): ensure runs before any U
         const copiedUrl = await copyFromItemMenu(page, 'copy-link', noProviderItemId, config.serverId);
 
         await expect(page.locator('.toastContainer .toast')).toContainText('Permanent link copied successfully.', { timeout: ENSURE_TIMEOUT_MS });
-        expect(copiedUrl).toMatch(/\/web\/p\/sk-[0-9a-hjkmnp-tv-z]{26}$/);
+        expect(copiedUrl).toMatch(/\/sk-[0-9a-hjkmnp-tv-z]{26}$/);
 
         await page.goto(copiedUrl);
-        await waitForPermalinkTarget(page, /#\/details\?id=/, RESOLVE_TIMEOUT_MS);
-        expect(new URL(page.url()).hash).toContain(`id=${noProviderItemId}`);
+        await waitForPermalinkTarget(page, new RegExp(`${new URL(copiedUrl).pathname}$`), RESOLVE_TIMEOUT_MS);
     });
 });

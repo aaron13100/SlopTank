@@ -15,7 +15,7 @@ const PluginCard = ({ plugin }: PluginCardProps) => {
 
     const pluginPage = useMemo(() => (
         {
-            pathname: `/dashboard/plugins/${plugin.id}`,
+            pathname: `/web/dashboard/plugins/${plugin.id}`,
             search: `?name=${encodeURIComponent(plugin.name || '')}`,
             hash: location.hash
         }

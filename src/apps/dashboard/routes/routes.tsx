@@ -29,7 +29,7 @@ export const DASHBOARD_APP_ROUTES: RouteObject[] = [
                             ...LEGACY_ADMIN_ROUTES.map(toViewManagerPageRoute),
                             {
                                 path: 'plugins/catalog',
-                                element: <Navigate replace to='/dashboard/plugins' />
+                                element: <Navigate replace to='/web/dashboard/plugins' />
                             }
                         ],
                         errorElement: <ErrorBoundary pageClasses={[ 'type-interior' ]} />

@@ -263,7 +263,7 @@ const UserEdit = () => {
                         }, {
                             onSuccess: () => {
                                 loading.hide();
-                                navigate('/dashboard/users', {
+                                navigate('/web/dashboard/users', {
                                     state: { openSavedToast: true }
                                 });
                             }

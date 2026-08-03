@@ -23,7 +23,7 @@ const RunningTasksWidget = ({ tasks }: RunningTasksWidgetProps) => {
     return (
         <Widget
             title={globalize.translate('HeaderRunningTasks')}
-            href='/dashboard/tasks'
+            href='/web/dashboard/tasks'
         >
             <Paper sx={{ padding: 2 }}>
                 <Stack spacing={2} maxWidth={'330px'}>

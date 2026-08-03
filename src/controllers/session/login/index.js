@@ -205,7 +205,7 @@ export default function (view, params) {
             }
         }
 
-        return '/home';
+        return '/web/home';
     }
 
     function showVisualForm() {

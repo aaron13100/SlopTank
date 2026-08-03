@@ -47,7 +47,7 @@ export const ForgotPasswordPage = () => {
                     msg += '<br/><br/>';
                     msg += result.PinFile;
                     msg += '<br/>';
-                    callback = () => navigate('/forgotpasswordpin');
+                    callback = () => navigate('/web/forgotpasswordpin');
                     break;
                 default:
                     return;

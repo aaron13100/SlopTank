@@ -14,10 +14,10 @@ import { LEGACY_PUBLIC_ROUTES, LEGACY_USER_ROUTES } from './legacyRoutes';
 
 export const STABLE_APP_ROUTES: RouteObject[] = [
     {
-        path: '/*',
+        path: '*',
         Component: AppLayout,
         children: [
-            { index: true, element: <Navigate replace to='/home' /> },
+            { index: true, element: <Navigate replace to='/web/home' /> },
 
             {
                 /* User routes */

@@ -10,23 +10,25 @@ import { getItemQuery } from 'hooks/useItem';
 import { ServerConnections } from 'lib/jellyfin-apiclient';
 import { toApi } from 'utils/jellyfin-apiclient/compat';
 import { queryClient } from 'utils/query/queryClient';
+import { getRememberedPermalinkAlias } from './permalinkSession';
+import { buildPermalinkPath } from './permalinkId';
 
 /** Pages of "no return" (when "Go back" should behave differently, probably quitting the application). */
-const START_PAGE_PATHS = ['/home', '/login', '/selectserver'];
+const START_PAGE_PATHS = ['/web/home', '/web/login', '/web/selectserver'];
 
 /** Pages that do not require a user to be logged in to view. */
 export const PUBLIC_PATHS = [
-    '/addserver',
-    '/selectserver',
-    '/login',
-    '/forgotpassword',
-    '/forgotpasswordpin',
-    '/wizardremoteaccess',
-    '/wizardfinish',
-    '/wizardlibrary',
-    '/wizardsettings',
-    '/wizardstart',
-    '/wizarduser'
+    '/web/addserver',
+    '/web/selectserver',
+    '/web/login',
+    '/web/forgotpassword',
+    '/web/forgotpasswordpin',
+    '/web/wizard/remoteaccess',
+    '/web/wizard/finish',
+    '/web/wizard/library',
+    '/web/wizard/settings',
+    '/web/wizard/start',
+    '/web/wizard/user'
 ];
 
 export class AppRouter {
@@ -47,13 +49,9 @@ export class AppRouter {
     constructor(routerHistory) {
         document.addEventListener('viewshow', () => this.onViewShow());
 
-        // TODO: Can this baseRoute logic be simplified?
-        this.baseRoute = window.location.href.split('?')[0].replace(this.#getRequestFile(), '');
-        // support hashbang
-        this.baseRoute = this.baseRoute.split('#')[0];
-        if (this.baseRoute.endsWith('/') && !this.baseRoute.endsWith('://')) {
-            this.baseRoute = this.baseRoute.substring(0, this.baseRoute.length - 1);
-        }
+        // The server injects a fixed BaseUrl-aware /web/ base into index.html.
+        // It remains correct on root permalink pages where pathname inference cannot.
+        this.baseRoute = document.baseURI.endsWith('/') ? document.baseURI.slice(0, -1) : document.baseURI;
 
         if (routerHistory) {
             this.initialize(routerHistory);
@@ -135,7 +133,7 @@ export class AppRouter {
     async #navigate(path, options, replace) {
         if (this.promiseShow) await this.promiseShow;
 
-        // ensure the path does not start with '#' since the router adds this
+        // Accept legacy hash-shaped targets while callers migrate.
         if (path.startsWith('#')) {
             path = path.substring(1);
         }
@@ -150,9 +148,13 @@ export class AppRouter {
 
         path = path.replace(this.baseUrl(), '');
 
+        if (!path.startsWith('/web/') && path !== '/web' && !/^\/(?:w\/)?(?:tt\d+|tm-(?:mv|tv|ep|se|co)-[1-9]\d*|sk-[0-9a-hjkmnp-tv-z]{26})(?:[?#]|$)/.test(path)) {
+            path = `/web${path}`;
+        }
+
         // can't use this with home right now due to the back menu
         const currentFullPath = this.history.location.pathname + this.history.location.search;
-        if ((this.history.location.pathname === path || currentFullPath === path) && path !== '/home') {
+        if ((this.history.location.pathname === path || currentFullPath === path) && path !== '/web/home') {
             loading.hide();
             return Promise.resolve();
         }
@@ -271,23 +273,6 @@ export class AppRouter {
         this.msgTimeout = setTimeout(this.onForcedLogoutMessageTimeout, 100);
     }
 
-    #getRequestFile() {
-        let path = window.location.pathname || '';
-
-        const index = path.lastIndexOf('/');
-        if (index !== -1) {
-            path = path.substring(index);
-        } else {
-            path = '/' + path;
-        }
-
-        if (!path || path === '/') {
-            path = '/index.html';
-        }
-
-        return path;
-    }
-
     getRouteUrl(item, options) {
         if (!item) {
             throw new Error('item cannot be null');
@@ -309,34 +294,32 @@ export class AppRouter {
         const itemType = item.Type || (options ? options.itemType : null);
         const serverId = item.ServerId || options.serverId;
 
-        // getRouteUrl returns an in-app navigation target and stays synchronous
-        // (docs/internal/permalink-url-design.md section 5): it is called 46+
-        // times across 24 files, and a permalink cannot be chosen without the
-        // server's `POST /Items/{id}/Permalink` round trip. Share and copy own
-        // that round trip themselves and build their own absolute URLs; routine
-        // navigation keeps returning the GUID route below.
+        const rememberedAlias = id ? getRememberedPermalinkAlias(serverId, id) : undefined;
+        if (rememberedAlias && itemHelper.isLocalItem(item)) {
+            return buildPermalinkPath(options.autoplay ? 'watch' : 'info', rememberedAlias);
+        }
         if (item === 'settings') {
-            return '#/mypreferencesmenu';
+            return '/web/mypreferencesmenu';
         }
 
         if (item === 'wizard') {
-            return '#/wizardstart';
+            return '/web/wizard/start';
         }
 
         if (item === 'manageserver') {
-            return '#/dashboard';
+            return '/web/dashboard';
         }
 
         if (item === 'recordedtv') {
-            return '#/livetv?tab=3&serverId=' + serverId;
+            return '/web/livetv?tab=3&serverId=' + serverId;
         }
 
         if (item === 'nextup') {
-            return '#/list?type=nextup&serverId=' + serverId;
+            return '/web/list?type=nextup&serverId=' + serverId;
         }
 
         if (item === 'list') {
-            let urlForList = '#/list?serverId=' + serverId + '&type=' + options.itemTypes;
+            let urlForList = '/web/list?serverId=' + serverId + '&type=' + options.itemTypes;
 
             if (options.isFavorite) {
                 urlForList += '&IsFavorite=true';
@@ -371,61 +354,61 @@ export class AppRouter {
 
         if (item === 'livetv') {
             if (options.section === 'programs') {
-                return '#/livetv?tab=0&serverId=' + serverId;
+                return '/web/livetv?tab=0&serverId=' + serverId;
             }
             if (options.section === 'guide') {
-                return '#/livetv?tab=1&serverId=' + serverId;
+                return '/web/livetv?tab=1&serverId=' + serverId;
             }
 
             if (options.section === 'movies') {
-                return '#/list?type=Programs&IsMovie=true&serverId=' + serverId;
+                return '/web/list?type=Programs&IsMovie=true&serverId=' + serverId;
             }
 
             if (options.section === 'shows') {
-                return '#/list?type=Programs&IsSeries=true&IsMovie=false&IsNews=false&serverId=' + serverId;
+                return '/web/list?type=Programs&IsSeries=true&IsMovie=false&IsNews=false&serverId=' + serverId;
             }
 
             if (options.section === 'sports') {
-                return '#/list?type=Programs&IsSports=true&serverId=' + serverId;
+                return '/web/list?type=Programs&IsSports=true&serverId=' + serverId;
             }
 
             if (options.section === 'kids') {
-                return '#/list?type=Programs&IsKids=true&serverId=' + serverId;
+                return '/web/list?type=Programs&IsKids=true&serverId=' + serverId;
             }
 
             if (options.section === 'news') {
-                return '#/list?type=Programs&IsNews=true&serverId=' + serverId;
+                return '/web/list?type=Programs&IsNews=true&serverId=' + serverId;
             }
 
             if (options.section === 'onnow') {
-                return '#/list?type=Programs&IsAiring=true&serverId=' + serverId;
+                return '/web/list?type=Programs&IsAiring=true&serverId=' + serverId;
             }
 
             if (options.section === 'channels') {
-                return '#/livetv?tab=2&serverId=' + serverId;
+                return '/web/livetv?tab=2&serverId=' + serverId;
             }
 
             if (options.section === 'dvrschedule') {
-                return '#/livetv?tab=4&serverId=' + serverId;
+                return '/web/livetv?tab=4&serverId=' + serverId;
             }
 
             if (options.section === 'seriesrecording') {
-                return '#/livetv?tab=5&serverId=' + serverId;
+                return '/web/livetv?tab=5&serverId=' + serverId;
             }
 
-            return '#/livetv?serverId=' + serverId;
+            return '/web/livetv?serverId=' + serverId;
         }
 
         if (itemType == 'SeriesTimer') {
-            return '#/details?seriesTimerId=' + id + '&serverId=' + serverId;
+            return '/web/details?seriesTimerId=' + id + '&serverId=' + serverId;
         }
 
         if (item.CollectionType == CollectionType.Livetv) {
-            return `#/livetv?collectionType=${item.CollectionType}`;
+            return `/web/livetv?collectionType=${item.CollectionType}`;
         }
 
         if (item.Type === 'Genre') {
-            url = '#/list?genreId=' + item.Id + '&serverId=' + serverId;
+            url = '/web/list?genreId=' + item.Id + '&serverId=' + serverId;
 
             if (context === 'livetv') {
                 url += '&type=Programs';
@@ -439,7 +422,7 @@ export class AppRouter {
         }
 
         if (item.Type === 'MusicGenre') {
-            url = '#/list?musicGenreId=' + item.Id + '&serverId=' + serverId;
+            url = '/web/list?musicGenreId=' + item.Id + '&serverId=' + serverId;
 
             if (options.parentId) {
                 url += '&parentId=' + options.parentId;
@@ -449,7 +432,7 @@ export class AppRouter {
         }
 
         if (item.Type === 'Studio') {
-            url = '#/list?studioId=' + item.Id + '&serverId=' + serverId;
+            url = '/web/list?studioId=' + item.Id + '&serverId=' + serverId;
 
             if (options.parentId) {
                 url += '&parentId=' + options.parentId;
@@ -459,7 +442,7 @@ export class AppRouter {
         }
 
         if (item === 'tag') {
-            url = `#/list?type=tag&tag=${encodeURIComponent(options.tag)}&serverId=${serverId}`;
+            url = `/web/list?type=tag&tag=${encodeURIComponent(options.tag)}&serverId=${serverId}`;
 
             if (options.parentId) {
                 url += '&parentId=' + options.parentId;
@@ -470,7 +453,7 @@ export class AppRouter {
 
         if (context !== 'folders' && !itemHelper.isLocalItem(item)) {
             if (item.CollectionType == CollectionType.Movies) {
-                url = `#/movies?topParentId=${item.Id}&collectionType=${item.CollectionType}`;
+                url = `/web/movies?topParentId=${item.Id}&collectionType=${item.CollectionType}`;
 
                 if (options && options.section === 'latest') {
                     url += '&tab=1';
@@ -480,7 +463,7 @@ export class AppRouter {
             }
 
             if (item.CollectionType == CollectionType.Tvshows) {
-                url = `#/tv?topParentId=${item.Id}&collectionType=${item.CollectionType}`;
+                url = `/web/tv?topParentId=${item.Id}&collectionType=${item.CollectionType}`;
 
                 if (options && options.section === 'latest') {
                     url += '&tab=1';
@@ -490,7 +473,7 @@ export class AppRouter {
             }
 
             if (item.CollectionType == CollectionType.Music) {
-                url = `#/music?topParentId=${item.Id}&collectionType=${item.CollectionType}`;
+                url = `/web/music?topParentId=${item.Id}&collectionType=${item.CollectionType}`;
 
                 if (options?.section === 'latest') {
                     url += '&tab=1';
@@ -502,7 +485,7 @@ export class AppRouter {
             const layoutMode = localStorage.getItem('layout');
 
             if (layoutMode === LayoutMode.Experimental && item.CollectionType == CollectionType.Homevideos) {
-                url = '#/homevideos?topParentId=' + item.Id;
+                url = '/web/homevideos?topParentId=' + item.Id;
 
                 return url;
             }
@@ -511,24 +494,24 @@ export class AppRouter {
         const itemTypes = ['Playlist', 'TvChannel', 'Program', 'BoxSet', 'MusicAlbum', 'MusicGenre', 'Person', 'Recording', 'MusicArtist'];
 
         if (itemTypes.indexOf(itemType) >= 0) {
-            return '#/details?id=' + id + '&serverId=' + serverId;
+            return '/web/details?id=' + id + '&serverId=' + serverId;
         }
 
         const contextSuffix = context ? '&context=' + context : '';
 
         if (itemType == 'Series' || itemType == 'Season' || itemType == 'Episode') {
-            return '#/details?id=' + id + contextSuffix + '&serverId=' + serverId;
+            return '/web/details?id=' + id + contextSuffix + '&serverId=' + serverId;
         }
 
         if (item.IsFolder) {
             if (id) {
-                return '#/list?parentId=' + id + '&serverId=' + serverId;
+                return '/web/list?parentId=' + id + '&serverId=' + serverId;
             }
 
             return '#';
         }
 
-        return '#/details?id=' + id + '&serverId=' + serverId;
+        return '/web/details?id=' + id + '&serverId=' + serverId;
     }
 
     showLocalLogin(serverId) {
@@ -544,7 +527,7 @@ export class AppRouter {
         // episode, autoplay, queue jump) must not grow the history stack:
         // replace the entry so Back always exits the player instead of
         // stepping back through previously played episodes.
-        if (this.history.location.pathname === '/video') {
+        if (this.history.location.pathname === '/web/video' || this.history.location.pathname.startsWith('/w/')) {
             return this.replace(path);
         }
 
@@ -590,7 +573,7 @@ export class AppRouter {
 
 export const appRouter = new AppRouter();
 
-export const isLyricsPage = () => appRouter.history.location.pathname.toLowerCase() === '/lyrics';
+export const isLyricsPage = () => appRouter.history.location.pathname.toLowerCase() === '/web/lyrics';
 
 window.Emby = window.Emby || {};
 window.Emby.Page = appRouter;

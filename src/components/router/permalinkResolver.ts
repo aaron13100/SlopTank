@@ -14,6 +14,7 @@ import {
     type PermalinkCandidateEnvelope
 } from './permalinkApi';
 import type { ParsedPermalinkId, PermalinkKind } from './permalinkId';
+import { rememberPermalinkAlias } from './permalinkSession';
 
 /**
  * Resolves a parsed permalink id to a real item
@@ -129,7 +130,9 @@ async function resolveForInfo(
         };
     }
 
-    return { status: 'resolved', item: { itemId, serverId: item.ServerId ?? request.serverId } };
+    const serverId = item.ServerId ?? request.serverId;
+    rememberPermalinkAlias(serverId, itemId, request.parsed.id);
+    return { status: 'resolved', item: { itemId, serverId } };
 }
 
 async function resolveForWatch(
@@ -153,6 +156,7 @@ async function resolveForWatch(
         signal: request.signal
     });
 
+    rememberPermalinkAlias(request.serverId, snapshot.itemId, request.parsed.id);
     return { status: 'resolved', item: { itemId: snapshot.itemId, serverId: request.serverId } };
 }
 

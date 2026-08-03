@@ -4,7 +4,7 @@ import { LibraryRoute } from '../types/LibraryRoute';
 
 export const LibraryRoutes: LibraryRoute[] = [
     {
-        path: '/livetv',
+        path: '/web/livetv',
         views: [
             {
                 index: 0,
@@ -40,7 +40,7 @@ export const LibraryRoutes: LibraryRoute[] = [
         ]
     },
     {
-        path: '/movies',
+        path: '/web/movies',
         views: [
             {
                 index: 0,
@@ -71,7 +71,7 @@ export const LibraryRoutes: LibraryRoute[] = [
         ]
     },
     {
-        path: '/music',
+        path: '/web/music',
         views: [
             {
                 index: 0,
@@ -112,7 +112,7 @@ export const LibraryRoutes: LibraryRoute[] = [
         ]
     },
     {
-        path: '/tv',
+        path: '/web/tv',
         views: [
             {
                 index: 0,
@@ -148,7 +148,7 @@ export const LibraryRoutes: LibraryRoute[] = [
         ]
     },
     {
-        path: '/homevideos',
+        path: '/web/homevideos',
         views: [
             {
                 index: 0,

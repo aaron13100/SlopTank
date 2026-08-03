@@ -18,7 +18,7 @@ export type ParsedPermalinkId =
     | { namespace: 'tmdb', qualifier: TmdbQualifier, numericId: string, id: string }
     | { namespace: 'sloptank', id: string };
 
-/** The one-character marker segments a pretty permalink path lives under: #/p/<id>, #/w/<id>. */
+/** Compatibility marker segments accepted from the previously shipped URL form. */
 export const PERMALINK_MARKER_SEGMENTS = ['p', 'w'] as const;
 
 const IMDB_ID_PATTERN = /^tt\d+$/;
@@ -64,22 +64,15 @@ export function parsePermalinkId(raw: string): ParsedPermalinkId | null {
     return null;
 }
 
-/** The marker segment each route kind publishes under (design 6.1). */
-function markerFor(kind: PermalinkKind): string {
-    return kind === 'info' ? 'p' : 'w';
-}
-
-/** Builds the in-app hash path for a permalink id, e.g. '#/p/tt3522806' or '#/w/tm-mv-4613'. */
-export function buildPermalinkHashPath(kind: PermalinkKind, id: string): string {
-    return `#/${markerFor(kind)}/${id}`;
+/** Builds the canonical BaseUrl-relative browser path. */
+export function buildPermalinkPath(kind: PermalinkKind, id: string): string {
+    return kind === 'info' ? `/${id}` : `/w/${id}`;
 }
 
 /**
- * Builds the absolute, pasteable permalink URL a share or copy action
- * publishes: the pretty entry form `/web/p/<id>` or `/web/w/<id>` (design
- * sections 3.1 and 6), which the server's redirect middleware turns into the
- * hash route. This is a share URL, not an in-app navigation target, so it is
- * deliberately not what `appRouter.getRouteUrl` returns.
+ * Builds the absolute, pasteable browser-router permalink URL a share or copy
+ * action publishes. The hosted server serves the web shell directly for this
+ * path, so the address bar remains canonical through reload and navigation.
  *
  * @param origin The absolute origin the link is published under, without a trailing slash.
  * @param kind Whether the link opens the info page or the player.
@@ -87,7 +80,7 @@ export function buildPermalinkHashPath(kind: PermalinkKind, id: string): string 
  * @returns The absolute URL to publish.
  */
 export function buildPermalinkShareUrl(origin: string, kind: PermalinkKind, id: string): string {
-    return `${trimTrailingSlashes(origin)}/web/${markerFor(kind)}/${id}`;
+    return `${trimTrailingSlashes(origin)}${buildPermalinkPath(kind, id)}`;
 }
 
 /**

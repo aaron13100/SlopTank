@@ -77,7 +77,7 @@ describe('buildShareUrl', () => {
 
         const link = await buildShareUrl({ api, origin: 'https://media.example', item: ITEM, kind: 'info' });
 
-        expect(link).toEqual({ status: 'permanent', url: 'https://media.example/web/p/tt0062622' });
+        expect(link).toEqual({ status: 'permanent', url: 'https://media.example/tt0062622' });
         expect(calls).toEqual([ 'POST /Items/item-1/Permalink' ]);
     });
 
@@ -93,7 +93,7 @@ describe('buildShareUrl', () => {
 
         expect(link).toEqual({
             status: 'permanent',
-            url: 'https://media.example/web/w/sk-2f3k2m9qbd8x4w1r0ehtyc5vnz'
+            url: 'https://media.example/w/sk-2f3k2m9qbd8x4w1r0ehtyc5vnz'
         });
     });
 
@@ -104,7 +104,7 @@ describe('buildShareUrl', () => {
 
         const link = await buildShareUrl({ api, origin: 'https://media.example/', item: ITEM, kind: 'info' });
 
-        expect(link).toEqual({ status: 'permanent', url: 'https://media.example/web/p/tt0062622' });
+        expect(link).toEqual({ status: 'permanent', url: 'https://media.example/tt0062622' });
     });
 
     it('falls back to a temporary legacy link, visibly marked and reasoned, for an empty or read-only item', async () => {
@@ -119,7 +119,7 @@ describe('buildShareUrl', () => {
 
         expect(link).toEqual({
             status: 'temporary',
-            url: 'https://media.example/web/#/details?id=item-1&serverId=server-1',
+            url: 'https://media.example/web/details?id=item-1&serverId=server-1',
             reason: 'permalink-ineligible: Item has no readable content root.'
         });
     });
@@ -136,7 +136,7 @@ describe('buildShareUrl', () => {
 
         expect(link).toEqual({
             status: 'temporary',
-            url: 'https://media.example/web/#/video?id=item-1&serverId=server-1',
+            url: 'https://media.example/web/video?id=item-1&serverId=server-1',
             reason: 'capsule-unreachable: The volume is not mounted.'
         });
     });
@@ -174,7 +174,7 @@ describe('buildShareUrl', () => {
 
         expect(link).toEqual({
             status: 'temporary',
-            url: 'https://media.example/web/#/details?id=item-1',
+            url: 'https://media.example/web/details?id=item-1',
             reason: 'permalink-ineligible: No content root.'
         });
     });
@@ -195,6 +195,6 @@ describe('buildShareUrl', () => {
         });
 
         expect(link.status === 'temporary' && link.url)
-            .toBe('https://media.example/web/#/details?id=a%26b%3Dc&serverId=server-1');
+            .toBe('https://media.example/web/details?id=a%26b%3Dc&serverId=server-1');
     });
 });

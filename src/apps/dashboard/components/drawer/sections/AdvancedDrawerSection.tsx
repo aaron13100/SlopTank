@@ -24,7 +24,7 @@ const AdvancedDrawerSection = () => {
             }
         >
             <ListItem disablePadding>
-                <ListItemLink to='/dashboard/networking'>
+                <ListItemLink to='/web/dashboard/networking'>
                     <ListItemIcon>
                         <Lan />
                     </ListItemIcon>
@@ -32,7 +32,7 @@ const AdvancedDrawerSection = () => {
                 </ListItemLink>
             </ListItem>
             <ListItem disablePadding>
-                <ListItemLink to='/dashboard/keys'>
+                <ListItemLink to='/web/dashboard/keys'>
                     <ListItemIcon>
                         <VpnKey />
                     </ListItemIcon>
@@ -40,7 +40,7 @@ const AdvancedDrawerSection = () => {
                 </ListItemLink>
             </ListItem>
             <ListItem disablePadding>
-                <ListItemLink to='/dashboard/backups'>
+                <ListItemLink to='/web/dashboard/backups'>
                     <ListItemIcon>
                         <Backup />
                     </ListItemIcon>
@@ -48,7 +48,7 @@ const AdvancedDrawerSection = () => {
                 </ListItemLink>
             </ListItem>
             <ListItem disablePadding>
-                <ListItemLink to='/dashboard/logs'>
+                <ListItemLink to='/web/dashboard/logs'>
                     <ListItemIcon>
                         <Article />
                     </ListItemIcon>
@@ -56,7 +56,7 @@ const AdvancedDrawerSection = () => {
                 </ListItemLink>
             </ListItem>
             <ListItem disablePadding>
-                <ListItemLink to='/dashboard/tasks'>
+                <ListItemLink to='/web/dashboard/tasks'>
                     <ListItemIcon>
                         <Schedule />
                     </ListItemIcon>

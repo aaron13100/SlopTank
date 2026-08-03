@@ -364,7 +364,7 @@ describe('playbackManager trailer playback', () => {
 
         // The app never navigates to its own video OSD for the trailer, so
         // the container must keep fronting the page itself.
-        expect(appRouter.history.location.pathname).not.toBe('/video');
+        expect(appRouter.history.location.pathname).not.toBe('/web/video');
         expect(trailerDialog().classList.contains('onTop')).toBe(true);
     });
 

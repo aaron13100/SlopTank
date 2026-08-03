@@ -2,13 +2,18 @@ import { ThemeProvider } from '@mui/material/styles';
 import React from 'react';
 import {
     RouterProvider,
-    createHashRouter,
+    createBrowserRouter,
     Outlet,
     useLocation
 } from 'react-router-dom';
 
 import { DASHBOARD_APP_PATHS, DASHBOARD_APP_ROUTES } from 'apps/dashboard/routes/routes';
 import { EXPERIMENTAL_APP_ROUTES } from 'apps/experimental/routes/routes';
+import {
+    LegacyRootRoute,
+    PermalinkCompatibilityRoute,
+    PermalinkRouteBoundary
+} from 'apps/stable/routes/permalink/PermalinkRouteBoundary';
 import { STABLE_APP_ROUTES } from 'apps/stable/routes/routes';
 import { WIZARD_APP_ROUTES } from 'apps/wizard/routes/routes';
 import AppHeader from 'components/AppHeader';
@@ -16,6 +21,8 @@ import Backdrop from 'components/Backdrop';
 import { SETTING_KEY as LAYOUT_SETTING_KEY } from 'components/layoutManager';
 import BangRedirect from 'components/router/BangRedirect';
 import { appRouter } from 'components/router/appRouter';
+import { getDeploymentBasePath } from 'components/router/browserBase';
+import { bridgeLegacyHashRoute } from 'components/router/legacyRouteBridge';
 import { createRouterHistory } from 'components/router/routerHistory';
 import { LayoutMode } from 'constants/layoutMode';
 import browser from 'scripts/browser';
@@ -25,20 +32,47 @@ import { ThemeStorageManager } from 'themes/themeStorageManager';
 const layoutMode = browser.tv ? LayoutMode.Tv : localStorage.getItem(LAYOUT_SETTING_KEY);
 const isExperimentalLayout = !layoutMode || layoutMode === LayoutMode.Experimental;
 
-const router = createHashRouter([
+bridgeLegacyHashRoute();
+
+const router = createBrowserRouter([
     {
         element: <RootAppLayout />,
         children: [
-            ...(isExperimentalLayout ? EXPERIMENTAL_APP_ROUTES : STABLE_APP_ROUTES),
-            ...DASHBOARD_APP_ROUTES,
-            ...WIZARD_APP_ROUTES,
             {
-                path: '!/*',
-                Component: BangRedirect
+                path: 'web/*',
+                children: [
+                    {
+                        path: 'p/:permalinkId',
+                        element: <PermalinkCompatibilityRoute purpose='info' />
+                    },
+                    {
+                        path: 'w/:permalinkId',
+                        element: <PermalinkCompatibilityRoute purpose='watch' />
+                    },
+                    ...(isExperimentalLayout ? EXPERIMENTAL_APP_ROUTES : STABLE_APP_ROUTES),
+                    ...DASHBOARD_APP_ROUTES,
+                    ...WIZARD_APP_ROUTES,
+                    {
+                        path: '!/*',
+                        Component: BangRedirect
+                    }
+                ]
+            },
+            {
+                path: 'w/:permalinkId',
+                element: <PermalinkRouteBoundary purpose='watch' />
+            },
+            {
+                path: ':permalinkId',
+                element: <PermalinkRouteBoundary purpose='info' />
+            },
+            {
+                path: '*',
+                Component: LegacyRootRoute
             }
         ]
     }
-]);
+], { basename: getDeploymentBasePath() });
 
 export const history = createRouterHistory(router);
 
@@ -58,7 +92,7 @@ export default function RootAppRouter() {
 function RootAppLayout() {
     const location = useLocation();
     const isNewLayoutPath = Object.values(DASHBOARD_APP_PATHS)
-        .some(path => location.pathname.startsWith(`/${path}`));
+        .some(path => location.pathname.startsWith(`/web/${path}`));
 
     return (
         <ThemeProvider

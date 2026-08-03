@@ -21,7 +21,7 @@ const LogItemList: FunctionComponent<LogItemProps> = ({ logs }: LogItemProps) =>
             {logs.map(log => {
                 return (
                     <ListItem key={log.Name} disablePadding>
-                        <ListItemLink to={`/dashboard/logs/${log.Name}`}>
+                        <ListItemLink to={`/web/dashboard/logs/${log.Name}`}>
                             <ListItemText
                                 primary={log.Name}
                                 secondary={getDate(log)}

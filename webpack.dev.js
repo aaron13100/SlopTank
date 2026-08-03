@@ -13,6 +13,10 @@ module.exports = merge(common, {
     // In order for live reload to work we must use "web" as the target not "browserslist"
     target: process.env.WEBPACK_SERVE ? 'web' : 'browserslist',
     mode: 'development',
+    entry: {
+        ...common.entry,
+        'serviceworker': './serviceworker.js'
+    },
     devtool: 'eval-cheap-module-source-map',
     module: {
         rules: [
@@ -35,9 +39,19 @@ module.exports = merge(common, {
         devMiddleware: {
             publicPath: '/web/'
         },
+        headers: {
+            'Service-Worker-Allowed': '/'
+        },
+        historyApiFallback: {
+            index: '/web/index.html',
+            disableDotRule: false
+        },
         proxy: [
             {
-                context: pathname => !pathname.startsWith('/web/') && pathname !== '/ws',
+                context: pathname => {
+                    const apiRoots = /^\/(?:[A-Z][^/]*|emby|health|socket|users)(?:\/|$)/;
+                    return pathname === '/ws' || apiRoots.test(pathname);
+                },
                 target: 'http://127.0.0.1:8096',
                 changeOrigin: true,
                 ws: true

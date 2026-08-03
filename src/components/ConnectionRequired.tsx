@@ -1,4 +1,4 @@
-import React, { FunctionComponent, useCallback, useEffect, useState } from 'react';
+import React, { FunctionComponent, ReactNode, useCallback, useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import type { ApiClient, ConnectResponse } from 'jellyfin-apiclient';
 
@@ -21,14 +21,15 @@ enum AccessLevel {
 type AccessLevelValue = `${AccessLevel}`;
 
 enum BounceRoutes {
-    Home = '/home',
-    Login = '/login',
-    SelectServer = '/selectserver',
-    StartWizard = '/wizard/start'
+    Home = '/web/home',
+    Login = '/web/login',
+    SelectServer = '/web/selectserver',
+    StartWizard = '/web/wizard/start'
 }
 
 type ConnectionRequiredProps = {
     level?: AccessLevelValue
+    children?: ReactNode
 };
 
 const ERROR_STATES = [
@@ -56,7 +57,8 @@ const fetchPublicSystemInfo = async (apiClient: ApiClient) => {
  * If a condition fails, this component will navigate to the appropriate page.
  */
 const ConnectionRequired: FunctionComponent<ConnectionRequiredProps> = ({
-    level = 'user'
+    level = 'user',
+    children
 }) => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -223,7 +225,7 @@ const ConnectionRequired: FunctionComponent<ConnectionRequiredProps> = ({
         return <Loading />;
     }
 
-    return <Outlet />;
+    return React.createElement(React.Fragment, null, children ?? <Outlet />);
 };
 
 export default ConnectionRequired;

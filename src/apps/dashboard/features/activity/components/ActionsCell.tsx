@@ -12,7 +12,7 @@ const ActionsCell: FC<ActivityLogEntryCell> = ({ row }) => (
             size='large'
             title={globalize.translate('LabelMediaDetails')}
             component={Link}
-            to={`/details?id=${row.original.ItemId}`}
+            to={`/web/details?id=${row.original.ItemId}`}
         >
             <PermMedia fontSize='inherit' />
         </IconButton>

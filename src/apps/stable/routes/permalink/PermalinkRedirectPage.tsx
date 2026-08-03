@@ -3,8 +3,8 @@
  * allow-no-test-found: rendered through its own route by PermalinkRedirectPage.test.tsx and e2e/permalink.spec.ts
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import React, { type FC, useCallback } from 'react';
-import { Navigate, useParams, useSearchParams } from 'react-router-dom';
+import React, { type FC, useCallback, useState } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 
 import Loading from 'components/loading/LoadingComponent';
 import Page from 'components/Page';
@@ -18,29 +18,34 @@ import { useApi } from 'hooks/useApi';
 import globalize from 'lib/globalize';
 import Button from 'elements/emby-button/Button';
 import LinkButton from 'elements/emby-button/LinkButton';
+import ViewManagerPage, { type ViewManagerPageProps } from 'components/viewManager/ViewManagerPage';
 
 export type PermalinkPurpose = 'info' | 'watch';
 
 /**
- * Renders one of the two pretty-permalink hash routes (#/p/:permalinkId,
- * #/w/:permalinkId, docs/internal/permalink-url-design.md sections 3 and 4.2).
+ * Renders one of the two pretty-permalink hash routes (/web/p/:permalinkId,
+ * /web/w/:permalinkId, docs/internal/permalink-url-design.md sections 3 and 4.2).
  *
  * Resolution runs entirely through the server's protected permalink endpoint:
  * this page never queries the library, never ranks candidates and never
  * guesses. On a single verified match it replaces the entry with the
- * corresponding legacy route (#/details or #/video) so the existing detail and
+ * corresponding legacy route (/web/details or /web/video) so the existing detail and
  * playback controllers own everything past this point. Ambiguity, absence,
  * a pending lineage (409), an unreachable capsule (503) and an unminted
  * external alias (EvidenceRequired) are each rendered as their own state,
  * with the server's own code in the message.
  */
-const PermalinkRedirectPage: FC<{ purpose: PermalinkPurpose }> = ({ purpose }) => {
+const PermalinkRedirectPage: FC<{
+    purpose: PermalinkPurpose
+    viewPageComponent?: FC<ViewManagerPageProps>
+}> = ({ purpose, viewPageComponent = ViewManagerPage }) => {
     const { permalinkId } = useParams();
     const [ searchParams ] = useSearchParams();
     const { api, user } = useApi();
     const queryClient = useQueryClient();
     const parsed = permalinkId ? parsePermalinkId(permalinkId) : null;
     const serverId = user?.ServerId ?? '';
+    const [ chosenTarget, setChosenTarget ] = useState<PermalinkTarget>();
 
     // Keyed on (permalinkId, purpose, serverId, userId) per design 4.2. Leases
     // are single-use, so nothing here may be replayed from cache: `gcTime: 0`
@@ -91,11 +96,29 @@ const PermalinkRedirectPage: FC<{ purpose: PermalinkPurpose }> = ({ purpose }) =
         );
     }
 
+    if (chosenTarget) {
+        return (
+            <PermalinkPresentation
+                purpose={purpose}
+                item={chosenTarget}
+                searchParams={searchParams}
+                ViewPageComponent={viewPageComponent}
+            />
+        );
+    }
+
     switch (data.status) {
         case 'resolved':
-            return <Navigate replace to={toRouteLocation(purpose, data.item, searchParams)} />;
+            return (
+                <PermalinkPresentation
+                    purpose={purpose}
+                    item={data.item}
+                    searchParams={searchParams}
+                    ViewPageComponent={viewPageComponent}
+                />
+            );
         case 'ambiguous':
-            return <PermalinkChooser purpose={purpose} candidates={data.candidates} />;
+            return <PermalinkChooser candidates={data.candidates} onChoose={setChosenTarget} />;
         case 'evidence-required':
             return (
                 <PermalinkMessage
@@ -133,25 +156,36 @@ function describeThrown(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-function legacySearch(item: PermalinkTarget): string {
-    return `?id=${item.itemId}&serverId=${item.serverId}`;
-}
-
-function toRouteLocation(purpose: PermalinkPurpose, item: PermalinkTarget, searchParams: URLSearchParams) {
-    let search = legacySearch(item);
+function presentationSearch(purpose: PermalinkPurpose, item: PermalinkTarget, searchParams: URLSearchParams) {
+    // eslint-disable-next-line compat/compat -- URLSearchParams is already required throughout the supported web client.
+    const parameters = new URLSearchParams({ id: item.itemId, serverId: item.serverId });
 
     if (purpose === 'watch') {
         const startSeconds = searchParams.get('t');
         if (permalinkStartSecondsToTicks(startSeconds) !== null) {
-            search += `&t=${startSeconds}`;
+            parameters.set('t', startSeconds!);
         }
     }
 
-    return {
-        pathname: purpose === 'info' ? '/details' : '/video',
-        search
-    };
+    return parameters;
 }
+
+const PermalinkPresentation: FC<{
+    purpose: PermalinkPurpose
+    item: PermalinkTarget
+    searchParams: URLSearchParams
+    ViewPageComponent: FC<ViewManagerPageProps>
+}> = ({ purpose, item, searchParams, ViewPageComponent }) => (
+    <ViewPageComponent
+        controller={purpose === 'info' ? 'itemDetails/index' : 'playback/video/index'}
+        view={purpose === 'info' ? 'itemDetails/index.html' : 'playback/video/index.html'}
+        type={purpose === 'watch' ? 'video-osd' : undefined}
+        isFullscreen={purpose === 'watch'}
+        isNowPlayingBarEnabled={purpose !== 'watch'}
+        isThemeMediaSupported={purpose === 'watch'}
+        routeParameters={presentationSearch(purpose, item, searchParams)}
+    />
+);
 
 const PermalinkMessage: FC<{ text: string, onRetry?: () => void }> = ({ text, onRetry }) => (
     <Page id='permalinkMessagePage' className='mainAnimatedPage libraryPage' shouldAutoFocus>
@@ -166,26 +200,42 @@ const PermalinkMessage: FC<{ text: string, onRetry?: () => void }> = ({ text, on
                     onClick={onRetry}
                 />
             )}
-            <LinkButton className='button-link' href='#/home'>
+            <LinkButton className='button-link' href='/web/home'>
                 {globalize.translate('GoHome')}
             </LinkButton>
         </div>
     </Page>
 );
 
-const PermalinkChooser: FC<{ purpose: PermalinkPurpose, candidates: PermalinkChoice[] }> = ({ purpose, candidates }) => (
+const PermalinkChoiceButton: FC<{
+    candidate: PermalinkChoice
+    onChoose: (candidate: PermalinkChoice) => void
+}> = ({ candidate, onChoose }) => {
+    const productionYear = candidate.productionYear ? ` (${candidate.productionYear})` : '';
+    const title = `${candidate.name}${productionYear} - ${candidate.type}`;
+    const handleClick = useCallback(() => onChoose(candidate), [ candidate, onChoose ]);
+
+    return (
+        <Button
+            type='button'
+            className='button-link'
+            title={title}
+            onClick={handleClick}
+        />
+    );
+};
+
+const PermalinkChooser: FC<{
+    candidates: PermalinkChoice[]
+    onChoose: (candidate: PermalinkChoice) => void
+}> = ({ candidates, onChoose }) => (
     <Page id='permalinkChooserPage' className='mainAnimatedPage libraryPage' shouldAutoFocus>
         <div className='padded-left padded-right'>
             <p>{globalize.translate('PermalinkAmbiguous')}</p>
             <ul>
                 {candidates.map(candidate => (
                     <li key={candidate.itemId}>
-                        <LinkButton
-                            className='button-link'
-                            href={`#${purpose === 'info' ? '/details' : '/video'}${legacySearch(candidate)}`}
-                        >
-                            {candidate.name}{candidate.productionYear ? ` (${candidate.productionYear})` : ''} - {candidate.type}
-                        </LinkButton>
+                        <PermalinkChoiceButton candidate={candidate} onChoose={onChoose} />
                     </li>
                 ))}
             </ul>
