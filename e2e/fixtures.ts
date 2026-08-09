@@ -281,11 +281,23 @@ export async function submitManualLogin(page: import('@playwright/test').Page, u
     }
 }
 
+/**
+ * Both spellings of the post-login home route.
+ *
+ * Root pretty URLs (commit 6e4b9c4900) moved the app from `#/home` to
+ * `/web/home`, and this fixture was not updated with it, so every spec in the
+ * suite failed at login from that commit onward. Matching both keeps the
+ * assertion honest during the migration: what login has to prove is that the
+ * app reached home, and which scheme it spells that in is permalink.spec.ts's
+ * job to pin, not this helper's.
+ */
+const HOME_ROUTE = /(#\/home|\/web\/home)/;
+
 export async function login(page: import('@playwright/test').Page, username: string, password: string) {
     await page.goto('/web/#/login');
     await submitManualLogin(page, username, password);
     try {
-        await page.waitForURL(/#\/home/, { timeout: 30_000 });
+        await page.waitForURL(HOME_ROUTE, { timeout: 30_000 });
     } catch (cause) {
         throw await describeLoginFailure(page, cause as Error);
     }
