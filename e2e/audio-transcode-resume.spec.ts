@@ -27,7 +27,7 @@
  * Season 00 extras (BDRip 1080p AC3) qualify permanently on this server.
  */
 import type { Page } from '@playwright/test';
-import { expect, login, test } from './fixtures';
+import { VIDEO_ROUTE, expect, login, test } from './fixtures';
 
 // This host's live transcoding is slow (see docs/streaming-format-policy in
 // the parent mediaserver project): each fatal-error fallback in the second
@@ -93,7 +93,7 @@ interface PlaybackTestWindow extends Window {
 
 async function playCurrentDetailsWithHls(page: Page): Promise<void> {
     await page.locator('.mainDetailButtons .btnPlay').click();
-    await page.waitForURL(/#\/video\?id=/, { timeout: 60_000 });
+    await page.waitForURL(VIDEO_ROUTE, { timeout: 60_000 });
     await expect(page.locator('video').first()).toBeVisible({ timeout: 20_000 });
     await expect.poll(
         () => page.evaluate(() => typeof (window as unknown as PlaybackTestWindow).Hls === 'function'),
@@ -191,7 +191,7 @@ test('resume of an audio-transcode item starts playing and advances', async ({ p
     const playButton = page.locator('.mainDetailButtons .btnPlay');
     await playButton.click();
 
-    await page.waitForURL(/#\/video\?id=/, { timeout: 60_000 });
+    await page.waitForURL(VIDEO_ROUTE, { timeout: 60_000 });
     const video = page.locator('video').first();
     await expect(video).toBeVisible({ timeout: 20_000 });
 

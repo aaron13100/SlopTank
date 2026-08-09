@@ -6,7 +6,8 @@ import {
     requireControlsItemId,
     requireDirectPlayChapterItemId,
     requireTranscodeChapterItemId,
-    test
+    test,
+    VIDEO_ROUTE
 } from './fixtures';
 
 test.setTimeout(180_000);
@@ -41,7 +42,7 @@ async function startPlayback(
         replayButton :
         primaryPlayButton;
     await playButton.click();
-    await page.waitForURL(/#\/video\?id=/, { timeout: 60_000 });
+    await page.waitForURL(VIDEO_ROUTE, { timeout: 60_000 });
     const video = page.locator('video').first();
     await expect(video).toBeVisible({ timeout: 20_000 });
     await expect

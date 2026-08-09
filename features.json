@@ -218,6 +218,12 @@
           "id": "subtitle_controls.track_menu.selecting_a_track_keeps_playback_alive",
           "type": "happy",
           "requiredAssertions": ["no_document_reload", "video_element_survives", "playhead_advances", "no_console_errors"]
+        },
+        {
+          "id": "subtitle_controls.track_menu.opening_the_menu_keeps_the_player_mounted",
+          "type": "unhappy",
+          "failureClass": "domain",
+          "requiredAssertions": ["overlay_opens", "video_element_still_mounted", "osd_still_mounted", "no_document_reload"]
         }
       ]
     },

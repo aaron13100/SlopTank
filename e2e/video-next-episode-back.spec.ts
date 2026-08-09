@@ -1,4 +1,4 @@
-import { expect, login, onScreenState, test } from './fixtures';
+import { VIDEO_ROUTE, expect, login, onScreenState, test } from './fixtures';
 
 test.setTimeout(120_000);
 
@@ -40,7 +40,7 @@ async function startEpisodePlayback(page: import('@playwright/test').Page, confi
 }) {
     await page.goto(`/web/#/details?id=${config.episodeId}&serverId=${config.serverId}`);
     await page.locator('.mainDetailButtons .btnPlay').click();
-    await page.waitForURL(/#\/video\?id=/, { timeout: 60_000 });
+    await page.waitForURL(VIDEO_ROUTE, { timeout: 60_000 });
     const video = page.locator('video').first();
     await expectPlaybackToAdvance(video, 20_000);
     await page.mouse.move(20, 20);
@@ -139,7 +139,7 @@ test('next episode then Back exits the player instead of resuming the previous e
 
     const playButton = page.locator('.mainDetailButtons .btnPlay');
     await playButton.click();
-    await page.waitForURL(/#\/video\?id=/, { timeout: 60_000 });
+    await page.waitForURL(VIDEO_ROUTE, { timeout: 60_000 });
 
     const video = page.locator('video').first();
     await expectPlaybackToAdvance(video, 20_000);

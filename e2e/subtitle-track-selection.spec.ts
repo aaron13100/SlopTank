@@ -122,3 +122,51 @@ test('choosing a subtitle track does not reload the page or kill playback', asyn
 
     expect(consoleErrors, 'console errors raised while switching subtitle track').toEqual([]);
 });
+
+// @covers subtitle_controls.track_menu.opening_the_menu_keeps_the_player_mounted
+test('opening the subtitle menu does not unmount the player', async ({ page, config }) => {
+    // The reported failure was not the track switch itself: merely opening the
+    // Subtitles menu and picking Subtitle Appearance destroyed the view. The
+    // address bar had been rewritten to the watch permalink behind React
+    // Router's back with a raw history.replaceState, so the router's location
+    // and the browser's disagreed; the first re-render matched the ROOT
+    // `w/:permalinkId` route and unmounted the player. No document reload is
+    // involved, which is why "it reloads the page" has to be measured as a
+    // teardown rather than as a load event.
+    let documentLoads = 0;
+    page.on('load', () => {
+        documentLoads++;
+    });
+
+    await login(page, config.username, config.password);
+
+    await page.goto(`/web/#/details?id=${config.itemId}&serverId=${config.serverId}`);
+    await page.locator('.mainDetailButtons .btnPlay').click();
+    const video = page.locator('video').first();
+    await expect(video).toBeVisible({ timeout: 60_000 });
+    await expect
+        .poll(async () => video.evaluate(
+            (el: HTMLVideoElement) => !el.paused && el.readyState >= 2
+        ), { timeout: 60_000 })
+        .toBe(true);
+
+    const loadsBefore = documentLoads;
+
+    await page.mouse.move(20, 20);
+    await page.mouse.move(100, 100);
+    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await expect(page.locator('.actionSheetMenuItem').first()).toBeVisible();
+    await page.getByText('Subtitle Appearance', { exact: true }).click();
+
+    // The overlay is the point of the click, so assert it arrives...
+    await expect(page.locator('.subtitleSizerContainer')).toBeVisible({ timeout: 15_000 });
+
+    // ...and, more importantly, that the movie is still there behind it.
+    const state = await page.evaluate(() => ({
+        videos: document.querySelectorAll('video').length,
+        osd: document.querySelectorAll('.videoOsdBottom').length
+    }));
+    expect(state, `player was unmounted; url is now ${page.url()}`)
+        .toMatchObject({ videos: 1, osd: 1 });
+    expect(documentLoads - loadsBefore, 'document reloaded').toBe(0);
+});

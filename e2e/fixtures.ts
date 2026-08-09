@@ -95,6 +95,17 @@ export function requireNoProviderItemId(): string {
     return requireEnv('E2E_NO_PROVIDER_ITEM_ID');
 }
 
+/**
+ * Every spelling the player route currently takes.
+ *
+ * Root pretty URLs (commit 6e4b9c4900) moved playback from `#/video?id=` to
+ * `/web/video?id=`, which then canonicalizes in place to `/web/w/<permalink>`
+ * while the player stays mounted. Six specs each carried their own copy of the
+ * old hash pattern and every one of them timed out after that commit, so the
+ * pattern lives here once: the next router change breaks one line, not six.
+ */
+export const VIDEO_ROUTE = /\/web\/(video\?id=|w\/)/;
+
 export const test = base.extend<{ config: E2eConfig }>({
     page: async ({ page }, use) => {
         await page.addInitScript(() => {

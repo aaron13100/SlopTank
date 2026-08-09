@@ -30,7 +30,6 @@ import '../../../styles/videoosd.scss';
 import shell from '../../../scripts/shell';
 import SubtitleSync from '../../../components/subtitlesync/subtitlesync';
 import { appRouter } from '../../../components/router/appRouter';
-import { canonicalizeLegacyGuidRoute } from '../../../components/router/permalinkCanonicalizer';
 import { ServerConnections } from 'lib/jellyfin-apiclient';
 import LibraryMenu from '../../../scripts/libraryMenu';
 import { setBackdropTransparency, TRANSPARENCY_LEVEL } from '../../../components/backdrop/backdrop';
@@ -209,7 +208,22 @@ export default function (view) {
         const item = state.NowPlayingItem;
 
         currentItem = item;
-        canonicalizeVideoRoute(item);
+        // The watch permalink is deliberately NOT written into the address bar
+        // while a player is mounted. permalinkCanonicalizer.replaceAddressBar
+        // calls window.history.replaceState directly, which React Router does
+        // not observe, so the router's location stays `/web/video?id=...`
+        // while the browser's reads `/w/<permalink>`. They remain desynced
+        // until something makes the router re-read window.location -- opening
+        // the Subtitles menu is enough -- and it then matches the ROOT
+        // `w/:permalinkId` route in RootAppRouter.tsx, unmounts this view and
+        // mounts PermalinkRouteBoundary, which renders no <video> (bug c145).
+        // Traced 2026-08-09 against the live build: clicking Subtitle
+        // Appearance took the page from {videos: 1, osd: 1, bodyChildren: 11}
+        // to {videos: 0, osd: 0, bodyChildren: 4} at `/w/tt0181689`, with no
+        // document reload -- the reported "it reloads and loads forever".
+        // Tidying the URL is cosmetic; losing the movie is not. Restore this
+        // only once the root watch route can host the player itself (c145),
+        // when it becomes a real transition instead of a hidden desync.
         if (!item) {
             updateRecordingButton(null);
             LibraryMenu.setTitle('');
@@ -672,8 +686,8 @@ export default function (view) {
         setPermalinkPreparing(true);
 
         permalinkResumePromise = apiClient.getItem(apiClient.getCurrentUserId(), id).then((item) => {
-            canonicalizeVideoRoute(item);
-
+            // No address-bar canonicalization here either; see the comment in
+            // updateNowPlayingInfo. Same desync, same blank player.
             if (playbackManager.getCurrentPlayer() || !playbackManager.canPlay(item)) {
                 setPermalinkPreparing(false);
                 return;
@@ -702,23 +716,6 @@ export default function (view) {
         });
 
         return permalinkResumePromise;
-    }
-
-    function canonicalizeVideoRoute(item) {
-        if (!window.location.pathname.endsWith('/web/video')
-            || !item?.Id
-            || !item.ServerId
-            || canonicalizingItemId === item.Id) {
-            return;
-        }
-
-        canonicalizingItemId = item.Id;
-        const apiClient = ServerConnections.getApiClient(item.ServerId);
-        void canonicalizeLegacyGuidRoute({
-            api: toApi(apiClient),
-            item,
-            kind: 'watch'
-        });
     }
 
     function bindToPlayer(player) {
@@ -1597,7 +1594,6 @@ export default function (view) {
     let trickplayResolution = null;
     const trickplayDiscovery = new TrickplayDiscovery();
     let permalinkResumePromise;
-    let canonicalizingItemId;
     let isViewSetup = false;
     const nowPlayingPositionSlider = view.querySelector('.osdPositionSlider');
     const nowPlayingPositionText = view.querySelector('.osdPositionText');

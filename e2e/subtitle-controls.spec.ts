@@ -3,7 +3,8 @@ import {
     login,
     onScreenState,
     requireAssSubtitleItemId,
-    test
+    test,
+    VIDEO_ROUTE
 } from './fixtures';
 
 test.setTimeout(180_000);
@@ -54,7 +55,7 @@ test('the browser harness removes a late webpack error overlay', async ({ page }
 async function startPlayback(page: import('@playwright/test').Page, config: { itemId: string, serverId: string }) {
     await page.goto(`/web/#/details?id=${config.itemId}&serverId=${config.serverId}`);
     await page.locator('.mainDetailButtons .btnPlay').click();
-    await page.waitForURL(/#\/video\?id=/, { timeout: 60_000 });
+    await page.waitForURL(VIDEO_ROUTE, { timeout: 60_000 });
     const video = page.locator('video').first();
     await expect(video).toBeVisible({ timeout: 20_000 });
     await expect
