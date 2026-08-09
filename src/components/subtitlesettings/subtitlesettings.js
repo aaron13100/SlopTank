@@ -6,7 +6,11 @@ import appSettings from '../../scripts/settings/appSettings';
 import focusManager from '../focusManager';
 import layoutManager from '../layoutManager';
 import loading from '../loading/loading';
-import subtitleAppearanceHelper, { getTextSizeMultiplier } from './subtitleappearancehelper';
+// Namespace import: the module's former default export was a hand-written list
+// of its own functions and could silently omit one (see the comment at the
+// bottom of subtitleappearancehelper.js).
+import * as subtitleAppearanceHelper from './subtitleappearancehelper';
+import { getTextSizeMultiplier } from './subtitleappearancehelper';
 import settingsHelper from '../settingshelper';
 import dom from '../../utils/dom';
 import Events from '../../utils/events.ts';

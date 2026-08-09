@@ -434,12 +434,12 @@ export function applyStyles(elements, appearanceSettings) {
         applyStyleList(styles.window, elements.window);
     }
 }
-export default {
-    getStyles: getStyles,
-    applyStyles: applyStyles,
-    getSubtitleFontSize: getSubtitleFontSize,
-    getTextSizeMultiplier: getTextSizeMultiplier,
-    getSubtitleVerticalPosition: getSubtitleVerticalPosition,
-    getAssSubtitleBottomPercentage: getAssSubtitleBottomPercentage,
-    getSecondarySubtitleOffset: getSecondarySubtitleOffset
-};
+// No default export on purpose. This module used to also ship a hand-written
+// object re-listing its functions, and htmlVideoPlayer/plugin.js consumed that
+// object rather than the named exports. Adding a function here without also
+// adding it to that list left the player calling `undefined`, which is exactly
+// what happened to getAssSubtitleVerticalOffsetPercentage: the unit tests
+// imported it by name and passed, while production threw
+// "Failed to initialize ASS renderer" on every ASS subtitle selection.
+// Consumers use `import * as subtitleAppearanceHelper`, whose namespace object
+// cannot drift from the named exports, so the mismatch is now unrepresentable.

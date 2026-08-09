@@ -16,9 +16,10 @@ import robotoMonoFontUrl from '@fontsource/roboto-mono/files/roboto-mono-latin-4
 import robotoMonoBoldFontUrl from '@fontsource/roboto-mono/files/roboto-mono-latin-700-normal.woff2';
 
 import { useCustomSubtitles } from 'apps/stable/features/playback/utils/subtitleStyles';
-import subtitleAppearanceHelper, {
-    VERTICAL_POSITION_BOTTOM
-} from 'components/subtitlesettings/subtitleappearancehelper';
+// Namespace import, not a default import: the module used to also export a
+// hand-written object re-listing its functions, and any function added without
+// being added to that list resolved to `undefined` here at runtime.
+import * as subtitleAppearanceHelper from 'components/subtitlesettings/subtitleappearancehelper';
 import { AppFeature } from 'constants/appFeature';
 import { ServerConnections } from 'lib/jellyfin-apiclient';
 import { currentSettings as userSettings } from 'scripts/settings/userSettings';
@@ -2041,8 +2042,8 @@ export class HtmlVideoPlayer {
         const appearance = this.getEffectiveAppearanceSettings();
         const positionOffsetPercentage =
             subtitleAppearanceHelper.getAssSubtitleVerticalOffsetPercentage(
-            appearance.verticalPosition,
-            appearance.textSize);
+                appearance.verticalPosition,
+                appearance.textSize);
         const renderedHeight = renderer.canvasParent?.getBoundingClientRect().height
             || this.#mediaElement?.getBoundingClientRect().height
             || 0;
@@ -2542,7 +2543,7 @@ export class HtmlVideoPlayer {
             && assState
             && videoBounds?.height) {
             const bottom = subtitleAppearanceHelper.getSubtitleVerticalPosition(
-                VERTICAL_POSITION_BOTTOM,
+                subtitleAppearanceHelper.VERTICAL_POSITION_BOTTOM,
                 appearance.textSize
             );
             if (assState.authoredBottomPercentage !== null) {

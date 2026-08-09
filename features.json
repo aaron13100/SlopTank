@@ -130,6 +130,9 @@
       "kind": "user-action",
       "files": [
         "e2e/subtitle-controls.spec.ts",
+        "e2e/subtitle-track-selection.spec.ts",
+        "src/components/subtitlesettings/subtitleappearancehelper.js",
+        "src/components/subtitlesettings/subtitlesettings.js",
         "src/components/playback/playbackmanager.js",
         "src/controllers/playback/video/SubtitleTrackMenu.js",
         "src/controllers/playback/video/SubtitleTrackMenu.test.jsx",
@@ -210,6 +213,11 @@
           "type": "unhappy",
           "failureClass": "domain",
           "requiredAssertions": ["sample_line_removed_on_every_dismissal", "dismissal_does_not_pause_playback"]
+        },
+        {
+          "id": "subtitle_controls.track_menu.selecting_a_track_keeps_playback_alive",
+          "type": "happy",
+          "requiredAssertions": ["no_document_reload", "video_element_survives", "playhead_advances", "no_console_errors"]
         }
       ]
     },
