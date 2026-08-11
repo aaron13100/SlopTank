@@ -130,6 +130,36 @@ export class AppRouter {
         return this.#navigate(path, options, true);
     }
 
+    /**
+     * Rewrites the address bar to a canonical spelling of the route already on
+     * screen, through the router rather than behind its back.
+     *
+     * Deliberately NOT routed through show()/replace(). Those await
+     * `promiseShow`, which only resolves on the next `viewshow` DOM event, and
+     * a canonicalization is defined by the view NOT reloading, so no viewshow
+     * would ever fire and every later navigation would wedge behind a promise
+     * that never settles.
+     *
+     * Equally deliberately not `window.history.replaceState`, which is what
+     * this used to be: React Router never observes a raw history write, so its
+     * location and the browser's diverged until some later re-render made the
+     * router re-read window.location, match the permalink route and unmount
+     * the player mid-movie (fixed 2026-08-11, reported 2026-08-09).
+     *
+     * @param {string} path Router path, relative to the deployment basename.
+     * @param {object} state History state carried to the destination route.
+     * @returns {boolean} Whether the address bar was rewritten.
+     */
+    canonicalizeAddressBar(path, state) {
+        if (!this.history) return false;
+
+        const current = this.history.location.pathname + this.history.location.search;
+        if (current === path) return false;
+
+        this.history.replace(path, state);
+        return true;
+    }
+
     async #navigate(path, options, replace) {
         if (this.promiseShow) await this.promiseShow;
 

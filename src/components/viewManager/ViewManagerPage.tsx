@@ -63,6 +63,19 @@ const importController = (
     }
 };
 
+/**
+ * The path part of a recorded view URL, which always begins at '/' and is
+ * already relative to the router basename.
+ *
+ * @param url A view URL as recorded by viewContainer, or null.
+ * @returns The path with any query string removed, or null.
+ */
+const pathnameOf = (url: string | null): string | null => {
+    if (url === null) return null;
+    const queryStart = url.indexOf('?');
+    return queryStart === -1 ? url : url.slice(0, queryStart);
+};
+
 const loadView = async (
     appType: AppType,
     controller: string,
@@ -96,10 +109,19 @@ const ViewManagerPage: FunctionComponent<ViewManagerPageProps> = ({
     const location = useLocation();
     const navigationType = useNavigationType();
 
+    // Flattened to a string BEFORE the dependency list, never compared as an
+    // object. Callers build these per render (PermalinkRedirectPage returns a
+    // fresh URLSearchParams every time), so depending on the object identity
+    // re-ran this effect on every re-render of the route -- and re-running it
+    // rebuilds the view, which dispatches `viewbeforehide`, on which the video
+    // OSD stops playback. Merely opening the Subtitles action sheet re-renders
+    // the route, so the movie ended when the menu opened. The effect's real
+    // dependency was always the search VALUE.
+    const explicitSearch = typeof routeParameters === 'string' ?
+        routeParameters : routeParameters?.toString();
+
     useEffect(() => {
         const loadPage = () => {
-            const explicitSearch = typeof routeParameters === 'string' ?
-                routeParameters : routeParameters?.toString();
             const effectiveSearch = explicitSearch ?
                 `?${explicitSearch.replace(/^\?/, '')}` : location.search;
             setRouteSearchOverride(explicitSearch ? effectiveSearch : null);
@@ -115,6 +137,26 @@ const ViewManagerPage: FunctionComponent<ViewManagerPageProps> = ({
                     enableMediaControl: isNowPlayingBarEnabled
                 }
             };
+
+            // A route change that is only a re-spelling of the URL already on
+            // screen -- a GUID route replaced by the canonical permalink for
+            // the very item it is showing -- must not rebuild the view.
+            // viewContainer.loadView dispatches `viewbeforehide` on the
+            // outgoing view, and the video OSD stops playback on that event,
+            // so tidying the address bar would end the movie.
+            //
+            // `canonicalizedFrom` is the pathname the canonicalizer saw on
+            // screen when it judged the change cosmetic. Re-checking it
+            // against the view that is on screen NOW is what makes the claim
+            // falsifiable: if the user navigated away while the alias was
+            // being minted, or this is a fresh load of a pasted permalink, the
+            // paths differ and the view loads normally.
+            const canonicalizedFrom = (location.state as { canonicalizedFrom?: string } | null)?.canonicalizedFrom;
+            if (canonicalizedFrom && canonicalizedFrom === pathnameOf(viewManager.currentViewUrl())) {
+                console.debug('[ViewManagerPage] retargeting view [%s] to [%s]', view, viewOptions.url);
+                viewManager.retargetCurrentView(viewOptions.url);
+                return Promise.resolve();
+            }
 
             if (navigationType !== Action.Pop) {
                 console.debug('[ViewManagerPage] loading view [%s]', view);
@@ -144,7 +186,7 @@ const ViewManagerPage: FunctionComponent<ViewManagerPageProps> = ({
         isNowPlayingBarEnabled,
         isThemeMediaSupported,
         transition,
-        routeParameters,
+        explicitSearch,
         location.pathname,
         location.search
     ]);

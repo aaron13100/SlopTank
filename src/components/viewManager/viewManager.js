@@ -1,4 +1,4 @@
-import viewContainer from '../viewContainer';
+import * as viewContainer from '../viewContainer';
 import focusManager from '../focusManager';
 import layoutManager from '../layoutManager';
 
@@ -175,6 +175,27 @@ class ViewManager {
 
     currentView() {
         return currentView;
+    }
+
+    /**
+     * The URL the on-screen view was loaded for, or null when none has been.
+     *
+     * @returns {string|null} The recorded URL of the on-screen view.
+     */
+    currentViewUrl() {
+        return viewContainer.getCurrentViewUrl();
+    }
+
+    /**
+     * Re-labels the on-screen view with a new URL without rebuilding it, for a
+     * route change that is a pure re-spelling of the same content. Rebuilding
+     * would dispatch `viewbeforehide`, on which the video OSD stops playback.
+     *
+     * @param {string} url The URL the on-screen view should now answer to.
+     * @returns {boolean} Whether a view was on screen to re-label.
+     */
+    retargetCurrentView(url) {
+        return viewContainer.retargetCurrentView(url);
     }
 
     dispatchPageEvents(value) {

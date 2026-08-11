@@ -2,6 +2,12 @@ import { expect } from '@playwright/test';
 
 import { test, login, requireAssSubtitleItemId } from './fixtures';
 
+// Playwright's default is 30s, which is under this file's own 60s playback
+// polls -- the test budget expired before the assertion it was waiting on
+// could resolve, reporting a timeout rather than a result. Every other player
+// spec in e2e/ sets 120-300s for the same reason.
+test.setTimeout(180_000);
+
 /**
  * Regression coverage for the reported failure: picking a subtitle track from
  * the in-player Subtitles menu navigates the page and playback never returns.

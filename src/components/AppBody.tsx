@@ -1,5 +1,5 @@
 import React, { type FC, type PropsWithChildren, useEffect } from 'react';
-import viewContainer from './viewContainer';
+import * as viewContainer from './viewContainer';
 
 /**
  * A simple component that includes the correct structure for ViewManager pages

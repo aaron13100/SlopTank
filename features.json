@@ -6,9 +6,21 @@
       "description": "The video playback URL becomes a durable, shareable link that survives a reload and resumes playback instead of bouncing home.",
       "owner": "web-client",
       "kind": "user-action",
-      "files": ["src/components/router/appRouter.js", "src/controllers/playback/video/index.js"],
+      "files": [
+        "src/components/router/appRouter.js",
+        "src/components/router/permalinkCanonicalizer.ts",
+        "src/components/viewContainer.js",
+        "src/components/viewManager/ViewManagerPage.tsx",
+        "src/apps/stable/routes/permalink/PermalinkRedirectPage.tsx",
+        "src/controllers/playback/video/index.js"
+      ],
       "added": "2026-07-23",
       "paths": [
+        {
+          "id": "video.permalink.canonicalized_url_survives_subtitle_menu",
+          "type": "happy",
+          "requiredAssertions": ["url_is_watch_permalink", "player_element_retained", "no_document_reload"]
+        },
         {
           "id": "video.permalink.reload.resumes_playback",
           "type": "happy",

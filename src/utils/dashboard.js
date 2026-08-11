@@ -1,5 +1,5 @@
 import { appHost } from 'components/apphost';
-import viewContainer from 'components/viewContainer';
+import * as viewContainer from 'components/viewContainer';
 import { AppFeature } from 'constants/appFeature';
 import { ServerConnections } from 'lib/jellyfin-apiclient';
 

@@ -184,6 +184,42 @@ export function setOnBeforeChange(fn) {
     onBeforeChange = fn;
 }
 
+/**
+ * The URL recorded for the view currently on screen, or null when nothing has
+ * been loaded yet.
+ *
+ * A view's URL is its identity here: tryRestoreView matches on it, and
+ * loadView records it. Exposing it is what lets a caller ask the only honest
+ * version of "am I already looking at this?" instead of inferring it.
+ *
+ * @returns {string|null} The recorded URL of the on-screen view.
+ */
+export function getCurrentViewUrl() {
+    return selectedPageIndex === -1 ? null : (currentUrls[selectedPageIndex] ?? null);
+}
+
+/**
+ * Re-labels the on-screen view with a new URL without rebuilding it.
+ *
+ * Used when a route change is a pure re-spelling of the same content: a GUID
+ * route replaced by the canonical permalink for the very item it is already
+ * showing. Rebuilding in that case is not merely wasteful, it is destructive,
+ * because loadView dispatches `viewbeforehide` on the outgoing view and the
+ * video OSD stops playback on that event. Keeping currentUrls in step means a
+ * later restore of this history entry still finds this view.
+ *
+ * @param {string} url The URL the on-screen view should now answer to.
+ * @returns {boolean} Whether a view was on screen to re-label.
+ */
+export function retargetCurrentView(url) {
+    if (selectedPageIndex === -1) {
+        return false;
+    }
+
+    currentUrls[selectedPageIndex] = url;
+    return true;
+}
+
 export function tryRestoreView(options) {
     console.debug('[viewContainer] tryRestoreView', options);
     const url = options.url;
@@ -247,9 +283,12 @@ let selectedPageIndex = -1;
 reset();
 getMainAnimatedPages()?.classList.remove('hide');
 
-export default {
-    loadView,
-    tryRestoreView,
-    reset,
-    setOnBeforeChange
-};
+// No default export on purpose. This module used to also ship a hand-written
+// object re-listing its functions, and every consumer default-imported that
+// object rather than the named exports, so any function added here without
+// also being added to the list resolved to `undefined` at the call site while
+// named-import unit tests kept passing. That exact drift shipped a broken ASS
+// renderer from subtitleappearancehelper.js (fixed 2026-08-09, commit
+// 23e5c64708); getCurrentViewUrl and retargetCurrentView below would have been
+// the next instance. Consumers use `import * as viewContainer`, whose
+// namespace object cannot drift from the named exports.

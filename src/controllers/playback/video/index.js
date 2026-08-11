@@ -37,6 +37,7 @@ import { pluginManager } from '../../../components/pluginManager';
 import { PluginType } from '../../../types/plugin.ts';
 import { getParameterByName } from '../../../utils/url.ts';
 import { toApi } from '../../../utils/jellyfin-apiclient/compat';
+import { canonicalizeLegacyGuidRoute } from '../../../components/router/permalinkCanonicalizer';
 import { permalinkStartSecondsToTicks } from '../../../components/router/permalinkId.ts';
 import SubtitleTrackMenu from './SubtitleTrackMenu';
 import EpisodePlaybackMenu from './EpisodePlaybackMenu';
@@ -208,22 +209,8 @@ export default function (view) {
         const item = state.NowPlayingItem;
 
         currentItem = item;
-        // The watch permalink is deliberately NOT written into the address bar
-        // while a player is mounted. permalinkCanonicalizer.replaceAddressBar
-        // calls window.history.replaceState directly, which React Router does
-        // not observe, so the router's location stays `/web/video?id=...`
-        // while the browser's reads `/w/<permalink>`. They remain desynced
-        // until something makes the router re-read window.location -- opening
-        // the Subtitles menu is enough -- and it then matches the ROOT
-        // `w/:permalinkId` route in RootAppRouter.tsx, unmounts this view and
-        // mounts PermalinkRouteBoundary, which renders no <video> (bug c145).
-        // Traced 2026-08-09 against the live build: clicking Subtitle
-        // Appearance took the page from {videos: 1, osd: 1, bodyChildren: 11}
-        // to {videos: 0, osd: 0, bodyChildren: 4} at `/w/tt0181689`, with no
-        // document reload -- the reported "it reloads and loads forever".
-        // Tidying the URL is cosmetic; losing the movie is not. Restore this
-        // only once the root watch route can host the player itself (c145),
-        // when it becomes a real transition instead of a hidden desync.
+        canonicalizeVideoRoute(item);
+
         if (!item) {
             updateRecordingButton(null);
             LibraryMenu.setTitle('');
@@ -686,8 +673,8 @@ export default function (view) {
         setPermalinkPreparing(true);
 
         permalinkResumePromise = apiClient.getItem(apiClient.getCurrentUserId(), id).then((item) => {
-            // No address-bar canonicalization here either; see the comment in
-            // updateNowPlayingInfo. Same desync, same blank player.
+            canonicalizeVideoRoute(item);
+
             if (playbackManager.getCurrentPlayer() || !playbackManager.canPlay(item)) {
                 setPermalinkPreparing(false);
                 return;
@@ -716,6 +703,37 @@ export default function (view) {
         });
 
         return permalinkResumePromise;
+    }
+
+    /**
+     * Replaces the legacy GUID watch route with the item's canonical
+     * permalink, in place, while playback continues.
+     *
+     * The rewrite goes through the router (appRouter.canonicalizeAddressBar)
+     * and carries the state that lets ViewManagerPage recognise the
+     * destination as the view already on screen, so this view is re-labelled
+     * rather than rebuilt. Rebuilding it would dispatch `viewbeforehide`, on
+     * which onViewHideStopPlayback stops the player -- that is exactly how
+     * tidying the URL used to end the movie.
+     *
+     * @param {object} item The now-playing item to canonicalize the route for.
+     */
+    function canonicalizeVideoRoute(item) {
+        if (!window.location.pathname.endsWith('/web/video')
+            || !item?.Id
+            || !item.ServerId
+            || canonicalizingItemId === item.Id) {
+            return;
+        }
+
+        canonicalizingItemId = item.Id;
+        const apiClient = ServerConnections.getApiClient(item.ServerId);
+        void canonicalizeLegacyGuidRoute({
+            api: toApi(apiClient),
+            item,
+            kind: 'watch',
+            userId: apiClient.getCurrentUserId()
+        });
     }
 
     function bindToPlayer(player) {
@@ -1578,6 +1596,7 @@ export default function (view) {
     let currentUpNextDialog;
     let isEnabled;
     let currentItem;
+    let canonicalizingItemId;
     let recordingButtonManager;
     let enableProgressByTimeOfDay;
     let currentVisibleMenu;

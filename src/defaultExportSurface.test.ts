@@ -167,6 +167,10 @@ describe('default-export surfaces cannot drift from named exports', () => {
         expect(hasDefaultExport('function x() {}\nexport { x as default };')).toBe(true);
     });
 
+    // Reads and scans every source file, which takes ~4s on the 2-core host
+    // this repo is developed on -- close enough to vitest's 5s default that it
+    // fails on load rather than on merit. An explicit budget keeps a red run
+    // meaningful.
     it('no file default-imports a local module that has no default export', () => {
         const contents = new Map(
             sourceFiles(SOURCE_ROOT).map((file) => [ file, readFileSync(file, 'utf8') ])
@@ -195,7 +199,7 @@ describe('default-export surfaces cannot drift from named exports', () => {
         }
 
         expect(broken).toEqual([]);
-    });
+    }, 30_000);
 
     // The detector has to be able to report both answers, or a clean sweep
     // proves nothing. These two cases are the controls.

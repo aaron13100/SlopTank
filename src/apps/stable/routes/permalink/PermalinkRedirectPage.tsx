@@ -4,10 +4,11 @@
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import React, { type FC, useCallback, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 
 import Loading from 'components/loading/LoadingComponent';
 import Page from 'components/Page';
+import { permalinkCanonicalizationHandoff } from 'components/router/permalinkCanonicalizer';
 import { parsePermalinkId, permalinkStartSecondsToTicks } from 'components/router/permalinkId';
 import {
     resolvePermalink,
@@ -41,11 +42,13 @@ const PermalinkRedirectPage: FC<{
 }> = ({ purpose, viewPageComponent = ViewManagerPage }) => {
     const { permalinkId } = useParams();
     const [ searchParams ] = useSearchParams();
+    const location = useLocation();
     const { api, user } = useApi();
     const queryClient = useQueryClient();
     const parsed = permalinkId ? parsePermalinkId(permalinkId) : null;
     const serverId = user?.ServerId ?? '';
     const [ chosenTarget, setChosenTarget ] = useState<PermalinkTarget>();
+    const handoff = permalinkCanonicalizationHandoff(location.state, permalinkId, serverId, user?.Id);
 
     // Keyed on (permalinkId, purpose, serverId, userId) per design 4.2. Leases
     // are single-use, so nothing here may be replayed from cache: `gcTime: 0`
@@ -60,7 +63,12 @@ const PermalinkRedirectPage: FC<{
             kind: purpose,
             signal
         }),
-        enabled: !!api && !!parsed,
+        // Waits for the user, not just the api. serverId and the handoff check
+        // both come from it, so starting earlier meant resolving against an
+        // empty serverId and then aborting the in-flight request the moment
+        // the user arrived and a handoff became readable -- surfacing as an
+        // unhandled CancelledError on the page.
+        enabled: !!api && !!user && !!parsed && !handoff,
         staleTime: Infinity,
         gcTime: 0,
         retry: false,
@@ -79,7 +87,25 @@ const PermalinkRedirectPage: FC<{
         return <PermalinkMessage text={globalize.translate('PermalinkInvalid')} />;
     }
 
-    if (!api || isPending) {
+    // The canonicalizer rewrote the address bar for the item this route is
+    // already showing, and carried that item with it. Re-resolving would burn
+    // a single-use lease to rediscover what the same process just minted, and
+    // would flash a spinner over a playing movie to do it.
+    if (handoff) {
+        return (
+            <PermalinkPresentation
+                purpose={purpose}
+                item={handoff}
+                searchParams={searchParams}
+                ViewPageComponent={viewPageComponent}
+            />
+        );
+    }
+
+    // Must match `enabled` above: a disabled query reports isPending forever,
+    // so anything the query waits for has to keep showing the resolving state
+    // rather than fall through to a data branch that has no data.
+    if (!api || !user || isPending) {
         return (
             <Page id='permalinkResolvingPage' isBackButtonEnabled={false}>
                 <Loading />

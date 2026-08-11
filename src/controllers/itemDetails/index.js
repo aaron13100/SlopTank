@@ -1958,7 +1958,8 @@ export default function (view, params) {
             void canonicalizeLegacyGuidRoute({
                 api: toApi(apiClient),
                 item,
-                kind: 'info'
+                kind: 'info',
+                userId: apiClient.getCurrentUserId()
             });
         }).catch((error) => {
             console.error('failed to get item or current user: ', error);
