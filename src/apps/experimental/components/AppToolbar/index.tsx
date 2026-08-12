@@ -24,8 +24,11 @@ const ExperimentalAppToolbar: FC<AppToolbarProps> = ({
 }) => {
     const location = useLocation();
 
-    // The video osd does not show the standard toolbar
-    if (location.pathname === '/web/video') return null;
+    // The video OSD used to be recognised here by its literal path, which
+    // stopped being true the moment playback canonicalized its address to
+    // /w/<alias> and left this toolbar drawn over the movie. The layout now
+    // decides, from the view that is actually mounted, whether to render this
+    // toolbar at all; see hooks/useVideoOsdPresence.
 
     // Only show the back button in apps when appropriate
     const isBackButtonAvailable = window.NativeShell && appRouter.canGoBack(location.pathname);

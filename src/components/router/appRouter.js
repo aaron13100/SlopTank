@@ -12,6 +12,7 @@ import { toApi } from 'utils/jellyfin-apiclient/compat';
 import { queryClient } from 'utils/query/queryClient';
 import { getRememberedPermalinkAlias } from './permalinkSession';
 import { buildPermalinkPath } from './permalinkId';
+import { isVideoOsdMounted } from 'components/playback/videoOsdPresence';
 
 /** Pages of "no return" (when "Go back" should behave differently, probably quitting the application). */
 const START_PAGE_PATHS = ['/web/home', '/web/login', '/web/selectserver'];
@@ -557,7 +558,12 @@ export class AppRouter {
         // episode, autoplay, queue jump) must not grow the history stack:
         // replace the entry so Back always exits the player instead of
         // stepping back through previously played episodes.
-        if (this.history.location.pathname === '/web/video' || this.history.location.pathname.startsWith('/w/')) {
+        //
+        // Asked of the mounted view rather than of the address: the player has
+        // two addresses (`/web/video` before canonicalization, `/w/<alias>`
+        // after), and listing them here is what left the navigation toolbar
+        // stranded over a playing movie when the second one appeared.
+        if (isVideoOsdMounted()) {
             return this.replace(path);
         }
 

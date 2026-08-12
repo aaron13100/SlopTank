@@ -103,6 +103,51 @@
       ]
     },
     {
+      "id": "video_osd_chrome",
+      "title": "The app header follows the playback controls",
+      "description": "While a video is playing, the header across the top of the screen appears and fades together with the playback controls, and the ordinary navigation header returns once playback is left.",
+      "owner": "web-client",
+      "kind": "user-action",
+      "files": [
+        "src/apps/experimental/AppLayout.tsx",
+        "src/apps/experimental/components/AppToolbar/index.tsx",
+        "src/apps/experimental/components/AppToolbar/VideoOsdToolbar.tsx",
+        "src/components/playback/videoOsdPresence.ts",
+        "src/components/router/appRouter.js",
+        "src/components/viewManager/ViewManagerPage.tsx",
+        "src/hooks/useVideoOsdPresence.ts"
+      ],
+      "added": "2026-08-12",
+      "paths": [
+        {
+          "id": "video_osd_chrome.header_is_present_while_the_controls_are_up",
+          "type": "happy",
+          "requiredAssertions": [
+            "playback_controls_visible",
+            "header_bar_on_screen"
+          ]
+        },
+        {
+          "id": "video_osd_chrome.header_does_not_persist_when_the_controls_fade",
+          "type": "unhappy",
+          "failureClass": "stranded_ui",
+          "requiredAssertions": [
+            "playback_controls_hidden",
+            "no_header_bar_on_screen"
+          ]
+        },
+        {
+          "id": "video_osd_chrome.header_returns_after_leaving_the_player",
+          "type": "unhappy",
+          "failureClass": "stranded_ui",
+          "requiredAssertions": [
+            "toolbar_present",
+            "toolbar_inside_viewport"
+          ]
+        }
+      ]
+    },
+    {
       "id": "video.next_episode_back",
       "title": "Next episode then Back player navigation",
       "description": "Advancing to the next episode in-player and pressing Back exits to the launching page instead of stepping back through played episodes.",

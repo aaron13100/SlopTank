@@ -9,7 +9,6 @@ import FallbackRoute from 'components/router/FallbackRoute';
 
 import { ASYNC_USER_ROUTES } from './asyncRoutes';
 import { LEGACY_PUBLIC_ROUTES, LEGACY_USER_ROUTES } from './legacyRoutes';
-import VideoPage from './video';
 
 export const EXPERIMENTAL_APP_ROUTES: RouteObject[] = [
     {
@@ -23,13 +22,11 @@ export const EXPERIMENTAL_APP_ROUTES: RouteObject[] = [
                 Component: ConnectionRequired,
                 children: [
                     ...ASYNC_USER_ROUTES.map(toAsyncPageRoute),
-                    ...LEGACY_USER_ROUTES.map(toViewManagerPageRoute),
-
-                    // The video page is special since it combines new controls with the legacy view
-                    {
-                        path: 'video',
-                        Component: VideoPage
-                    }
+                    // The video page is an ordinary legacy view again: its
+                    // toolbar is drawn by the app layout, keyed on the
+                    // `video-osd` view type, so it no longer needs a component
+                    // of its own to combine new controls with the legacy view.
+                    ...LEGACY_USER_ROUTES.map(toViewManagerPageRoute)
                 ],
                 ErrorBoundary
             },

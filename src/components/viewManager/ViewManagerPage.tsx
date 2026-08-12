@@ -7,7 +7,11 @@ import type { RestoreViewFailResponse } from 'types/viewManager';
 
 import viewManager from './viewManager';
 import { AppType } from 'constants/appType';
+import { useVideoOsdPresence } from 'hooks/useVideoOsdPresence';
 import { setRouteSearchOverride } from 'utils/url';
+
+/** The view type every route that mounts the video player already declares. */
+const VIDEO_OSD_VIEW_TYPE = 'video-osd';
 
 export interface ViewManagerPageProps {
     appType?: AppType
@@ -108,6 +112,14 @@ const ViewManagerPage: FunctionComponent<ViewManagerPageProps> = ({
 }) => {
     const location = useLocation();
     const navigationType = useNavigationType();
+
+    // Every route that mounts the video player already says so, by asking for
+    // the `video-osd` view type. Declaring presence from that one existing
+    // signal is what keeps the app chrome correct on routes that do not exist
+    // yet: the alternative, each route telling the layout separately, is the
+    // arrangement that left the navigation toolbar over a playing movie as
+    // soon as playback gained a second URL (2026-08-12).
+    useVideoOsdPresence(type === VIDEO_OSD_VIEW_TYPE);
 
     // Flattened to a string BEFORE the dependency list, never compared as an
     // object. Callers build these per render (PermalinkRedirectPage returns a
