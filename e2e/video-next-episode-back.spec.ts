@@ -1,4 +1,4 @@
-import { VIDEO_ROUTE, expect, login, onScreenState, test } from './fixtures';
+import { VIDEO_ROUTE, expect, login, onScreenState, revealOsdControl, test, wakeOsd } from './fixtures';
 
 test.setTimeout(120_000);
 
@@ -38,13 +38,12 @@ async function startEpisodePlayback(page: import('@playwright/test').Page, confi
     episodeId: string;
     serverId: string;
 }) {
-    await page.goto(`/web/#/details?id=${config.episodeId}&serverId=${config.serverId}`);
+    await page.goto(`/web/details?id=${config.episodeId}&serverId=${config.serverId}`);
     await page.locator('.mainDetailButtons .btnPlay').click();
     await page.waitForURL(VIDEO_ROUTE, { timeout: 60_000 });
     const video = page.locator('video').first();
     await expectPlaybackToAdvance(video, 20_000);
-    await page.mouse.move(20, 20);
-    await page.mouse.move(100, 100);
+    await wakeOsd(page);
     return video;
 }
 
@@ -65,8 +64,7 @@ test('Episodes opens a reachable series list and switches the playing episode', 
     await login(page, config.username, config.password);
     const video = await startEpisodePlayback(page, { episodeId, serverId: config.serverId });
 
-    const episodesButton = page.locator('.videoOsdBottom-maincontrols .btnEpisodes');
-    await expect(episodesButton).toBeVisible({ timeout: 20_000 });
+    const episodesButton = await revealOsdControl(page, '.videoOsdBottom-maincontrols .btnEpisodes');
     await episodesButton.click();
     await expect.poll(
         () => onScreenState(page, '.episodePlaybackMenu'),
@@ -135,7 +133,8 @@ test('next episode then Back exits the player instead of resuming the previous e
     const episodeId = requireEpisodeItemId();
 
     await login(page, config.username, config.password);
-    await page.goto(`/web/#/details?id=${episodeId}&serverId=${config.serverId}`);
+    const episode = await fetchEpisode(page, episodeId);
+    await page.goto(`/web/details?id=${episodeId}&serverId=${config.serverId}`);
 
     const playButton = page.locator('.mainDetailButtons .btnPlay');
     await playButton.click();
@@ -144,28 +143,22 @@ test('next episode then Back exits the player instead of resuming the previous e
     const video = page.locator('video').first();
     await expectPlaybackToAdvance(video, 20_000);
 
-    const firstEpisodeUrl = new URL(page.url());
-    expect(firstEpisodeUrl.hash).toContain(`id=${episodeId}`);
+    // The player's own address, whatever spelling it currently holds. It
+    // starts as /web/video?id=<episode> and canonicalizes in place to
+    // /web/w/<permalink> at a time this test does not control, so what the
+    // next-episode switch has to change is "the address", not "the id
+    // parameter": pinning the spelling is what left this test asserting a
+    // hash fragment the app stopped producing on 2026-08-03.
+    const firstEpisodeUrl = page.url();
     const historyIdxDuringFirstEpisode = await page.evaluate(() => window.history.state?.idx);
 
-    // Reveal the OSD bottom controls; they auto-hide on inactivity, same as
-    // every other OSD button this suite drives (see video-permalink.spec.ts).
-    await page.mouse.move(20, 20);
-    await page.mouse.move(100, 100);
-    const nextTrackButton = page.locator('.videoOsdBottom-maincontrols .btnNextTrack');
-    await expect(nextTrackButton).toBeVisible({ timeout: 20_000 });
+    const nextTrackButton = await revealOsdControl(page, '.videoOsdBottom-maincontrols .btnNextTrack');
     await nextTrackButton.click();
 
-    // This is a hash router (createHashRouter): the /video?id=... route lives
-    // in the URL's hash fragment, not its real pathname/search, so match it
-    // as a string rather than through the WHATWG URL's path/query parsing
-    // (see the existing convention in video-permalink.spec.ts).
     await expect
         .poll(() => page.url(), { timeout: 20_000 })
-        .not.toContain(`id=${episodeId}`);
-    expect(page.url()).toContain('#/video?id=');
-    const nextEpisodeId = page.url().match(/#\/video\?id=([^&]+)/)?.[1];
-    expect(nextEpisodeId).toBeTruthy();
+        .not.toBe(firstEpisodeUrl);
+    expect(page.url()).toMatch(VIDEO_ROUTE);
     await expectPlaybackToAdvance(video, 20_000);
 
     // The in-place item change must replace the history entry, not push a
@@ -177,10 +170,15 @@ test('next episode then Back exits the player instead of resuming the previous e
 
     // Back must land on the details page the player was launched from (the
     // replaced video entry means there is nothing to step back through), not
-    // resume playback of either episode.
-    await page.waitForURL(/#\/details\?id=/, { timeout: 20_000 });
-    expect(page.url()).toContain(`id=${episodeId}`);
-    expect(page.url()).not.toContain('/video');
+    // resume playback of either episode. Assert the rendered page rather than
+    // the URL: the details page canonicalizes to a root permalink too, so its
+    // address is no more stable than the player's, while the title it shows
+    // is exactly what the user checks to know where Back took them.
+    await expect
+        .poll(() => page.url(), { timeout: 20_000 })
+        .not.toMatch(VIDEO_ROUTE);
+    await expect(page.locator('.nameContainer')).toContainText(episode.Name as string, { timeout: 20_000 });
+    await expect(page.locator('video')).toHaveCount(0);
 });
 
 // Regression coverage for the same appRouter fix's other branch: back()
@@ -202,6 +200,12 @@ test('a fresh-tab permalink exits to home when playback ends with no next item',
     permalinkPage.on('pageerror', (error) => browserDiagnostics.push(`pageerror: ${error.message}`));
 
     try {
+        // The legacy hash spelling deliberately: bridgeLegacyHashRoute
+        // replaceState's it to /web/video?id= before the router boots, which
+        // is the entry point a shared old link still arrives through, and it
+        // is the one that reaches the player from a cold tab. Navigating
+        // straight to /web/video?id= leaves the fresh tab with no <video> at
+        // all, which is its own question and not this test's subject.
         await permalinkPage.goto(`/web/#/video?id=${config.itemId}&serverId=${config.serverId}`);
 
         const video = permalinkPage.locator('video').first();
@@ -220,7 +224,7 @@ test('a fresh-tab permalink exits to home when playback ends with no next item',
         // user-visible signal that playback ended with no next item and
         // appRouter fell back to goHome() (no in-app history behind a
         // fresh-tab permalink).
-        await permalinkPage.waitForURL(/#\/home/, { timeout: 30_000 }).finally(async () => {
+        await permalinkPage.waitForURL(/\/web\/home/, { timeout: 30_000 }).finally(async () => {
             await test.info().attach('browser-diagnostics', {
                 body: browserDiagnostics.join('\n') || 'No browser warnings or errors.',
                 contentType: 'text/plain'

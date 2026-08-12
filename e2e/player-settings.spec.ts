@@ -1,4 +1,4 @@
-import { VIDEO_ROUTE, expect, login, requireControlsItemId, test } from './fixtures';
+import { VIDEO_ROUTE, expect, login, requireControlsItemId, revealOsdControl, test } from './fixtures';
 
 test.setTimeout(180_000);
 
@@ -29,9 +29,12 @@ async function startPlayback(page: import('@playwright/test').Page, config: { it
     return video;
 }
 
+/**
+ * Bring up the OSD and hold it up until its controls are on screen, rather
+ * than nudging the pointer once and hoping. See revealOsdControl in fixtures.
+ */
 async function openOsd(page: import('@playwright/test').Page) {
-    await page.mouse.move(20, 20);
-    await page.mouse.move(100, 100);
+    await revealOsdControl(page, '.videoOsdBottom-maincontrols');
 }
 
 async function openSettingsMenu(page: import('@playwright/test').Page) {

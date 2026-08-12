@@ -24,7 +24,10 @@ test('public login keeps the SlopTank identity through an invalid sign-in', asyn
 
     await form.locator('.button-submit').click();
     await expect(page.locator('.toast')).toBeVisible({ timeout: 15_000 });
-    await expect(page).toHaveURL(/#\/login/);
+    // /web/login, not #/login: root pretty URLs (6e4b9c4900) moved the app to
+    // a browser router, and the legacy bridge replaceState's the hash away
+    // before the router ever sees it.
+    await expect(page).toHaveURL(/\/web\/login/);
     await expect(brand).toBeVisible({ timeout: 30_000 });
 });
 

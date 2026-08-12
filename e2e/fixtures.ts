@@ -106,6 +106,51 @@ export function requireNoProviderItemId(): string {
  */
 export const VIDEO_ROUTE = /\/web\/(video\?id=|w\/)/;
 
+/**
+ * Move the pointer so the player treats the user as active and shows the OSD.
+ *
+ * Two moves, not one: the OSD wakes on movement, and a move to the coordinate
+ * the pointer already occupies is not movement.
+ *
+ * @param page - Page with the player mounted.
+ */
+export async function wakeOsd(page: import('@playwright/test').Page): Promise<void> {
+    await page.mouse.move(20, 20);
+    await page.mouse.move(100, 100);
+}
+
+/**
+ * Wait for an OSD control to be usable, holding the OSD awake the whole time.
+ *
+ * The OSD hides itself after ~3s of inactivity and its container ends up
+ * `display: none`, so a control whose data arrives later than that window is
+ * invisible to `toBeVisible()` even though the app is behaving correctly.
+ * Waking once before asserting is a race against server latency: the Episodes
+ * button (enabled only after the series query returns) held on an idle box and
+ * failed the moment the box was busy, which reads as a player regression that
+ * is not there. Waking on every poll removes the race rather than widening a
+ * timeout until the race usually loses.
+ *
+ * @param page - Page with the player mounted.
+ * @param selector - CSS selector for the OSD control the user must be able to press.
+ * @param timeout - How long the control may take to become usable.
+ * @returns The control, awake and visible.
+ */
+export async function revealOsdControl(
+    page: import('@playwright/test').Page,
+    selector: string,
+    timeout = 20_000
+): Promise<import('@playwright/test').Locator> {
+    const control = page.locator(selector);
+    await expect
+        .poll(async () => {
+            await wakeOsd(page);
+            return control.isVisible();
+        }, { timeout, message: `expected the OSD control ${selector} to become usable` })
+        .toBe(true);
+    return control;
+}
+
 export const test = base.extend<{ config: E2eConfig }>({
     page: async ({ page }, use) => {
         await page.addInitScript(() => {

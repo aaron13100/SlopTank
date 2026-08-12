@@ -7,7 +7,8 @@ import {
     requireDirectPlayChapterItemId,
     requireTranscodeChapterItemId,
     test,
-    VIDEO_ROUTE
+    VIDEO_ROUTE,
+    wakeOsd
 } from './fixtures';
 
 test.setTimeout(180_000);
@@ -55,10 +56,14 @@ async function openOsd(
     page: Page,
     controlSelector = '.videoOsdBottom-maincontrols'
 ) {
-    await page.mouse.move(20, 20);
-    await page.mouse.move(100, 100);
     await expect.poll(
-        () => onScreenState(page, controlSelector),
+        async () => {
+            // Wake on every poll, not once before it: the OSD hides itself
+            // after ~3s of inactivity, so a single wake races whatever the
+            // control is waiting on and loses as soon as the host is busy.
+            await wakeOsd(page);
+            return onScreenState(page, controlSelector);
+        },
         {
             message: `expected OSD control to be on screen and reachable: ${controlSelector}`,
             timeout: 10_000
