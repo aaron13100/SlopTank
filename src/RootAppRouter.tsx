@@ -100,16 +100,30 @@ const router = createBrowserRouter([
                 ]
             },
             {
-                path: 'w/:permalinkId',
-                element: <PermalinkRouteBoundary purpose='watch' />
-            },
-            ...Object.keys(canonicalLibraries).map(path => ({
-                path,
-                element: <CanonicalLibraryPage path={path as CanonicalLibraryPath} />
-            })),
-            {
-                path: ':permalinkId',
-                element: <PermalinkRouteBoundary purpose='info' />
+                // Root pretty URLs render the SAME chrome as /web/*, through
+                // the same layout route. The toolbar lives in the layout, and
+                // apps/stable/AppLayout has none, so wrapping these pages in
+                // it unconditionally left them with no toolbar whenever the
+                // experimental layout is configured -- which is the default.
+                // The user was then stranded on a detail page with the
+                // browser's own Back button as the only way out (2026-08-12).
+                ...(isExperimentalLayout ?
+                    { lazy: () => import('./apps/experimental/AppLayout') } :
+                    { Component: AppLayout }),
+                children: [
+                    {
+                        path: 'w/:permalinkId',
+                        element: <PermalinkRouteBoundary purpose='watch' />
+                    },
+                    ...Object.keys(canonicalLibraries).map(path => ({
+                        path,
+                        element: <CanonicalLibraryPage path={path as CanonicalLibraryPath} />
+                    })),
+                    {
+                        path: ':permalinkId',
+                        element: <PermalinkRouteBoundary purpose='info' />
+                    }
+                ]
             },
             {
                 path: '*',
@@ -181,12 +195,13 @@ function LegacyLibraryRedirect({ path }: Readonly<{ path: CanonicalLibraryPath }
 }
 
 function CanonicalLibraryPage({ path }: Readonly<{ path: CanonicalLibraryPath }>) {
+    // No layout wrapper here: the parent route owns the chrome, so that these
+    // pages get whichever layout is configured rather than always the stable
+    // one. Wrapping again would nest a second AppBody inside the first.
     return (
-        <AppLayout>
-            <ConnectionRequired>
-                <CanonicalLibraryContent path={path} />
-            </ConnectionRequired>
-        </AppLayout>
+        <ConnectionRequired>
+            <CanonicalLibraryContent path={path} />
+        </ConnectionRequired>
     );
 }
 

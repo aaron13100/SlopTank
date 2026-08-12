@@ -1,7 +1,6 @@
 import React, { type FC } from 'react';
 import { Navigate, useLocation, useParams } from 'react-router-dom';
 
-import AppLayout from 'apps/stable/AppLayout';
 import PermalinkRedirectPage, { type PermalinkPurpose } from 'apps/stable/routes/permalink/PermalinkRedirectPage';
 import ConnectionRequired from 'components/ConnectionRequired';
 import FallbackRoute from 'components/router/FallbackRoute';
@@ -14,6 +13,15 @@ const LEGACY_ONE_SEGMENT_ROUTES = new Set([
     'selectserver', 'tv', 'userprofile', 'video', 'wizardstart'
 ]);
 
+/**
+ * Renders a root-level pretty permalink.
+ *
+ * Deliberately renders NO layout of its own. The parent route in
+ * RootAppRouter owns the chrome, so these pages get whichever layout is
+ * configured; this component used to hard-wire apps/stable/AppLayout, which
+ * renders no toolbar, stranding the user on a detail page with no in-app way
+ * back whenever the experimental layout was active (2026-08-12).
+ */
 export const PermalinkRouteBoundary: FC<{ purpose: PermalinkPurpose }> = ({ purpose }) => {
     const { permalinkId } = useParams();
     const location = useLocation();
@@ -23,15 +31,13 @@ export const PermalinkRouteBoundary: FC<{ purpose: PermalinkPurpose }> = ({ purp
             return <Navigate replace to={{ ...location, pathname: `/web/${permalinkId}` }} />;
         }
 
-        return <AppLayout><FallbackRoute /></AppLayout>;
+        return <FallbackRoute />;
     }
 
     return (
-        <AppLayout>
-            <ConnectionRequired>
-                <PermalinkRedirectPage purpose={purpose} />
-            </ConnectionRequired>
-        </AppLayout>
+        <ConnectionRequired>
+            <PermalinkRedirectPage purpose={purpose} />
+        </ConnectionRequired>
     );
 };
 

@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test';
 
-import { test, login, requireControlsItemId } from './fixtures';
+import { test, login } from './fixtures';
 
 test.setTimeout(180_000);
 
@@ -26,8 +26,6 @@ const WATCH_PERMALINK_ROUTE = /\/w\/(?:tt\d+|(?:tm|tv)-(?:mv|tv|ep|se|co)-\d+|sk
 
 // @covers video.permalink.canonicalized_url_survives_subtitle_menu
 test('the subtitle menu keeps the player mounted once the URL has canonicalized', async ({ page, config }) => {
-    const itemId = requireControlsItemId();
-
     let documentLoads = 0;
     page.on('load', () => {
         documentLoads++;
@@ -35,7 +33,11 @@ test('the subtitle menu keeps the player mounted once the URL has canonicalized'
 
     await login(page, config.username, config.password);
 
-    await page.goto(`/web/details?id=${itemId}&serverId=${config.serverId}`);
+    // config.itemId deliberately, not E2E_CONTROLS_ITEM_ID. That fixture is
+    // AC3, which Chrome cannot decode, so the server transcodes it and the
+    // test spends its whole budget measuring transcode throughput on a 2-core
+    // box instead of the routing behaviour it is about. This item direct-plays.
+    await page.goto(`/web/details?id=${config.itemId}&serverId=${config.serverId}`);
     await page.locator('.mainDetailButtons .btnPlay').click();
 
     const video = page.locator('video').first();
@@ -47,6 +49,18 @@ test('the subtitle menu keeps the player mounted once the URL has canonicalized'
     // The feature must actually be present before its interaction can be tested.
     // Failing here means canonicalization regressed, not the subtitle menu.
     await page.waitForURL(WATCH_PERMALINK_ROUTE, { timeout: 90_000 });
+
+    // Settle before stamping. Canonicalization currently rebuilds the player
+    // once, because the root route mounts a SECOND app layout instance and
+    // AppBody's unmount calls viewContainer.reset(), destroying the legacy
+    // view container. That is a real open defect with its own task and its own
+    // failing test; it is not this test's subject, and stamping through it
+    // would make this test report that defect intermittently instead of
+    // reporting whether the menu unmounts the player.
+    await expect
+        .poll(async () => video.evaluate((el: HTMLVideoElement) => !el.paused && el.readyState >= 2), { timeout: 60_000 })
+        .toBe(true);
+    await page.waitForTimeout(2_000);
 
     await video.evaluate((el: HTMLVideoElement) => el.setAttribute('data-e2e-player-identity', 'canonicalized'));
     const loadsBefore = documentLoads;
