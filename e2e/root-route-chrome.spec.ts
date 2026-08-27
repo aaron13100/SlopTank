@@ -29,6 +29,40 @@ test.setTimeout(180_000);
 
 const TOOLBAR = '.MuiAppBar-root';
 
+test('leaving home while a section is still upgrading reaches the selected page', async ({ page, config }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', error => pageErrors.push(error.message));
+
+    await login(page, config.username, config.password);
+
+    const homeSections = page.locator('#indexPage.homePage .itemsContainer');
+    const destination = homeSections.locator('a[href]').first();
+    await expect(destination).toBeVisible({ timeout: 30_000 });
+
+    // A customized built-in can be present before its prototype upgrade has
+    // supplied lifecycle methods. Reproduce that browser-visible state on one
+    // real home section, then leave through the same card link a user clicks.
+    await homeSections.first().evaluate(section => {
+        Object.defineProperty(section, 'pause', {
+            configurable: true,
+            value: undefined
+        });
+    });
+
+    await destination.click();
+
+    await expect.poll(() => ({
+        leftHome: !/(#\/home|\/web\/home)(?:[?#]|$)/.test(page.url()),
+        pageErrors
+    }), {
+        message: 'the selected home card should navigate without a lifecycle TypeError',
+        timeout: 30_000
+    }).toEqual({
+        leftHome: true,
+        pageErrors: []
+    });
+});
+
 // @covers root_route_chrome.canonicalized_detail_page_keeps_the_toolbar
 test('a detail page that canonicalizes to a root permalink keeps the app toolbar', async ({ page, config }) => {
     await login(page, config.username, config.password);

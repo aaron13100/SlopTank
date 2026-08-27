@@ -123,7 +123,9 @@ export function destroySections(elem) {
 export function pause(elem) {
     const elems = elem.querySelectorAll('.itemsContainer');
     for (const e of elems) {
-        e.pause();
+        if (e.pause) {
+            e.pause();
+        }
     }
 }
 
@@ -187,4 +189,3 @@ export default {
     pause,
     resume
 };
-
