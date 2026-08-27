@@ -12,37 +12,38 @@ import AppLayout from '../AppLayout';
 import { ASYNC_PUBLIC_ROUTES, ASYNC_USER_ROUTES } from './asyncRoutes';
 import { LEGACY_PUBLIC_ROUTES, LEGACY_USER_ROUTES } from './legacyRoutes';
 
+export const STABLE_APP_CHILD_ROUTES: RouteObject[] = [
+    { index: true, element: <Navigate replace to='/web/home' /> },
+
+    {
+        /* User routes */
+        Component: ConnectionRequired,
+        children: [
+            ...ASYNC_USER_ROUTES.map(toAsyncPageRoute),
+            ...LEGACY_USER_ROUTES.map(toViewManagerPageRoute)
+        ],
+        ErrorBoundary
+    },
+
+    {
+        /* Public routes */
+        element: <ConnectionRequired level='public' />,
+        children: [
+            ...ASYNC_PUBLIC_ROUTES.map(toAsyncPageRoute),
+            ...LEGACY_PUBLIC_ROUTES.map(toViewManagerPageRoute),
+            /* Fallback route for invalid paths */
+            {
+                path: '*',
+                Component: FallbackRoute
+            }
+        ]
+    }
+];
+
 export const STABLE_APP_ROUTES: RouteObject[] = [
     {
         path: '*',
         Component: AppLayout,
-        children: [
-            { index: true, element: <Navigate replace to='/web/home' /> },
-
-            {
-                /* User routes */
-                Component: ConnectionRequired,
-                children: [
-                    ...ASYNC_USER_ROUTES.map(toAsyncPageRoute),
-                    ...LEGACY_USER_ROUTES.map(toViewManagerPageRoute)
-                ],
-                ErrorBoundary
-            },
-
-            {
-                /* Public routes */
-                element: <ConnectionRequired level='public' />,
-                children: [
-                    ...ASYNC_PUBLIC_ROUTES.map(toAsyncPageRoute),
-                    ...LEGACY_PUBLIC_ROUTES.map(toViewManagerPageRoute),
-                    /* Fallback route for invalid paths */
-                    {
-                        path: '*',
-                        Component: FallbackRoute
-                    }
-                ]
-            }
-
-        ]
+        children: STABLE_APP_CHILD_ROUTES
     }
 ];

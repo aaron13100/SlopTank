@@ -10,13 +10,13 @@ import {
 import { CollectionType } from '@jellyfin/sdk/lib/generated-client/models/collection-type';
 
 import { DASHBOARD_APP_PATHS, DASHBOARD_APP_ROUTES } from 'apps/dashboard/routes/routes';
-import { EXPERIMENTAL_APP_ROUTES } from 'apps/experimental/routes/routes';
+import { EXPERIMENTAL_APP_CHILD_ROUTES } from 'apps/experimental/routes/routes';
 import {
     LegacyRootRoute,
     PermalinkCompatibilityRoute,
     PermalinkRouteBoundary
 } from 'apps/stable/routes/permalink/PermalinkRouteBoundary';
-import { STABLE_APP_ROUTES } from 'apps/stable/routes/routes';
+import { STABLE_APP_CHILD_ROUTES } from 'apps/stable/routes/routes';
 import AppLayout from 'apps/stable/AppLayout';
 import { WIZARD_APP_ROUTES } from 'apps/wizard/routes/routes';
 import AppHeader from 'components/AppHeader';
@@ -44,6 +44,8 @@ import HomeVideos from 'apps/experimental/routes/homevideos';
 
 const layoutMode = browser.tv ? LayoutMode.Tv : localStorage.getItem(LAYOUT_SETTING_KEY);
 const isExperimentalLayout = !layoutMode || layoutMode === LayoutMode.Experimental;
+const primaryAppChildRoutes = isExperimentalLayout ?
+    EXPERIMENTAL_APP_CHILD_ROUTES : STABLE_APP_CHILD_ROUTES;
 
 type CanonicalLibraryPath = 'movies' | 'music' | 'tv' | 'homevideos';
 
@@ -80,37 +82,32 @@ const router = createBrowserRouter([
         element: <RootAppLayout />,
         children: [
             {
-                path: 'web/*',
-                children: [
-                    {
-                        path: 'p/:permalinkId',
-                        element: <PermalinkCompatibilityRoute purpose='info' />
-                    },
-                    {
-                        path: 'w/:permalinkId',
-                        element: <PermalinkCompatibilityRoute purpose='watch' />
-                    },
-                    ...(isExperimentalLayout ? EXPERIMENTAL_APP_ROUTES : STABLE_APP_ROUTES),
-                    ...DASHBOARD_APP_ROUTES,
-                    ...WIZARD_APP_ROUTES,
-                    {
-                        path: '!/*',
-                        Component: BangRedirect
-                    }
-                ]
-            },
-            {
-                // Root pretty URLs render the SAME chrome as /web/*, through
-                // the same layout route. The toolbar lives in the layout, and
-                // apps/stable/AppLayout has none, so wrapping these pages in
-                // it unconditionally left them with no toolbar whenever the
-                // experimental layout is configured -- which is the default.
-                // The user was then stranded on a detail page with the
-                // browser's own Back button as the only way out (2026-08-12).
+                // One app-layout instance owns both legacy /web pages and the
+                // root pretty routes. Moving between /web/video and /w/:id is
+                // only a spelling change, so it must not unmount AppBody and
+                // erase the imperative legacy view container (c159).
                 ...(isExperimentalLayout ?
                     { lazy: () => import('./apps/experimental/AppLayout') } :
                     { Component: AppLayout }),
                 children: [
+                    {
+                        path: 'web/*',
+                        children: [
+                            {
+                                path: 'p/:permalinkId',
+                                element: <PermalinkCompatibilityRoute purpose='info' />
+                            },
+                            {
+                                path: 'w/:permalinkId',
+                                element: <PermalinkCompatibilityRoute purpose='watch' />
+                            },
+                            ...primaryAppChildRoutes,
+                            {
+                                path: '!/*',
+                                Component: BangRedirect
+                            }
+                        ]
+                    },
                     {
                         path: 'w/:permalinkId',
                         element: <PermalinkRouteBoundary purpose='watch' />
@@ -123,6 +120,17 @@ const router = createBrowserRouter([
                         path: ':permalinkId',
                         element: <PermalinkRouteBoundary purpose='info' />
                     }
+                ]
+            },
+            {
+                // Administrative and setup pages own different layouts. Keep
+                // them outside the shared user-app layout while giving /web a
+                // single non-wildcard branch; their specific descendants rank
+                // ahead of the user-app's lone web/* catch-all.
+                path: 'web',
+                children: [
+                    ...DASHBOARD_APP_ROUTES,
+                    ...WIZARD_APP_ROUTES
                 ]
             },
             {

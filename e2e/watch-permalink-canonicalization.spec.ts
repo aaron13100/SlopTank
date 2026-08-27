@@ -25,6 +25,69 @@ test.setTimeout(180_000);
 const WATCH_PERMALINK_ROUTE = /\/w\/(?:tt\d+|(?:tm|tv)-(?:mv|tv|ep|se|co)-\d+|sk-[0-9a-hjkmnp-tv-z]{26})(?:[?#]|$)/;
 
 // @covers video.permalink.canonicalized_url_survives_subtitle_menu
+test('canonicalizing a playing GUID route keeps the same player and timeline', async ({ page, config }) => {
+    await login(page, config.username, config.password);
+    await page.goto(`/web/details?id=${config.itemId}&serverId=${config.serverId}`);
+
+    // Capture the player synchronously at the history write. Waiting for the
+    // pretty URL before stamping would miss the destructive gap: the root
+    // route can tear down the original video and create a replacement before
+    // Playwright observes the address-bar change.
+    await page.evaluate(() => {
+        const probeWindow = window as typeof window & {
+            permalinkCanonicalizationProbe?: {
+                video: HTMLVideoElement | null
+                currentTime: number
+            }
+        };
+        const nativeReplaceState = window.history.replaceState.bind(window.history);
+
+        window.history.replaceState = (data, unused, url) => {
+            if (/\/w\//.test(String(url))) {
+                const video = document.querySelector('video');
+                video?.setAttribute('data-e2e-player-identity', 'before-canonicalization');
+                probeWindow.permalinkCanonicalizationProbe = {
+                    video,
+                    currentTime: video?.currentTime ?? 0
+                };
+            }
+
+            nativeReplaceState(data, unused, url);
+        };
+    });
+
+    await page.locator('.mainDetailButtons .btnPlay').click();
+    await page.waitForURL(WATCH_PERMALINK_ROUTE, { timeout: 90_000 });
+
+    await expect
+        .poll(() => page.evaluate(() => {
+            const probe = (window as typeof window & {
+                permalinkCanonicalizationProbe?: { video: HTMLVideoElement | null }
+            }).permalinkCanonicalizationProbe;
+            return !!probe?.video && probe.video === document.querySelector('video');
+        }), { timeout: 20_000 })
+        .toBe(true);
+
+    const timeline = await page.evaluate(() => {
+        const probe = (window as typeof window & {
+            permalinkCanonicalizationProbe?: {
+                video: HTMLVideoElement | null
+                currentTime: number
+            }
+        }).permalinkCanonicalizationProbe;
+        return {
+            before: probe?.currentTime ?? -1,
+            after: probe?.video?.currentTime ?? -1
+        };
+    });
+    expect(timeline.after).toBeGreaterThanOrEqual(timeline.before);
+    await expect(page.locator('video').first()).toHaveAttribute(
+        'data-e2e-player-identity',
+        'before-canonicalization'
+    );
+});
+
+// @covers video.permalink.canonicalized_url_survives_subtitle_menu
 test('the subtitle menu keeps the player mounted once the URL has canonicalized', async ({ page, config }) => {
     let documentLoads = 0;
     page.on('load', () => {
