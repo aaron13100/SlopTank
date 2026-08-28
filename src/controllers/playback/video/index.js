@@ -1411,16 +1411,6 @@ export default function (view) {
         resetIdle();
     }
 
-    function onWheel(e) {
-        if (getOpenedDialog()) return;
-        if (e.deltaY < 0) {
-            playbackManager.volumeUp(currentPlayer);
-        }
-        if (e.deltaY > 0) {
-            playbackManager.volumeDown(currentPlayer);
-        }
-    }
-
     function onWindowMouseDown(e) {
         clickedElement = e.target;
         mouseIsDown = true;
@@ -1718,7 +1708,6 @@ export default function (view) {
                 capture: true,
                 passive: true
             });
-            document.addEventListener('wheel', onWheel);
             /* eslint-disable-next-line compat/compat */
             dom.addEventListener(document, window.PointerEvent ? 'pointerdown' : 'mousedown', onOverlayDismissPointerDown, {
                 capture: true
@@ -1768,7 +1757,6 @@ export default function (view) {
             capture: true,
             passive: true
         });
-        document.removeEventListener('wheel', onWheel);
         /* eslint-disable-next-line compat/compat */
         dom.removeEventListener(document, window.PointerEvent ? 'pointerdown' : 'mousedown', onOverlayDismissPointerDown, {
             capture: true
