@@ -25,15 +25,15 @@ describe('getMediaSegmentAction()', () => {
         localStorage.clear();
     });
 
-    it('defaults Intro and Outro to AskToSkip when unset', () => {
+    it('defaults Intro, Recap and Outro to AskToSkip when unset', () => {
         expect(getMediaSegmentAction(userSettings, MediaSegmentType.Intro)).toBe(MediaSegmentAction.AskToSkip);
+        expect(getMediaSegmentAction(userSettings, MediaSegmentType.Recap)).toBe(MediaSegmentAction.AskToSkip);
         expect(getMediaSegmentAction(userSettings, MediaSegmentType.Outro)).toBe(MediaSegmentAction.AskToSkip);
     });
 
     it('defaults every other segment type to None when unset', () => {
         expect(getMediaSegmentAction(userSettings, MediaSegmentType.Commercial)).toBe(MediaSegmentAction.None);
         expect(getMediaSegmentAction(userSettings, MediaSegmentType.Preview)).toBe(MediaSegmentAction.None);
-        expect(getMediaSegmentAction(userSettings, MediaSegmentType.Recap)).toBe(MediaSegmentAction.None);
     });
 
     it('returns the stored user preference when one has been saved', () => {
@@ -48,7 +48,7 @@ describe('getMediaSegmentAction()', () => {
         expect(getMediaSegmentAction(userSettings, MediaSegmentType.Commercial)).toBe(MediaSegmentAction.AskToSkip);
     });
 
-    it('lets a stored "None" preference override the Intro/Outro default of AskToSkip', () => {
+    it('lets a stored "None" preference override a built-in AskToSkip default', () => {
         userSettings.set(getId(MediaSegmentType.Outro), MediaSegmentAction.None, false);
 
         expect(getMediaSegmentAction(userSettings, MediaSegmentType.Outro)).toBe(MediaSegmentAction.None);
