@@ -14,7 +14,9 @@
 }
 
 .videoPlayerContainer .libassjs-canvas-parent {
-    order: -1;
+    position: absolute !important;
+    inset: 0;
+    pointer-events: none;
 }
 
 /* Controls are enabled for devices that don't support autoplay. They will be hidden when playback starts.

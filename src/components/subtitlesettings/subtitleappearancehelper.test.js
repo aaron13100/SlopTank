@@ -108,7 +108,7 @@ describe('subtitle vertical position', () => {
             expect(getWindowStyle(
                 { textSize, verticalPosition: -12 },
                 'transform'
-            )).toBe('translateY(-75%)');
+            )).toBe('translateY(-100%)');
         }
     );
 
@@ -123,23 +123,23 @@ describe('subtitle vertical position', () => {
         expect(getSubtitleVerticalPosition(-5, '1')).toEqual({
             value: -5,
             fraction: 0.9375,
-            percentage: 88.31484375,
+            percentage: 88.125,
             centerPercentage: 88.125
         });
         expect(getSubtitleVerticalPosition(2, '1')).toEqual({
             value: -5,
             fraction: 0.9375,
-            percentage: 88.31484375,
+            percentage: 88.125,
             centerPercentage: 88.125
         });
-        expect(getWindowStyle({ verticalPosition: -20 }, 'top')).toBe('0%');
+        expect(getWindowStyle({ verticalPosition: -20 }, 'top')).toBe('3.0375%');
         expect(getWindowStyle({ verticalPosition: -20 }, 'bottom')).toBe('auto');
         expect(getWindowStyle({ verticalPosition: -20 }, 'transform'))
-            .toBe('translateY(-50%)');
+            .toBe('translateY(-100%)');
         expect(getWindowStyle({ verticalPosition: -5 }, 'top')).toBe('88.125%');
         expect(getWindowStyle({ verticalPosition: -5 }, 'bottom')).toBe('auto');
         expect(getWindowStyle({ verticalPosition: -5 }, 'transform'))
-            .toBe('translateY(-96.875%)');
+            .toBe('translateY(-100%)');
     });
 
     it('keeps half a line visible at the top for every text size', () => {
@@ -155,9 +155,9 @@ describe('subtitle vertical position', () => {
         expect(getAssSubtitleVerticalOffsetPercentage(-20, '1'))
             .toBe(-90.9625);
         expect(getAssSubtitleVerticalOffsetPercentage(-5, '1'))
-            .toBeCloseTo(-5.68515625, 12);
+            .toBeCloseTo(-5.875, 12);
         expect(getAssSubtitleVerticalOffsetPercentage('not-a-position', '1'))
-            .toBeCloseTo(-5.68515625, 12);
+            .toBeCloseTo(-5.875, 12);
     });
 });
 

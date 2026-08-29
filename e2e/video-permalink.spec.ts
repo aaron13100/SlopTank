@@ -1,4 +1,4 @@
-import { expect, login, test } from './fixtures';
+import { expect, login, revealOsdControl, test } from './fixtures';
 
 test.setTimeout(300_000);
 
@@ -65,10 +65,10 @@ test('video url becomes a durable permalink that survives a reload', async ({ pa
 
     // Exercise the real OSD controls. A paused or autoplay-blocked video must
     // retain a visible Play button instead of looking like a frozen page.
-    await page.mouse.move(20, 20);
-    await page.mouse.move(100, 100);
-    const playPauseButton = page.locator('.videoOsdBottom-maincontrols .btnPause');
-    await expect(playPauseButton).toBeVisible();
+    const playPauseButton = await revealOsdControl(
+        page,
+        '.videoOsdBottom-maincontrols .btnPause'
+    );
     await playPauseButton.click();
     await expect.poll(async () => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(true);
     await page.waitForTimeout(4_000);
@@ -154,9 +154,7 @@ test('video url becomes a durable permalink that survives a reload', async ({ pa
         .poll(async () => video.evaluate((el: HTMLVideoElement) => el.readyState))
         .toBeGreaterThanOrEqual(2);
     await expect.poll(async () => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(true);
-    await page.mouse.move(20, 20);
-    await page.mouse.move(100, 100);
-    await expect(playPauseButton).toBeVisible();
+    await revealOsdControl(page, '.videoOsdBottom-maincontrols .btnPause');
 
     await page.evaluate(() => sessionStorage.removeItem('e2e-block-autoplay'));
     await playPauseButton.click();

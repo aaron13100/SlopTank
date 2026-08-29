@@ -8,6 +8,30 @@ import { expect, login, test } from './fixtures';
 // reads the same either way.
 test.setTimeout(60_000);
 
+test('the Sign In button authenticates without relying on the browser form default', async ({ page, config }) => {
+    let authenticationRequests = 0;
+    page.on('request', request => {
+        if (request.method() === 'POST' && /\/Users\/AuthenticateByName$/i.test(request.url())) {
+            authenticationRequests++;
+        }
+    });
+    await page.addInitScript(() => {
+        document.addEventListener('click', event => {
+            const target = event.target;
+            if (
+                target instanceof Element
+                && target.closest('.manualLoginForm .button-submit')
+            ) {
+                event.preventDefault();
+            }
+        }, true);
+    });
+
+    await login(page, config.username, config.password);
+
+    expect(authenticationRequests).toBe(1);
+});
+
 /**
  * Runs login() to completion and returns the error it throws.
  *

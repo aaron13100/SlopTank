@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test';
 
-import { test, login, requireAssSubtitleItemId } from './fixtures';
+import { test, login, requireAssSubtitleItemId, revealOsdControl } from './fixtures';
 
 // Playwright's default is 30s, which is under this file's own 60s playback
 // polls -- the test budget expired before the assertion it was waiting on
@@ -54,8 +54,7 @@ async function startPlayback(
 
 /** Reveal the OSD the way a mouse user does. */
 async function openOsd(page: import('@playwright/test').Page) {
-    await page.mouse.move(20, 20);
-    await page.mouse.move(100, 100);
+    await revealOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
 }
 
 // @covers subtitle_controls.track_menu.selecting_a_track_keeps_playback_alive
@@ -158,8 +157,7 @@ test('opening the subtitle menu does not unmount the player', async ({ page, con
 
     const loadsBefore = documentLoads;
 
-    await page.mouse.move(20, 20);
-    await page.mouse.move(100, 100);
+    await openOsd(page);
     await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
     await expect(page.locator('.actionSheetMenuItem').first()).toBeVisible();
     await page.getByText('Subtitle Appearance', { exact: true }).click();

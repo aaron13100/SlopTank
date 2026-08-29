@@ -3,6 +3,7 @@ import {
     login,
     onScreenState,
     requireAssSubtitleItemId,
+    revealOsdControl,
     test,
     VIDEO_ROUTE
 } from './fixtures';
@@ -24,20 +25,20 @@ test.setTimeout(180_000);
 test('the suite reaches the app and Jellyfin API through its configured origin', async ({ page }) => {
     await page.goto('/web/#/login');
 
-    await expect(page).toHaveTitle('SlopTank');
     await expect(page.locator('#loginPage')).toBeVisible({ timeout: 30_000 });
 
     const publicInfo = await page.evaluate(async () => {
         const response = await fetch('/System/Info/Public');
         return {
             status: response.status,
-            body: await response.json() as { ProductName?: string }
+            body: await response.json() as { ProductName?: string, ServerName?: string }
         };
     });
     expect(publicInfo).toMatchObject({
         status: 200,
         body: { ProductName: 'Jellyfin Server' }
     });
+    await expect(page).toHaveTitle(publicInfo.body.ServerName ?? 'SlopTank');
 });
 
 test('the browser harness removes a late webpack error overlay', async ({ page }) => {
@@ -62,11 +63,6 @@ async function startPlayback(page: import('@playwright/test').Page, config: { it
         .poll(async () => video.evaluate((el: HTMLVideoElement) => !el.paused && el.readyState >= 2), { timeout: 30_000 })
         .toBe(true);
     return video;
-}
-
-async function openOsd(page: import('@playwright/test').Page) {
-    await page.mouse.move(20, 20);
-    await page.mouse.move(100, 100);
 }
 
 /** Playback position, in seconds, known to sit inside spoken dialogue. */
@@ -139,8 +135,10 @@ async function expectOverlayReachable(page: import('@playwright/test').Page, sel
 }
 
 async function openSizeOverlay(page: import('@playwright/test').Page) {
-    await openOsd(page);
-    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await (await revealOsdControl(
+        page,
+        '.videoOsdBottom-maincontrols .btnSubtitles'
+    )).click();
     await page.getByText('Subtitle Appearance', { exact: true }).click();
     await expect(page.locator('.subtitleSizerContainer')).toBeVisible();
     await expectOverlayReachable(page, '.subtitleSizerContainer');
@@ -620,8 +618,10 @@ test('the sample line goes away however the user dismisses the size control', as
     // 3. The reported flow: open the size control, then turn subtitles off.
     //    Nothing about subtitles may be left on screen afterwards.
     await openSizeOverlay(page);
-    await openOsd(page);
-    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await (await revealOsdControl(
+        page,
+        '.videoOsdBottom-maincontrols .btnSubtitles'
+    )).click();
     await page.locator('.actionSheetMenuItem', { hasText: 'Off' }).first().click();
     await expect(sampleLine).toHaveCount(0);
     await expect(page.locator('.videoSubtitlesInner')).toHaveCount(0);
@@ -708,17 +708,21 @@ test('Document PiP keeps custom subtitles and live appearance controls', async (
         () => typeof window.documentPictureInPicture?.requestWindow === 'function');
     expect(documentPipSupported).toBe(true);
 
-    await openOsd(page);
-    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await (await revealOsdControl(
+        page,
+        '.videoOsdBottom-maincontrols .btnSubtitles'
+    )).click();
     await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
     const mainSubtitleLine = page.locator(
         '.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)');
     await parkOnCue(video, mainSubtitleLine);
     const cueText = await mainSubtitleLine.textContent();
 
-    await openOsd(page);
     const pipPagePromise = page.context().waitForEvent('page');
-    await page.locator('.videoOsdBottom-maincontrols .btnPip').click();
+    await (await revealOsdControl(
+        page,
+        '.videoOsdBottom-maincontrols .btnPip'
+    )).click();
     const pipPage = await pipPagePromise;
 
     const pipVideo = pipPage.locator('.videoPlayerContainer video');
@@ -732,12 +736,14 @@ test('Document PiP keeps custom subtitles and live appearance controls', async (
 
     // Selecting a secondary track after the player has moved documents must
     // still find the shared subtitle container in the PiP document.
-    await openOsd(page);
-    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await (await revealOsdControl(
+        page,
+        '.videoOsdBottom-maincontrols .btnSubtitles'
+    )).click();
     await page.getByText('Secondary Subtitles', { exact: true }).click();
     await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
     const pipSecondaryLine = pipPage.locator('.videoSecondarySubtitlesInner');
-    await expect(pipSecondaryLine).toBeVisible();
+    await expect(pipSecondaryLine).toBeVisible({ timeout: 30_000 });
     await expect(pipSecondaryLine).toHaveText(cueText || '');
     await expect.poll(async () => {
         const primary = await pipSubtitleLine.boundingBox();
@@ -787,8 +793,10 @@ test('subtitle size applies live to real rendered cues', async ({ page, config }
     await login(page, config.username, config.password);
     const video = await startPlayback(page, config);
 
-    await openOsd(page);
-    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await (await revealOsdControl(
+        page,
+        '.videoOsdBottom-maincontrols .btnSubtitles'
+    )).click();
     await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
 
     // The default rendering path is the custom subtitle element; wait for a
@@ -849,8 +857,10 @@ test('a saved Native preference still produces a resizable real cue', async ({ p
     });
     const video = await startPlayback(page, config);
 
-    await openOsd(page);
-    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await (await revealOsdControl(
+        page,
+        '.videoOsdBottom-maincontrols .btnSubtitles'
+    )).click();
     await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
 
     // Browser-native caption compositors do not consistently honor live
@@ -890,8 +900,10 @@ test('changing the size resizes the subtitle in place instead of sliding it up t
     await login(page, config.username, config.password);
     const video = await startPlayback(page, config);
 
-    await openOsd(page);
-    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await (await revealOsdControl(
+        page,
+        '.videoOsdBottom-maincontrols .btnSubtitles'
+    )).click();
     await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
 
     const subtitleLine = page.locator('.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)');
@@ -932,15 +944,19 @@ test('subtitle offset explains itself without a subtitle and shifts cues with on
 
     // Playback can restore the user's last subtitle choice. Establish the
     // no-subtitle precondition through the same menu a user operates.
-    await openOsd(page);
-    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await (await revealOsdControl(
+        page,
+        '.videoOsdBottom-maincontrols .btnSubtitles'
+    )).click();
     await page.locator('.actionSheetMenuItem', { hasText: 'Off' }).first().click();
     await expect(page.locator('.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)')).toHaveCount(0);
 
     // Without an enabled subtitle the entry must exist and explain itself (it
     // used to be silently hidden).
-    await openOsd(page);
-    await page.locator('.videoOsdBottom-maincontrols .btnVideoOsdSettings').click();
+    await (await revealOsdControl(
+        page,
+        '.videoOsdBottom-maincontrols .btnVideoOsdSettings'
+    )).click();
     const offsetItem = page.locator('.actionSheetMenuItem', { hasText: 'Subtitle Offset' });
     await expect(offsetItem).toBeVisible();
     await offsetItem.click();
@@ -948,8 +964,10 @@ test('subtitle offset explains itself without a subtitle and shifts cues with on
     await expect(page.locator('.subtitleSyncContainer')).toBeHidden();
 
     // Enable the external subtitle and park on a cue.
-    await openOsd(page);
-    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await (await revealOsdControl(
+        page,
+        '.videoOsdBottom-maincontrols .btnSubtitles'
+    )).click();
     await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
     const subtitleLine = page.locator('.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)');
     await parkOnCue(video, subtitleLine);
@@ -958,8 +976,10 @@ test('subtitle offset explains itself without a subtitle and shifts cues with on
 
     // Now the offset entry opens the overlay.
     // @covers subtitle_controls.track_menu.offset_shifts_displayed_cue
-    await openOsd(page);
-    await page.locator('.videoOsdBottom-maincontrols .btnVideoOsdSettings').click();
+    await (await revealOsdControl(
+        page,
+        '.videoOsdBottom-maincontrols .btnVideoOsdSettings'
+    )).click();
     await offsetItem.click();
     await expect(page.locator('.subtitleSyncContainer')).toBeVisible();
     // Same body-appended overlay shape as the size control: it must land on
@@ -1014,8 +1034,10 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
         serverId: config.serverId
     });
 
-    await openOsd(page);
-    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await (await revealOsdControl(
+        page,
+        '.videoOsdBottom-maincontrols .btnSubtitles'
+    )).click();
     await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
 
     await expect(page.locator('.libassjs-canvas')).toBeVisible({ timeout: 30_000 });
@@ -1191,8 +1213,10 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
 
     // ASS is also independently selectable as a secondary subtitle. The
     // primary canvas must remain connected when the second renderer appears.
-    await openOsd(page);
-    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await (await revealOsdControl(
+        page,
+        '.videoOsdBottom-maincontrols .btnSubtitles'
+    )).click();
     await page.getByText('Secondary Subtitles', { exact: true }).click();
     await page.locator('.actionSheetMenuItem', { hasText: 'French' }).first().click();
     await expect(page.locator('.libassjs-canvas')).toHaveCount(2, { timeout: 30_000 });
@@ -1229,8 +1253,10 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
         return horizontallySeparate || verticallySeparate;
     }, { timeout: 30_000 }).toBe(true);
 
-    await openOsd(page);
-    await page.locator('.videoOsdBottom-maincontrols .btnVideoOsdSettings').click();
+    await (await revealOsdControl(
+        page,
+        '.videoOsdBottom-maincontrols .btnVideoOsdSettings'
+    )).click();
     await page.locator('.actionSheetMenuItem', { hasText: 'Subtitle Offset' }).click();
     await expect(page.locator('.subtitleSyncContainer')).toBeVisible();
     await expectOverlayReachable(page, '.subtitleSyncContainer');

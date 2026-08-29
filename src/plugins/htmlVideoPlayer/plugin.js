@@ -1858,6 +1858,13 @@ export class HtmlVideoPlayer {
                     if (!isCurrentRequest() || renderer !== htmlVideoPlayer.#currentAssRenderers[rendererIndex]) {
                         return;
                     }
+                    // The constructor may run its first resize before video
+                    // metadata and the final flex layout agree. Normalize the
+                    // canvas through libass's own video-position calculation
+                    // once the renderer is ready, so the first painted frame
+                    // and every later ResizeObserver/window resize share the
+                    // same letterboxed coordinate origin.
+                    renderer.resize();
                     htmlVideoPlayer.captureAssRendererState(
                         renderer,
                         rendererIndex,
@@ -2542,13 +2549,19 @@ export class HtmlVideoPlayer {
         if (this.#subtitleRenderPath === 'ass'
             && assState
             && videoBounds?.height) {
-            const bottom = subtitleAppearanceHelper.getSubtitleVerticalPosition(
-                subtitleAppearanceHelper.VERTICAL_POSITION_BOTTOM,
-                appearance.textSize
-            );
             if (assState.authoredBottomPercentage !== null) {
+                const assPositionOffset =
+                    subtitleAppearanceHelper.getAssSubtitleVerticalOffsetPercentage(
+                        appearance.verticalPosition,
+                        appearance.textSize
+                    );
+                // The libass canvas moves from the authored 94% baseline. The
+                // DOM preview already sits at the selected lower edge, so its
+                // correction is authored edge + ASS nudge - selected edge.
                 const offset = (
-                    assState.authoredBottomPercentage - bottom.percentage
+                    assState.authoredBottomPercentage
+                    + assPositionOffset
+                    - position.percentage
                 ) * videoBounds.height / 100;
                 if (Math.abs(offset) >= 0.01) {
                     previewTransform = `translateY(${offset}px)`;

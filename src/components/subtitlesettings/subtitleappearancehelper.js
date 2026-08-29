@@ -39,9 +39,12 @@ export function getSubtitleVerticalPosition(position, textSize) {
         * SUBTITLE_LINE_HEIGHT_RATIO
         * getTextSizeMultiplier(textSize)
         * 50;
-    const percentage = halfLinePercentage
-        + fraction * (VERTICAL_POSITION_BOTTOM_PERCENT - halfLinePercentage);
     const centerPercentage = fraction * VERTICAL_POSITION_BOTTOM_PERCENT;
+    // Position is a lower-edge contract, so text size never moves a cue once
+    // the chosen edge has enough room. Only clamp the top of the range, where
+    // half a line must remain visible instead of placing the entire cue above
+    // the picture.
+    const percentage = Math.max(halfLinePercentage, centerPercentage);
 
     return { value, fraction, percentage, centerPercentage };
 }
@@ -387,13 +390,13 @@ function getWindowStyles(settings, preview) {
             settings.verticalPosition,
             settings.textSize
         );
-        // DOM subtitle blocks can use their own measured height, so interpolate
-        // from a centre anchor at the top to the existing lower-edge anchor at
-        // the bottom. This keeps exactly half of any sized line visible at the
-        // upper endpoint without changing the lower endpoint.
+        // `percentage` is the cue's lower-edge anchor. Translating the whole
+        // rendered block keeps that edge fixed as font size and line count
+        // change; the helper clamps the top endpoint so half a line remains
+        // visible there.
         list.push({
             name: 'top',
-            value: `${position.fraction * VERTICAL_POSITION_BOTTOM_PERCENT}%`
+            value: `${position.percentage}%`
         });
         // Explicitly override the stylesheet's legacy `bottom: 0`. Clearing
         // the inline declaration would merely reveal that rule, stretching
@@ -402,7 +405,7 @@ function getWindowStyles(settings, preview) {
         list.push({ name: 'bottom', value: 'auto' });
         list.push({
             name: 'transform',
-            value: `translateY(${-50 - position.fraction * 50}%)`
+            value: 'translateY(-100%)'
         });
     }
 

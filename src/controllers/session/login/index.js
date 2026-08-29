@@ -241,13 +241,24 @@ export default function (view, params) {
         }
     });
     const manualLoginForm = view.querySelector('.manualLoginForm');
-    manualLoginForm.addEventListener('submit', function (e) {
+    function submitManualLogin(e) {
+        e.preventDefault();
+        if (!manualLoginForm.checkValidity()) {
+            manualLoginForm.reportValidity?.();
+            return;
+        }
+
         appSettings.enableAutoLogin(view.querySelector('.chkRememberLogin').checked);
         authenticateUserByName(view, getApiClient(), getTargetUrl(), view.querySelector('#txtManualName').value, view.querySelector('#txtManualPassword').value);
-        e.preventDefault();
-        return false;
-    });
-    manualLoginForm.querySelector('.button-submit').disabled = false;
+    }
+    manualLoginForm.addEventListener('submit', submitManualLogin);
+    const manualLoginButton = manualLoginForm.querySelector('.button-submit');
+    // Customized built-in buttons have occasionally accepted the click
+    // without dispatching their native form submit. Handle the visible user
+    // action directly; preventDefault above keeps a working browser default
+    // from authenticating twice. The form listener remains for Enter/submit.
+    manualLoginButton.addEventListener('click', submitManualLogin);
+    manualLoginButton.disabled = false;
     view.querySelector('.btnForgotPassword').addEventListener('click', function () {
         Dashboard.navigate('forgotpassword');
     });
