@@ -1,4 +1,4 @@
-import { expect, login, test } from './fixtures';
+import { expect, login, submitManualLogin, test } from './fixtures';
 
 const ELECTRIC_LAGOON_BACKGROUND = 'rgb(7, 16, 24)';
 
@@ -22,13 +22,71 @@ test('public login keeps the SlopTank identity through an invalid sign-in', asyn
         await spinner.waitFor({ state: 'hidden', timeout: 15_000 });
     }
 
+    const authenticationResponse = page.waitForResponse(response => (
+        response.request().method() === 'POST'
+        && /\/Users\/AuthenticateByName$/i.test(response.url())
+    ));
     await form.locator('.button-submit').click();
-    await expect(page.locator('.toast')).toBeVisible({ timeout: 15_000 });
+    const response = await authenticationResponse;
+    expect({
+        body: await response.text(),
+        status: response.status()
+    }).toEqual({
+        body: 'Error processing request.',
+        status: 401
+    });
+    await expect(page.locator('.toast')).toHaveText(
+        'Invalid username or password. Please try again.',
+        { timeout: 15_000 }
+    );
     // /web/login, not #/login: root pretty URLs (6e4b9c4900) moved the app to
     // a browser router, and the legacy bridge replaceState's the hash away
     // before the router ever sees it.
     await expect(page).toHaveURL(/\/web\/login/);
     await expect(brand).toBeVisible({ timeout: 30_000 });
+});
+
+test('a disabled account reports authorization failure instead of a connection failure', async ({ page, config }) => {
+    await page.route('**/Users/authenticatebyname*', route => route.fulfill({
+        body: 'Account disabled',
+        contentType: 'text/plain',
+        status: 403
+    }));
+    await page.goto('/web/#/login');
+
+    await submitManualLogin(page, config.username, 'not-the-real-password');
+
+    await expect(page.locator('.toast')).toHaveText(
+        'You are not authorized to access the server at this time. Please contact your server administrator for more information.',
+        { timeout: 15_000 }
+    );
+    await expect(page.getByRole('heading', { name: 'Connection Failure' })).toHaveCount(0);
+});
+
+test('a transport failure retains its cause in the connection dialog', async ({ page, config }) => {
+    await page.route('**/Users/authenticatebyname*', route => route.abort('connectionrefused'));
+    await page.goto('/web/#/login');
+
+    await submitManualLogin(page, config.username, 'not-the-real-password');
+
+    await expect(page.getByRole('heading', { name: 'Connection Failure' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/unable to connect to the selected server.*Failed to fetch/i)).toBeVisible();
+    await expect(page.locator('.toast')).toHaveCount(0);
+});
+
+test('an unclassified HTTP failure retains its status in the connection dialog', async ({ page, config }) => {
+    await page.route('**/Users/authenticatebyname*', route => route.fulfill({
+        body: 'Service unavailable',
+        contentType: 'text/plain',
+        status: 503
+    }));
+    await page.goto('/web/#/login');
+
+    await submitManualLogin(page, config.username, 'not-the-real-password');
+
+    await expect(page.getByRole('heading', { name: 'Connection Failure' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/unable to connect to the selected server.*HTTP 503/i)).toBeVisible();
+    await expect(page.locator('.toast')).toHaveCount(0);
 });
 
 test('mobile login brand stays inside the viewport without horizontal overflow', async ({ page }) => {

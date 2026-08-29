@@ -35,13 +35,22 @@ function authenticateUserByName(page, apiClient, url, username, password) {
         page.querySelector('#txtManualPassword').value = '';
         loading.hide();
 
+        const status = response?.status;
         const UnauthorizedOrForbidden = [401, 403];
-        if (UnauthorizedOrForbidden.includes(response.status)) {
-            const messageKey = response.status === 401 ? 'MessageInvalidUser' : 'MessageUnauthorizedUser';
+        if (UnauthorizedOrForbidden.includes(status)) {
+            const messageKey = status === 401 ? 'MessageInvalidUser' : 'MessageUnauthorizedUser';
             toast(globalize.translate(messageKey));
         } else {
+            let statusDetail = 'No HTTP status was returned';
+            if (status) {
+                const statusText = response.statusText ? ` ${response.statusText}` : '';
+                statusDetail = `HTTP ${status}${statusText}`;
+            } else if (response instanceof Error) {
+                statusDetail = `${response.name}: ${response.message}`;
+            }
+            console.error('[LoginPage] authentication failed', response);
             Dashboard.alert({
-                message: globalize.translate('MessageUnableToConnectToServer'),
+                message: `${globalize.translate('MessageUnableToConnectToServer')} (${statusDetail})`,
                 title: globalize.translate('HeaderConnectionFailure')
             });
         }

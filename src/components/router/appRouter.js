@@ -1,6 +1,7 @@
 import { CollectionType } from '@jellyfin/sdk/lib/generated-client/models/collection-type';
 
 import { setBackdropTransparency } from '../backdrop/backdrop';
+import globalize from '../../lib/globalize';
 import itemHelper from '../itemHelper';
 import loading from '../loading/loading';
 import alert from '../alert';
@@ -302,6 +303,21 @@ export class AppRouter {
         }
 
         this.msgTimeout = setTimeout(this.onForcedLogoutMessageTimeout, 100);
+    }
+
+    onRequestFail(_e, data) {
+        const apiClient = this;
+
+        if (data.status === 403 && data.errorCode === 'ParentalControl') {
+            const currentPath = appRouter.history?.location.pathname ?? window.location.pathname;
+            const isPublicPage = PUBLIC_PATHS.includes(currentPath);
+
+            // Bounce to the login screen, but not if a password entry fails.
+            if (!isPublicPage) {
+                appRouter.showForcedLogoutMessage(globalize.translate('AccessRestrictedTryAgainLater'));
+                appRouter.showLocalLogin(apiClient.serverId());
+            }
+        }
     }
 
     getRouteUrl(item, options) {
