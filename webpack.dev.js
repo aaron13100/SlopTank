@@ -49,7 +49,7 @@ module.exports = merge(common, {
         proxy: [
             {
                 context: pathname => {
-                    const apiRoots = /^\/(?:[A-Z][^/]*|emby|health|socket|users)(?:\/|$)/;
+                    const apiRoots = /^\/(?:[A-Z][^/]*|videos|emby|health|socket|users)(?:\/|$)/;
                     return pathname === '/ws' || apiRoots.test(pathname);
                 },
                 target: 'http://127.0.0.1:8096',
