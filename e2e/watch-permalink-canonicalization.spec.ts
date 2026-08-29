@@ -37,7 +37,8 @@ test('canonicalizing a playing GUID route keeps the same player and timeline', a
         const probeWindow = window as typeof window & {
             permalinkCanonicalizationProbe?: {
                 video: HTMLVideoElement | null
-                currentTime: number
+                timeline: number[]
+                active: boolean
             }
         };
         const nativeReplaceState = window.history.replaceState.bind(window.history);
@@ -46,10 +47,19 @@ test('canonicalizing a playing GUID route keeps the same player and timeline', a
             if (/\/w\//.test(String(url))) {
                 const video = document.querySelector('video');
                 video?.setAttribute('data-e2e-player-identity', 'before-canonicalization');
-                probeWindow.permalinkCanonicalizationProbe = {
+                const probe = {
                     video,
-                    currentTime: video?.currentTime ?? 0
+                    timeline: [] as number[],
+                    active: true
                 };
+                probeWindow.permalinkCanonicalizationProbe = probe;
+
+                const sampleTimeline = () => {
+                    if (!probe.active) return;
+                    probe.timeline.push(video?.currentTime ?? -1);
+                    window.requestAnimationFrame(sampleTimeline);
+                };
+                sampleTimeline();
             }
 
             nativeReplaceState(data, unused, url);
@@ -68,19 +78,31 @@ test('canonicalizing a playing GUID route keeps the same player and timeline', a
         }), { timeout: 20_000 })
         .toBe(true);
 
+    await expect
+        .poll(() => page.evaluate(() => (window as typeof window & {
+            permalinkCanonicalizationProbe?: { timeline: number[] }
+        }).permalinkCanonicalizationProbe?.timeline.length ?? 0))
+        .toBeGreaterThan(1);
+
     const timeline = await page.evaluate(() => {
         const probe = (window as typeof window & {
             permalinkCanonicalizationProbe?: {
                 video: HTMLVideoElement | null
-                currentTime: number
+                timeline: number[]
+                active: boolean
             }
         }).permalinkCanonicalizationProbe;
+        if (probe) probe.active = false;
+        const samples = probe?.timeline ?? [];
+        const regressionIndex = samples.findIndex((sample, index) => (
+            index > 0 && sample < samples[index - 1]
+        ));
         return {
-            before: probe?.currentTime ?? -1,
-            after: probe?.video?.currentTime ?? -1
+            samples,
+            regressionIndex
         };
     });
-    expect(timeline.after).toBeGreaterThanOrEqual(timeline.before);
+    expect(timeline.regressionIndex, JSON.stringify(timeline)).toBe(-1);
     await expect(page.locator('video').first()).toHaveAttribute(
         'data-e2e-player-identity',
         'before-canonicalization'
@@ -113,17 +135,11 @@ test('the subtitle menu keeps the player mounted once the URL has canonicalized'
     // Failing here means canonicalization regressed, not the subtitle menu.
     await page.waitForURL(WATCH_PERMALINK_ROUTE, { timeout: 90_000 });
 
-    // Settle before stamping. Canonicalization currently rebuilds the player
-    // once, because the root route mounts a SECOND app layout instance and
-    // AppBody's unmount calls viewContainer.reset(), destroying the legacy
-    // view container. That is a real open defect with its own task and its own
-    // failing test; it is not this test's subject, and stamping through it
-    // would make this test report that defect intermittently instead of
-    // reporting whether the menu unmounts the player.
+    // Settle before stamping so this test isolates the later menu interaction;
+    // the strict test above separately guards the canonicalization transition.
     await expect
         .poll(async () => video.evaluate((el: HTMLVideoElement) => !el.paused && el.readyState >= 2), { timeout: 60_000 })
         .toBe(true);
-    await page.waitForTimeout(2_000);
 
     await video.evaluate((el: HTMLVideoElement) => el.setAttribute('data-e2e-player-identity', 'canonicalized'));
     const loadsBefore = documentLoads;
