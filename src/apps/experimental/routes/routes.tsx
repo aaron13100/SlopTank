@@ -41,11 +41,3 @@ export const EXPERIMENTAL_APP_CHILD_ROUTES: RouteObject[] = [
         ]
     }
 ];
-
-export const EXPERIMENTAL_APP_ROUTES: RouteObject[] = [
-    {
-        path: '*',
-        lazy: () => import('../AppLayout'),
-        children: EXPERIMENTAL_APP_CHILD_ROUTES
-    }
-];

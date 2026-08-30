@@ -7,8 +7,6 @@ import { toViewManagerPageRoute } from 'components/router/LegacyRoute';
 import ErrorBoundary from 'components/router/ErrorBoundary';
 import FallbackRoute from 'components/router/FallbackRoute';
 
-import AppLayout from '../AppLayout';
-
 import { ASYNC_PUBLIC_ROUTES, ASYNC_USER_ROUTES } from './asyncRoutes';
 import { LEGACY_PUBLIC_ROUTES, LEGACY_USER_ROUTES } from './legacyRoutes';
 
@@ -37,13 +35,5 @@ export const STABLE_APP_CHILD_ROUTES: RouteObject[] = [
                 Component: FallbackRoute
             }
         ]
-    }
-];
-
-export const STABLE_APP_ROUTES: RouteObject[] = [
-    {
-        path: '*',
-        Component: AppLayout,
-        children: STABLE_APP_CHILD_ROUTES
     }
 ];
