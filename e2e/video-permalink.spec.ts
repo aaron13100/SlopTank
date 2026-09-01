@@ -50,7 +50,7 @@ test('video url becomes a durable permalink that survives a reload', async ({ pa
 
     // The details page always renders one .btnPlay in .mainDetailButtons;
     // its title toggles between Play/Resume via JS, the class never changes.
-    const playButton = page.locator('.mainDetailButtons .btnPlay');
+    const playButton = page.locator('.mainDetailButtons .btnPlay:visible');
     await playButton.click();
 
     await page.waitForURL(/\/web\/video\?id=/, { timeout: 60_000 });

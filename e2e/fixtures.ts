@@ -1,5 +1,7 @@
 import { test as base, expect } from '@playwright/test';
 
+import permalinkGrammar from '../src/components/router/permalink-grammar-v1.json';
+
 export interface E2eConfig {
     username: string;
     password: string;
@@ -98,13 +100,23 @@ export function requireNoProviderItemId(): string {
 /**
  * Every spelling the player route currently takes.
  *
- * Root pretty URLs (commit 6e4b9c4900) moved playback from `#/video?id=` to
- * `/web/video?id=`, which then canonicalizes in place to `/web/w/<permalink>`
- * while the player stays mounted. Six specs each carried their own copy of the
- * old hash pattern and every one of them timed out after that commit, so the
- * pattern lives here once: the next router change breaks one line, not six.
+ * Playback starts on `/web/video?id=<guid>` and then canonicalizes in place to
+ * root `/w/<permalink>` while the player stays mounted. Root `/<permalink>` is
+ * the item information route and must not satisfy a playback wait.
+ *
+ * The permalink alternatives come from the versioned web copy of the server
+ * integration-test contract, so E2E route waits cannot drift into a third
+ * handwritten grammar.
  */
-export const VIDEO_ROUTE = /\/web\/(video\?id=|w\/)/;
+const permalinkIdPattern = Object.entries(permalinkGrammar.patterns)
+    .filter(([ namespace ]) => namespace !== 'reserved')
+    .map(([, pattern ]) => pattern.slice(1, -1))
+    .join('|');
+
+/** A canonical root watch permalink, excluding legacy and information routes. */
+export const WATCH_PERMALINK_ROUTE = new RegExp(`/w/(?:${permalinkIdPattern})(?:[?#]|$)`);
+
+export const VIDEO_ROUTE = new RegExp(`/web/video\\?id=|${WATCH_PERMALINK_ROUTE.source}`);
 
 /**
  * Move the pointer so the player treats the user as active and shows the OSD.
@@ -141,7 +153,10 @@ export async function revealOsdControl(
     selector: string,
     timeout = 20_000
 ): Promise<import('@playwright/test').Locator> {
-    const control = page.locator(selector);
+    // Legacy views stay mounted but hidden for fast back navigation. Match the
+    // control a user can actually reach; strict mode still catches two active
+    // controls because `isVisible()` rejects a multi-match locator.
+    const control = page.locator(`${selector}:visible`);
     await expect
         .poll(async () => {
             await wakeOsd(page);

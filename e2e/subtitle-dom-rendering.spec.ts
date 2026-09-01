@@ -13,7 +13,7 @@ test.setTimeout(180_000);
 
 async function startPlayback(page: import('@playwright/test').Page, config: { itemId: string, serverId: string }) {
     await page.goto(`/web/#/details?id=${config.itemId}&serverId=${config.serverId}`);
-    await page.locator('.mainDetailButtons .btnPlay').click();
+    await page.locator('.mainDetailButtons .btnPlay:visible').click();
     await page.waitForURL(VIDEO_ROUTE, { timeout: 60_000 });
     const video = page.locator('video').first();
     await expect(video).toBeVisible({ timeout: 20_000 });

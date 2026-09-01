@@ -21,7 +21,7 @@ test('the dev server proxies a lowercase HLS manifest from real playback', async
         return url.pathname.startsWith('/videos/') && url.pathname.endsWith('/master.m3u8');
     }, { timeout: 60_000 });
 
-    await page.locator('.mainDetailButtons .btnPlay').click();
+    await page.locator('.mainDetailButtons .btnPlay:visible').click();
 
     const response = await manifestResponse;
     const contentType = response.headers()['content-type'] || '';

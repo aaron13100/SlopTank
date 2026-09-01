@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
-import { test, login, onScreenState } from './fixtures';
+import { test, login, onScreenState, WATCH_PERMALINK_ROUTE } from './fixtures';
 
 test.setTimeout(180_000);
 
@@ -27,8 +27,6 @@ test.setTimeout(180_000);
  * the element mounted and full-size at opacity 0, and `display: none` is
  * inherited from an ancestor the selector never names.
  */
-
-const WATCH_PERMALINK_ROUTE = /\/w\/(?:tt\d+|(?:tm|tv)-(?:mv|tv|ep|se|co)-\d+|sk-[0-9a-hjkmnp-tv-z]{26})(?:[?#]|$)/;
 
 interface OsdChromeState {
     controlsVisible: boolean
@@ -104,7 +102,7 @@ async function playUntilCanonicalized(
     // which Chrome cannot decode, so the server transcodes it and the run
     // measures transcode throughput on a 2-core box instead of chrome.
     await page.goto(`/web/details?id=${config.itemId}&serverId=${config.serverId}`);
-    await page.locator('.mainDetailButtons .btnPlay').click();
+    await page.locator('.mainDetailButtons .btnPlay:visible').click();
 
     const video = page.locator('video').first();
     await expect(video).toBeVisible({ timeout: 60_000 });

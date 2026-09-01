@@ -41,7 +41,7 @@ async function startPlayback(
     itemId: string
 ) {
     await page.goto(`/web/#/details?id=${itemId}&serverId=${config.serverId}`);
-    await page.locator('.mainDetailButtons .btnPlay').click();
+    await page.locator('.mainDetailButtons .btnPlay:visible').click();
     const video = page.locator('video').first();
     await expect(video).toBeVisible({ timeout: 60_000 });
     await expect
@@ -146,7 +146,7 @@ test('opening the subtitle menu does not unmount the player', async ({ page, con
     await login(page, config.username, config.password);
 
     await page.goto(`/web/#/details?id=${config.itemId}&serverId=${config.serverId}`);
-    await page.locator('.mainDetailButtons .btnPlay').click();
+    await page.locator('.mainDetailButtons .btnPlay:visible').click();
     const video = page.locator('video').first();
     await expect(video).toBeVisible({ timeout: 60_000 });
     await expect

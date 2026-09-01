@@ -92,7 +92,7 @@ interface PlaybackTestWindow extends Window {
 }
 
 async function playCurrentDetailsWithHls(page: Page): Promise<void> {
-    await page.locator('.mainDetailButtons .btnPlay').click();
+    await page.locator('.mainDetailButtons .btnPlay:visible').click();
     await page.waitForURL(VIDEO_ROUTE, { timeout: 60_000 });
     await expect(page.locator('video').first()).toBeVisible({ timeout: 20_000 });
     await expect.poll(
@@ -188,7 +188,7 @@ test('resume of an audio-transcode item starts playing and advances', async ({ p
 
     await page.goto(`/web/#/details?id=${itemId}&serverId=${config.serverId}`);
 
-    const playButton = page.locator('.mainDetailButtons .btnPlay');
+    const playButton = page.locator('.mainDetailButtons .btnPlay:visible');
     await playButton.click();
 
     await page.waitForURL(VIDEO_ROUTE, { timeout: 60_000 });

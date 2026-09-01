@@ -1,4 +1,12 @@
-import { VIDEO_ROUTE, expect, login, requireControlsItemId, revealOsdControl, test } from './fixtures';
+import {
+    VIDEO_ROUTE,
+    WATCH_PERMALINK_ROUTE,
+    expect,
+    login,
+    requireControlsItemId,
+    revealOsdControl,
+    test
+} from './fixtures';
 
 test.setTimeout(180_000);
 
@@ -18,9 +26,15 @@ interface WindowWithApiClient extends Window {
 }
 
 async function startPlayback(page: import('@playwright/test').Page, config: { itemId: string, serverId: string }) {
-    await page.goto(`/web/#/details?id=${config.itemId}&serverId=${config.serverId}`);
-    await page.locator('.mainDetailButtons .btnPlay').click();
-    await page.waitForURL(VIDEO_ROUTE, { timeout: 60_000 });
+    await page.goto(`/web/details?id=${config.itemId}&serverId=${config.serverId}`);
+    await page.waitForURL(url => url.pathname !== '/web/details', { timeout: 90_000 });
+    const canonicalInfoPath = new URL(page.url()).pathname;
+    expect(canonicalInfoPath).toMatch(/^\/[^/]+$/);
+    expect(canonicalInfoPath).not.toMatch(VIDEO_ROUTE);
+
+    await page.locator('.mainDetailButtons .btnPlay:visible').click();
+    await page.waitForURL(WATCH_PERMALINK_ROUTE, { timeout: 90_000 });
+    await page.waitForURL(VIDEO_ROUTE, { timeout: 1_000 });
     const video = page.locator('video').first();
     await expect(video).toBeVisible({ timeout: 20_000 });
     await expect
@@ -54,6 +68,26 @@ async function fetchItem(page: import('@playwright/test').Page, itemId: string):
         return api.getItem(api.getCurrentUserId(), id);
     }, itemId);
 }
+
+test('play from a canonical item URL reaches the canonical video route', async ({ page, config }) => {
+    await login(page, config.username, config.password);
+    await page.goto(`/web/details?id=${config.itemId}&serverId=${config.serverId}`);
+
+    await page.waitForURL(url => url.pathname !== '/web/details', { timeout: 90_000 });
+    const canonicalInfoPath = new URL(page.url()).pathname;
+    expect(canonicalInfoPath).toMatch(/^\/[^/]+$/);
+    expect(canonicalInfoPath).not.toMatch(VIDEO_ROUTE);
+
+    await page.locator('.mainDetailButtons .btnPlay:visible').click();
+    await page.waitForURL(WATCH_PERMALINK_ROUTE, { timeout: 90_000 });
+    await page.waitForURL(VIDEO_ROUTE, { timeout: 1_000 });
+
+    const video = page.locator('video').first();
+    await expect(video).toBeVisible({ timeout: 20_000 });
+    await expect
+        .poll(async () => video.evaluate((el: HTMLVideoElement) => !el.paused && el.readyState >= 2), { timeout: 30_000 })
+        .toBe(true);
+});
 
 test('playback speed menu changes the real video rate and reflects the selection', async ({ page, config }) => {
     await login(page, config.username, config.password);

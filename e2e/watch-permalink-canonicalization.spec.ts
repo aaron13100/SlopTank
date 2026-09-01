@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test';
 
-import { test, login, revealOsdControl } from './fixtures';
+import { test, login, revealOsdControl, WATCH_PERMALINK_ROUTE } from './fixtures';
 
 test.setTimeout(180_000);
 
@@ -21,8 +21,6 @@ test.setTimeout(180_000);
  * also true of a player that was destroyed and rebuilt, which is the
  * regression itself; a stamp read back off the same element is not.
  */
-
-const WATCH_PERMALINK_ROUTE = /\/w\/(?:tt\d+|(?:tm|tv)-(?:mv|tv|ep|se|co)-\d+|sk-[0-9a-hjkmnp-tv-z]{26})(?:[?#]|$)/;
 
 // @covers video.permalink.canonicalized_url_survives_subtitle_menu
 test('canonicalizing a playing GUID route keeps the same player and timeline', async ({ page, config }) => {
@@ -66,7 +64,7 @@ test('canonicalizing a playing GUID route keeps the same player and timeline', a
         };
     });
 
-    await page.locator('.mainDetailButtons .btnPlay').click();
+    await page.locator('.mainDetailButtons .btnPlay:visible').click();
     await page.waitForURL(WATCH_PERMALINK_ROUTE, { timeout: 90_000 });
 
     await expect
@@ -123,7 +121,7 @@ test('the subtitle menu keeps the player mounted once the URL has canonicalized'
     // test spends its whole budget measuring transcode throughput on a 2-core
     // box instead of the routing behaviour it is about. This item direct-plays.
     await page.goto(`/web/details?id=${config.itemId}&serverId=${config.serverId}`);
-    await page.locator('.mainDetailButtons .btnPlay').click();
+    await page.locator('.mainDetailButtons .btnPlay:visible').click();
 
     const video = page.locator('video').first();
     await expect(video).toBeVisible({ timeout: 60_000 });

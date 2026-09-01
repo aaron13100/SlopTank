@@ -8,6 +8,7 @@ import {
     requireTranscodeChapterItemId,
     test,
     VIDEO_ROUTE,
+    WATCH_PERMALINK_ROUTE,
     wakeOsd
 } from './fixtures';
 
@@ -35,15 +36,21 @@ async function startPlayback(
     page: Page,
     config: { itemId: string, serverId: string, playFromBeginning?: boolean }
 ) {
-    await page.goto(`/web/#/details?id=${config.itemId}&serverId=${config.serverId}`);
-    const primaryPlayButton = page.locator('.mainDetailButtons .btnPlay');
+    await page.goto(`/web/details?id=${config.itemId}&serverId=${config.serverId}`);
+    await page.waitForURL(url => url.pathname !== '/web/details', { timeout: 90_000 });
+    const canonicalInfoPath = new URL(page.url()).pathname;
+    expect(canonicalInfoPath).toMatch(/^\/[^/]+$/);
+    expect(canonicalInfoPath).not.toMatch(VIDEO_ROUTE);
+
+    const primaryPlayButton = page.locator('.mainDetailButtons .btnPlay:visible');
     await expect(primaryPlayButton).toBeVisible({ timeout: 30_000 });
-    const replayButton = page.locator('.mainDetailButtons .btnReplay');
+    const replayButton = page.locator('.mainDetailButtons .btnReplay:visible');
     const playButton = config.playFromBeginning && await replayButton.isVisible() ?
         replayButton :
         primaryPlayButton;
     await playButton.click();
-    await page.waitForURL(VIDEO_ROUTE, { timeout: 60_000 });
+    await page.waitForURL(WATCH_PERMALINK_ROUTE, { timeout: 90_000 });
+    await page.waitForURL(VIDEO_ROUTE, { timeout: 1_000 });
     const video = page.locator('video').first();
     await expect(video).toBeVisible({ timeout: 20_000 });
     await expect

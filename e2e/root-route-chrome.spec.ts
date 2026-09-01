@@ -70,7 +70,7 @@ test('a detail page that canonicalizes to a root permalink keeps the app toolbar
     await expect(page.locator(TOOLBAR)).toBeVisible({ timeout: 30_000 });
 
     await page.goto(`/web/details?id=${config.itemId}&serverId=${config.serverId}`);
-    await expect(page.locator('.mainDetailButtons .btnPlay')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('.mainDetailButtons .btnPlay:visible')).toBeVisible({ timeout: 60_000 });
 
     // The detail route rewrites itself to the item's canonical permalink at
     // root. That transition is the moment the chrome used to be lost.
