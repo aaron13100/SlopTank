@@ -278,7 +278,11 @@
       "owner": "web-client",
       "kind": "user-action",
       "files": [
-        "e2e/subtitle-controls.spec.ts",
+        "e2e/subtitle-appearance-controls.spec.ts",
+        "e2e/subtitle-ass-rendering.spec.ts",
+        "e2e/subtitle-dom-rendering.spec.ts",
+        "e2e/subtitle-positioning.spec.ts",
+        "e2e/subtitle-sync-controls.spec.ts",
         "e2e/subtitle-track-selection.spec.ts",
         "src/components/subtitlesettings/subtitleappearancehelper.js",
         "src/components/subtitlesettings/subtitlesettings.js",

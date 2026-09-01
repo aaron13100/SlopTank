@@ -1,4 +1,4 @@
-import { VIDEO_ROUTE, expect, login, onScreenState, revealOsdControl, test, wakeOsd } from './fixtures';
+import { VIDEO_ROUTE, clickOsdControl, expect, login, onScreenState, test, wakeOsd } from './fixtures';
 
 test.setTimeout(120_000);
 
@@ -64,8 +64,7 @@ test('Episodes opens a reachable series list and switches the playing episode', 
     await login(page, config.username, config.password);
     const video = await startEpisodePlayback(page, { episodeId, serverId: config.serverId });
 
-    const episodesButton = await revealOsdControl(page, '.videoOsdBottom-maincontrols .btnEpisodes');
-    await episodesButton.click();
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnEpisodes');
     await expect.poll(
         () => onScreenState(page, '.episodePlaybackMenu'),
         { message: 'expected the episode list to be fully on screen and reachable' }
@@ -152,8 +151,7 @@ test('next episode then Back exits the player instead of resuming the previous e
     const firstEpisodeUrl = page.url();
     const historyIdxDuringFirstEpisode = await page.evaluate(() => window.history.state?.idx);
 
-    const nextTrackButton = await revealOsdControl(page, '.videoOsdBottom-maincontrols .btnNextTrack');
-    await nextTrackButton.click();
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnNextTrack');
 
     await expect
         .poll(() => page.url(), { timeout: 20_000 })

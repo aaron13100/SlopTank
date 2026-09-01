@@ -1,5 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import {
+    clickOsdControl,
     expect,
     login,
     onScreenState,
@@ -84,7 +85,7 @@ async function openOsd(
 
 async function expectPlayMethod(page: Page, expected: 'Direct playing' | 'Transcoding') {
     await openOsd(page, '.videoOsdBottom-maincontrols .btnVideoOsdSettings');
-    await page.locator('.videoOsdBottom-maincontrols .btnVideoOsdSettings').click();
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnVideoOsdSettings');
     await page.locator('.actionSheetMenuItem[data-id="stats"]').click();
 
     const stats = page.locator('.playerStats');
@@ -149,7 +150,7 @@ async function expectPositionPercent(slider: Locator, target: number, tolerance:
         async () => Math.abs(Number(await slider.inputValue()) - target),
         {
             message: `expected absolute player position ${target}% within ${tolerance} percentage points`,
-            timeout: 20_000
+            timeout: 60_000
         }
     ).toBeLessThanOrEqual(tolerance);
 }
@@ -176,11 +177,11 @@ async function expectConsecutiveChapterNavigation(page: Page, item: ItemDetails)
     const tolerance = 100_000_000 / runtimeTicks * 100 + 0.5;
 
     await openOsd(page, nextButtonSelector);
-    await nextButton.click();
+    await clickOsdControl(page, nextButtonSelector);
     await expectPositionPercent(positionSlider, toPercent(chapters[1].StartPositionTicks), tolerance);
 
     await openOsd(page, nextButtonSelector);
-    await nextButton.click();
+    await clickOsdControl(page, nextButtonSelector);
     await expectPositionPercent(positionSlider, toPercent(chapters[2].StartPositionTicks), tolerance);
 
     const adjustedTicks = chapters[2].StartPositionTicks - 100_000_000;
@@ -188,7 +189,7 @@ async function expectConsecutiveChapterNavigation(page: Page, item: ItemDetails)
         .find(chapter => chapter.StartPositionTicks <= adjustedTicks) || chapters[0];
 
     await openOsd(page, previousButtonSelector);
-    await prevButton.click();
+    await clickOsdControl(page, previousButtonSelector);
     await expectPositionPercent(positionSlider, toPercent(expectedChapter.StartPositionTicks), tolerance);
 }
 

@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test';
 
-import { test, login, revealOsdControl, WATCH_PERMALINK_ROUTE } from './fixtures';
+import { test, login, clickOsdControl, WATCH_PERMALINK_ROUTE } from './fixtures';
 
 test.setTimeout(180_000);
 
@@ -142,7 +142,7 @@ test('the subtitle menu keeps the player mounted once the URL has canonicalized'
     await video.evaluate((el: HTMLVideoElement) => el.setAttribute('data-e2e-player-identity', 'canonicalized'));
     const loadsBefore = documentLoads;
 
-    await (await revealOsdControl(page, '.btnSubtitles')).click();
+    await clickOsdControl(page, '.btnSubtitles');
     await expect(page.locator('.actionSheetMenuItem').first()).toBeVisible({ timeout: 15_000 });
     await page.keyboard.press('Escape');
 

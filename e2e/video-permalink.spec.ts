@@ -1,4 +1,4 @@
-import { expect, login, revealOsdControl, test } from './fixtures';
+import { clickOsdControl, expect, login, revealOsdControl, test } from './fixtures';
 
 test.setTimeout(300_000);
 
@@ -69,11 +69,11 @@ test('video url becomes a durable permalink that survives a reload', async ({ pa
         page,
         '.videoOsdBottom-maincontrols .btnPause'
     );
-    await playPauseButton.click();
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnPause');
     await expect.poll(async () => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(true);
     await page.waitForTimeout(4_000);
     await expect(playPauseButton).toBeVisible();
-    await playPauseButton.click();
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnPause');
     await expectPlaybackToAdvance(video, 20_000);
 
     const urlAfterPlay = new URL(page.url());
@@ -157,6 +157,6 @@ test('video url becomes a durable permalink that survives a reload', async ({ pa
     await revealOsdControl(page, '.videoOsdBottom-maincontrols .btnPause');
 
     await page.evaluate(() => sessionStorage.removeItem('e2e-block-autoplay'));
-    await playPauseButton.click();
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnPause');
     await expectPlaybackToAdvance(video, 20_000);
 });

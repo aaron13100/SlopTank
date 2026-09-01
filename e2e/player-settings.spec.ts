@@ -1,10 +1,10 @@
 import {
     VIDEO_ROUTE,
     WATCH_PERMALINK_ROUTE,
+    clickOsdControl,
     expect,
     login,
     requireControlsItemId,
-    revealOsdControl,
     test
 } from './fixtures';
 
@@ -43,17 +43,11 @@ async function startPlayback(page: import('@playwright/test').Page, config: { it
     return video;
 }
 
-/**
- * Bring up the OSD and hold it up until its controls are on screen, rather
- * than nudging the pointer once and hoping. See revealOsdControl in fixtures.
- */
-async function openOsd(page: import('@playwright/test').Page) {
-    await revealOsdControl(page, '.videoOsdBottom-maincontrols');
-}
+/** The OSD's audio-track button, pressed through the shared wake-and-click loop. */
+const AUDIO_BUTTON = '.videoOsdBottom-maincontrols .btnAudio';
 
 async function openSettingsMenu(page: import('@playwright/test').Page) {
-    await openOsd(page);
-    await page.locator('.videoOsdBottom-maincontrols .btnVideoOsdSettings').click();
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnVideoOsdSettings');
 }
 
 async function expectPlaybackResumed(video: import('@playwright/test').Locator, timeout: number) {
@@ -176,8 +170,7 @@ test('audio track menu switches the real playing track', async ({ page, config }
     const audioStreams = (item.MediaStreams || []).filter(stream => stream.Type === 'Audio');
     expect(audioStreams.length).toBeGreaterThanOrEqual(2);
 
-    await openOsd(page);
-    await page.locator('.videoOsdBottom-maincontrols .btnAudio').click();
+    await clickOsdControl(page, AUDIO_BUTTON);
     const menuItems = page.locator('.actionSheetMenuItem');
     await expect(menuItems).toHaveCount(audioStreams.length);
 
@@ -200,21 +193,18 @@ test('audio track menu switches the real playing track', async ({ page, config }
     try {
         await expectPlaybackResumed(video, 30_000);
 
-        await openOsd(page);
-        await page.locator('.videoOsdBottom-maincontrols .btnAudio').click();
+        await clickOsdControl(page, AUDIO_BUTTON);
         await expect(page.locator(`.actionSheetMenuItem[data-id="${otherStream.Index}"] .actionsheetMenuItemIcon`)).toBeVisible();
         await expect(page.locator(`.actionSheetMenuItem[data-id="${currentIndex}"] .actionsheetMenuItemIcon`)).toBeHidden();
     } finally {
         const originalTrack = page.locator(`.actionSheetMenuItem[data-id="${currentIndex}"]`);
         if (!await originalTrack.isVisible()) {
-            await openOsd(page);
-            await page.locator('.videoOsdBottom-maincontrols .btnAudio').click();
+            await clickOsdControl(page, AUDIO_BUTTON);
         }
         await originalTrack.click();
         await expectPlaybackResumed(video, 30_000);
 
-        await openOsd(page);
-        await page.locator('.videoOsdBottom-maincontrols .btnAudio').click();
+        await clickOsdControl(page, AUDIO_BUTTON);
         await expect(originalTrack.locator('.actionsheetMenuItemIcon')).toBeVisible();
     }
 });

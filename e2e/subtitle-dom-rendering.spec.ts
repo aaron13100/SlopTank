@@ -1,8 +1,9 @@
 import {
+    clickOsdControl,
     expect,
     login,
     onScreenState,
-    revealOsdControl,
+    parkOnCue,
     test,
     VIDEO_ROUTE
 } from './fixtures';
@@ -21,53 +22,6 @@ async function startPlayback(page: import('@playwright/test').Page, config: { it
         .poll(async () => video.evaluate((el: HTMLVideoElement) => !el.paused && el.readyState >= 2), { timeout: 30_000 })
         .toBe(true);
     return video;
-}
-
-/** Playback position, in seconds, known to sit inside spoken dialogue. */
-const DIALOGUE_TIME = 95;
-
-/** Seconds after DIALOGUE_TIME still expected to contain dialogue. */
-const DIALOGUE_WINDOW = 20;
-
-/**
- * Park playback on a rendered subtitle cue and hold it there.
- *
- * Two separate races have to be beaten, and both produce the same misleading
- * symptom -- the cue element present but empty, so `toBeVisible()` reports
- * hidden:
- *   1. a `currentTime` write issued while the player is still starting up is
- *      silently discarded, leaving the playhead at 0 where nothing is spoken;
- *   2. pausing immediately after a seek that DID land freezes the player before
- *      it has decoded the new position or run the subtitle renderer for it, so
- *      the cue text never arrives and never will -- the renderer updates on
- *      timeupdate, which a paused element stops firing.
- * So: keep the playhead inside the dialogue window, keep it playing, and only
- * pause once real text is actually on screen.
- * @param video - The player's video element.
- * @param subtitleLine - The rendered (non-preview) subtitle text element.
- */
-async function parkOnCue(
-    video: import('@playwright/test').Locator,
-    subtitleLine: import('@playwright/test').Locator
-) {
-    await expect
-        .poll(async () => {
-            const position = await video.evaluate(async (el: HTMLVideoElement, [target, window]) => {
-                // Re-seek only when outside the window, so normal playback
-                // through the dialogue is not yanked back to the start of it.
-                if (el.currentTime < target - 1 || el.currentTime > target + window) {
-                    el.currentTime = target;
-                }
-                if (el.paused) await el.play();
-                return el.currentTime;
-            }, [ DIALOGUE_TIME, DIALOGUE_WINDOW ]);
-            const text = (await subtitleLine.textContent()) ?? '';
-            return position >= DIALOGUE_TIME - 1 && text.trim().length > 0;
-        }, { timeout: 60_000 })
-        .toBe(true);
-    await video.evaluate((el: HTMLVideoElement) => el.pause());
-    await expect(subtitleLine).toBeVisible({ timeout: 10_000 });
-    await expect(subtitleLine).not.toBeEmpty();
 }
 
 /**
@@ -93,10 +47,7 @@ async function expectOverlayReachable(page: import('@playwright/test').Page, sel
 }
 
 async function openSizeOverlay(page: import('@playwright/test').Page) {
-    await (await revealOsdControl(
-        page,
-        '.videoOsdBottom-maincontrols .btnSubtitles'
-    )).click();
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
     await page.getByText('Subtitle Appearance', { exact: true }).click();
     await expect(page.locator('.subtitleSizerContainer')).toBeVisible();
     await expectOverlayReachable(page, '.subtitleSizerContainer');
@@ -284,10 +235,7 @@ test('Document PiP keeps custom subtitles and live appearance controls', async (
         () => typeof window.documentPictureInPicture?.requestWindow === 'function');
     expect(documentPipSupported).toBe(true);
 
-    await (await revealOsdControl(
-        page,
-        '.videoOsdBottom-maincontrols .btnSubtitles'
-    )).click();
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
     await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
     const mainSubtitleLine = page.locator(
         '.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)');
@@ -295,10 +243,7 @@ test('Document PiP keeps custom subtitles and live appearance controls', async (
     const cueText = await mainSubtitleLine.textContent();
 
     const pipPagePromise = page.context().waitForEvent('page');
-    await (await revealOsdControl(
-        page,
-        '.videoOsdBottom-maincontrols .btnPip'
-    )).click();
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnPip');
     const pipPage = await pipPagePromise;
 
     const pipVideo = pipPage.locator('.videoPlayerContainer video');
@@ -312,10 +257,7 @@ test('Document PiP keeps custom subtitles and live appearance controls', async (
 
     // Selecting a secondary track after the player has moved documents must
     // still find the shared subtitle container in the PiP document.
-    await (await revealOsdControl(
-        page,
-        '.videoOsdBottom-maincontrols .btnSubtitles'
-    )).click();
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
     await page.getByText('Secondary Subtitles', { exact: true }).click();
     await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
     const pipSecondaryLine = pipPage.locator('.videoSecondarySubtitlesInner');
@@ -369,10 +311,7 @@ test('subtitle size applies live to real rendered cues', async ({ page, config }
     await login(page, config.username, config.password);
     const video = await startPlayback(page, config);
 
-    await (await revealOsdControl(
-        page,
-        '.videoOsdBottom-maincontrols .btnSubtitles'
-    )).click();
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
     await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
 
     // The default rendering path is the custom subtitle element; wait for a
@@ -433,10 +372,7 @@ test('a saved Native preference still produces a resizable real cue', async ({ p
     });
     const video = await startPlayback(page, config);
 
-    await (await revealOsdControl(
-        page,
-        '.videoOsdBottom-maincontrols .btnSubtitles'
-    )).click();
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
     await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
 
     // Browser-native caption compositors do not consistently honor live

@@ -1,9 +1,9 @@
 import {
+    clickOsdControl,
     expect,
     login,
     onScreenState,
     requireAssSubtitleItemId,
-    revealOsdControl,
     test,
     VIDEO_ROUTE
 } from './fixtures';
@@ -47,10 +47,7 @@ async function expectOverlayReachable(page: import('@playwright/test').Page, sel
 }
 
 async function openSizeOverlay(page: import('@playwright/test').Page) {
-    await (await revealOsdControl(
-        page,
-        '.videoOsdBottom-maincontrols .btnSubtitles'
-    )).click();
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
     await page.getByText('Subtitle Appearance', { exact: true }).click();
     await expect(page.locator('.subtitleSizerContainer')).toBeVisible();
     await expectOverlayReachable(page, '.subtitleSizerContainer');
@@ -236,10 +233,7 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
         serverId: config.serverId
     });
 
-    await (await revealOsdControl(
-        page,
-        '.videoOsdBottom-maincontrols .btnSubtitles'
-    )).click();
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
     await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
 
     await expect(page.locator('.libassjs-canvas')).toBeVisible({ timeout: 30_000 });
@@ -423,10 +417,7 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
 
     // ASS is also independently selectable as a secondary subtitle. The
     // primary canvas must remain connected when the second renderer appears.
-    await (await revealOsdControl(
-        page,
-        '.videoOsdBottom-maincontrols .btnSubtitles'
-    )).click();
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
     await page.getByText('Secondary Subtitles', { exact: true }).click();
     await page.locator('.actionSheetMenuItem', { hasText: 'French' }).first().click();
     await expect(page.locator('.libassjs-canvas')).toHaveCount(2, { timeout: 30_000 });
@@ -463,10 +454,7 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
         return horizontallySeparate || verticallySeparate;
     }, { timeout: 30_000 }).toBe(true);
 
-    await (await revealOsdControl(
-        page,
-        '.videoOsdBottom-maincontrols .btnVideoOsdSettings'
-    )).click();
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnVideoOsdSettings');
     await page.locator('.actionSheetMenuItem', { hasText: 'Subtitle Offset' }).click();
     await expect(page.locator('.subtitleSyncContainer')).toBeVisible();
     await expectOverlayReachable(page, '.subtitleSyncContainer');

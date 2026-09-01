@@ -166,6 +166,129 @@ export async function revealOsdControl(
     return control;
 }
 
+/**
+ * How long one click attempt may wait for the OSD control to accept it.
+ *
+ * Under the ~3s auto-hide window on purpose: an attempt that runs longer than
+ * the hide timer spends the rest of its budget waiting on an element the OSD
+ * has already taken away, and the pointer is only woken between attempts.
+ */
+const OSD_CLICK_ATTEMPT_MS = 2_000;
+
+/**
+ * Press an OSD control, holding the OSD awake across the click itself.
+ *
+ * `revealOsdControl` keeps the OSD up until the control is visible and then
+ * hands the locator back, which leaves the press outside the loop that made it
+ * reachable. The OSD hides itself after ~3s of inactivity, so on a busy host
+ * the container reaches `display: none` between the last poll and the click,
+ * and Playwright then retries actionability forever against a control nothing
+ * is waking any more -- observed as
+ * "element is visible, enabled and stable / scrolling into view if needed /
+ * element is not visible" repeating until the test timeout.
+ *
+ * Retrying the click with a fresh wake each attempt removes the race instead of
+ * widening a timeout until it usually loses: every attempt re-establishes the
+ * precondition it depends on.
+ *
+ * @param page - Page with the player mounted.
+ * @param selector - CSS selector for the OSD control the user must be able to press.
+ * @param timeout - How long the control may take to accept a press.
+ */
+export async function clickOsdControl(
+    page: import('@playwright/test').Page,
+    selector: string,
+    timeout = 20_000
+): Promise<void> {
+    const control = page.locator(`${selector}:visible`);
+    let lastFailure: Error | undefined;
+    try {
+        await expect
+            .poll(async () => {
+                await wakeOsd(page);
+                try {
+                    await control.click({ timeout: OSD_CLICK_ATTEMPT_MS });
+                    return true;
+                } catch (cause) {
+                    // Keep the actionability detail. expect.poll only reports
+                    // that the value never became true, and why the control
+                    // refused the press is the entire diagnosis.
+                    lastFailure = cause as Error;
+                    return false;
+                }
+            }, { timeout, message: `expected the OSD control ${selector} to accept a click` })
+            .toBe(true);
+    } catch (pollExpired) {
+        throw new Error( // allow-raw-error: test setup fast-fail, not user-facing production code
+            `OSD control ${selector} never accepted a click within ${timeout}ms. `
+                + `Last attempt: ${lastFailure?.message ?? '(the control never became visible)'}`,
+            { cause: lastFailure ?? pollExpired }
+        );
+    }
+}
+
+/** Playback position, in seconds, known to sit inside spoken dialogue. */
+export const DIALOGUE_TIME = 95;
+
+/** Seconds after DIALOGUE_TIME still expected to contain dialogue. */
+export const DIALOGUE_WINDOW = 20;
+
+/**
+ * Park playback on a rendered subtitle cue and hold it there, paused.
+ *
+ * Three races have to be beaten, and all three produce the same misleading
+ * symptom -- the cue element present but empty or `hide`, so `toBeVisible()`
+ * reports hidden:
+ *   1. a `currentTime` write issued while the player is still starting up is
+ *      silently discarded, leaving the playhead at 0 where nothing is spoken;
+ *   2. pausing immediately after a seek that DID land freezes the player before
+ *      it has decoded the new position or run the subtitle renderer for it, so
+ *      the cue text never arrives and never will -- the renderer updates on
+ *      timeupdate, which a paused element stops firing;
+ *   3. the cue the loop accepted expires before the pause lands. Text content
+ *      survives on the hidden element, so a predicate that only reads
+ *      `textContent()` passes on a cue the renderer has already taken off
+ *      screen, and the caller's `toBeVisible()` fails on state that really was
+ *      correct a moment earlier.
+ *
+ * So the freeze happens INSIDE the loop and the loop judges what the caller
+ * asserts -- visible, non-empty, and paused -- rather than a weaker proxy for
+ * it. An attempt that lands on an expired cue resumes and tries again.
+ *
+ * @param video - The player's video element.
+ * @param subtitleLine - The rendered (non-preview) subtitle text element.
+ */
+export async function parkOnCue(
+    video: import('@playwright/test').Locator,
+    subtitleLine: import('@playwright/test').Locator
+): Promise<void> {
+    await expect
+        .poll(async () => {
+            const position = await video.evaluate(async (el: HTMLVideoElement, [target, window]) => {
+                // Re-seek only when outside the window, so normal playback
+                // through the dialogue is not yanked back to the start of it.
+                if (el.currentTime < target - 1 || el.currentTime > target + window) {
+                    el.currentTime = target;
+                }
+                if (el.paused) await el.play();
+                return el.currentTime;
+            }, [ DIALOGUE_TIME, DIALOGUE_WINDOW ]);
+            if (position < DIALOGUE_TIME - 1) return false;
+            // Freeze first, then judge: checking the cue and pausing afterwards
+            // lets the playhead leave the dialogue window in between, and the
+            // renderer hides the very line the check just accepted.
+            await video.evaluate((el: HTMLVideoElement) => el.pause());
+            const [ visible, text ] = await Promise.all([
+                subtitleLine.isVisible(),
+                subtitleLine.textContent()
+            ]);
+            return visible && (text ?? '').trim().length > 0;
+        }, { timeout: 60_000, message: 'expected playback to park, paused, on a visible subtitle cue' })
+        .toBe(true);
+    await expect(subtitleLine).toBeVisible({ timeout: 10_000 });
+    await expect(subtitleLine).not.toBeEmpty();
+}
+
 export const test = base.extend<{ config: E2eConfig }>({
     page: async ({ page }, use) => {
         await page.addInitScript(() => {

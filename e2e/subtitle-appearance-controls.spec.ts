@@ -1,8 +1,8 @@
 import {
+    clickOsdControl,
     expect,
     login,
     onScreenState,
-    revealOsdControl,
     test,
     VIDEO_ROUTE
 } from './fixtures';
@@ -46,10 +46,7 @@ async function expectOverlayReachable(page: import('@playwright/test').Page, sel
 }
 
 async function openSizeOverlay(page: import('@playwright/test').Page) {
-    await (await revealOsdControl(
-        page,
-        '.videoOsdBottom-maincontrols .btnSubtitles'
-    )).click();
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
     await page.getByText('Subtitle Appearance', { exact: true }).click();
     await expect(page.locator('.subtitleSizerContainer')).toBeVisible();
     await expectOverlayReachable(page, '.subtitleSizerContainer');
@@ -235,10 +232,7 @@ test('the sample line goes away however the user dismisses the size control', as
     // 3. The reported flow: open the size control, then turn subtitles off.
     //    Nothing about subtitles may be left on screen afterwards.
     await openSizeOverlay(page);
-    await (await revealOsdControl(
-        page,
-        '.videoOsdBottom-maincontrols .btnSubtitles'
-    )).click();
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
     await page.locator('.actionSheetMenuItem', { hasText: 'Off' }).first().click();
     await expect(sampleLine).toHaveCount(0);
     await expect(page.locator('.videoSubtitlesInner')).toHaveCount(0);

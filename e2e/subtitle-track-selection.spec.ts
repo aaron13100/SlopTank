@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test';
 
-import { test, login, requireAssSubtitleItemId, revealOsdControl } from './fixtures';
+import { test, login, requireAssSubtitleItemId, clickOsdControl } from './fixtures';
 
 // Playwright's default is 30s, which is under this file's own 60s playback
 // polls -- the test budget expired before the assertion it was waiting on
@@ -12,10 +12,10 @@ test.setTimeout(180_000);
  * Regression coverage for the reported failure: picking a subtitle track from
  * the in-player Subtitles menu navigates the page and playback never returns.
  *
- * `e2e/subtitle-controls.spec.ts` covers the appearance controls (size,
- * position, offset) and the "Off" entry, but nothing in the suite has ever
- * selected an actual subtitle TRACK from that menu. That is the gap this file
- * closes, so the test is written to fail while the bug is present.
+ * The subtitle appearance, positioning and sync specs cover the controls
+ * (size, position, offset) and the "Off" entry, but nothing in the suite has
+ * ever selected an actual subtitle TRACK from that menu. That is the gap this
+ * file closes, so the test is written to fail while the bug is present.
  *
  * What the user sees is "the page reloads and then loads forever", so the
  * assertions are about survival rather than about subtitles rendering:
@@ -52,9 +52,9 @@ async function startPlayback(
     return video;
 }
 
-/** Reveal the OSD the way a mouse user does. */
-async function openOsd(page: import('@playwright/test').Page) {
-    await revealOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
+/** Open the Subtitles menu the way a mouse user does. */
+async function openSubtitleMenu(page: import('@playwright/test').Page) {
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
 }
 
 // @covers subtitle_controls.track_menu.selecting_a_track_keeps_playback_alive
@@ -86,8 +86,7 @@ test('choosing a subtitle track does not reload the page or kill playback', asyn
     const urlBeforeSelection = page.url();
     const positionBeforeSelection = await video.evaluate((el: HTMLVideoElement) => el.currentTime);
 
-    await openOsd(page);
-    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await openSubtitleMenu(page);
     await expect(page.locator('.actionSheetMenuItem').first()).toBeVisible();
 
     // Real tracks carry the stream index in `data-id`; the menu COMMANDS carry
@@ -157,8 +156,7 @@ test('opening the subtitle menu does not unmount the player', async ({ page, con
 
     const loadsBefore = documentLoads;
 
-    await openOsd(page);
-    await page.locator('.videoOsdBottom-maincontrols .btnSubtitles').click();
+    await openSubtitleMenu(page);
     await expect(page.locator('.actionSheetMenuItem').first()).toBeVisible();
     await page.getByText('Subtitle Appearance', { exact: true }).click();
 
