@@ -175,6 +175,73 @@ export async function revealOsdControl(
  */
 const OSD_CLICK_ATTEMPT_MS = 2_000;
 
+/** A page-side record of presses that actually reached an OSD control. */
+interface DeliveredPresses {
+    presses: number;
+    stop: () => void;
+}
+
+/**
+ * Start counting, inside the page, presses that actually reach a control.
+ *
+ * A timed-out `locator.click()` does NOT mean the press was never delivered.
+ * `click()` dispatches the press and then waits for scheduled navigations, and
+ * that second phase can outlast the attempt budget by itself: opening a
+ * Document Picture-in-Picture window took 2.0s on its own, so the call threw
+ * `Timeout 2000ms exceeded` on a press the button had already received. The
+ * return value of `click()` therefore cannot decide whether a retry is safe,
+ * and most OSD controls toggle -- Picture in picture, Subtitles, Pause -- so a
+ * repeated press undoes the first one.
+ *
+ * The listener runs in the capture phase on the document, so a press the app
+ * stops from propagating still registers.
+ *
+ * @param page - Page with the player mounted.
+ * @param selector - CSS selector for the control being pressed. Plain CSS: it
+ *   is matched with `Element.closest`, so Playwright pseudo-classes are out.
+ * @returns A page-side handle counting delivered presses.
+ */
+async function countDeliveredPresses(
+    page: import('@playwright/test').Page,
+    selector: string
+): Promise<import('@playwright/test').JSHandle<DeliveredPresses>> {
+    return page.evaluateHandle((controlSelector) => {
+        const record: DeliveredPresses = { presses: 0, stop: () => { /* replaced below */ } };
+        const onClick = (event: Event) => {
+            const target = event.target as Element | null;
+            if (target?.closest?.(controlSelector)) {
+                record.presses += 1;
+            }
+        };
+        document.addEventListener('click', onClick, true);
+        record.stop = () => document.removeEventListener('click', onClick, true);
+        return record;
+    }, selector);
+}
+
+/**
+ * Read the delivered-press count, treating a destroyed page as a delivery.
+ *
+ * The handle only dies with its execution context, which in these specs means
+ * the press navigated the document or closed the window. Both are downstream of
+ * a press that landed, so reporting "not delivered" there would license exactly
+ * the repeat this counter exists to prevent.
+ *
+ * @param delivered - Handle from countDeliveredPresses.
+ * @returns Whether at least one press reached the control.
+ */
+async function pressWasDelivered(
+    delivered: import('@playwright/test').JSHandle<DeliveredPresses>
+): Promise<boolean> {
+    try {
+        return await delivered.evaluate(record => record.presses > 0);
+    } catch (contextGone) {
+        // The reason a press is assumed delivered must stay in the run log.
+        console.warn(`[osd] treating the press as delivered: ${(contextGone as Error).message}`);
+        return true;
+    }
+}
+
 /**
  * Press an OSD control, holding the OSD awake across the click itself.
  *
@@ -189,7 +256,9 @@ const OSD_CLICK_ATTEMPT_MS = 2_000;
  *
  * Retrying the click with a fresh wake each attempt removes the race instead of
  * widening a timeout until it usually loses: every attempt re-establishes the
- * precondition it depends on.
+ * precondition it depends on. The retry is gated on the press not having been
+ * DELIVERED rather than on `click()` having thrown, so a control whose press is
+ * slow to settle is never pressed twice; see countDeliveredPresses.
  *
  * @param page - Page with the player mounted.
  * @param selector - CSS selector for the OSD control the user must be able to press.
@@ -201,10 +270,12 @@ export async function clickOsdControl(
     timeout = 20_000
 ): Promise<void> {
     const control = page.locator(`${selector}:visible`);
+    const delivered = await countDeliveredPresses(page, selector);
     let lastFailure: Error | undefined;
     try {
         await expect
             .poll(async () => {
+                if (await pressWasDelivered(delivered)) return true;
                 await wakeOsd(page);
                 try {
                     await control.click({ timeout: OSD_CLICK_ATTEMPT_MS });
@@ -214,7 +285,7 @@ export async function clickOsdControl(
                     // that the value never became true, and why the control
                     // refused the press is the entire diagnosis.
                     lastFailure = cause as Error;
-                    return false;
+                    return pressWasDelivered(delivered);
                 }
             }, { timeout, message: `expected the OSD control ${selector} to accept a click` })
             .toBe(true);
@@ -224,6 +295,17 @@ export async function clickOsdControl(
                 + `Last attempt: ${lastFailure?.message ?? '(the control never became visible)'}`,
             { cause: lastFailure ?? pollExpired }
         );
+    } finally {
+        // Leave no listener behind: a spec presses OSD controls a dozen times,
+        // and a counter for a press that already happened would answer for the
+        // next one.
+        try {
+            await delivered.evaluate(record => record.stop());
+        } catch (contextGone) {
+            // A failed teardown must be visible, not swallowed.
+            console.warn(`[osd] press counter for ${selector} outlived its page: ${(contextGone as Error).message}`);
+        }
+        await delivered.dispose();
     }
 }
 
