@@ -32,6 +32,17 @@ test.setTimeout(300_000);
  */
 const PLAYBACK_START_BUDGET_MS = 10_000;
 
+/*
+ * The budget assertions below are SOFT on purpose.
+ *
+ * A hard assertion ends the test at the first item over budget, so the items
+ * after it are never measured at all. That matters because the promotion tool
+ * compares each measurement against a baseline taken minutes earlier on the
+ * same host, and a number that was never produced cannot be compared: one slow
+ * item would hide a real regression in every other one. Soft assertions
+ * measure everything and still fail the test.
+ */
+
 /**
  * Ceiling for the wait itself, kept far above the budget on purpose.
  *
@@ -135,7 +146,7 @@ test.describe('playback start latency', () => {
 
             reportMeasurement('play-button', itemId, elapsedMs);
             await expect(page).toHaveURL(VIDEO_ROUTE);
-            expect(
+            expect.soft(
                 elapsedMs,
                 `pressing Play on item ${itemId} took ${(elapsedMs / 1000).toFixed(2)}s to reach a playing `
                 + `frame, over the ${PLAYBACK_START_BUDGET_MS / 1000}s a person will wait`
@@ -201,7 +212,7 @@ test.describe('playback start latency', () => {
                 const elapsedMs = nowMs() - started;
 
                 reportMeasurement('watch-link', itemId, elapsedMs);
-                expect(
+                expect.soft(
                     elapsedMs,
                     `opening watch link ${watchUrl} took ${(elapsedMs / 1000).toFixed(2)}s to reach a playing `
                     + `frame, over the ${PLAYBACK_START_BUDGET_MS / 1000}s a person will wait`
