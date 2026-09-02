@@ -32,6 +32,36 @@ const SLOPTANK_ID_PATTERN = /^sk-[0-9a-hjkmnp-tv-z]{26}$/;
 const RESERVED_PREFIX_PATTERN = /^(mb|au)-/;
 
 /**
+ * Reports whether a pathname is a permalink route still resolving to its real
+ * destination.
+ *
+ * A permalink route is a doorway, not a page: it asks the server which item the
+ * link means and then replaces itself with the details or video route. Anything
+ * the app fetches for its own chrome while that is in flight is work the user
+ * did not ask for, on a box that is busy answering the question they did ask.
+ *
+ * Measured on production 2026-09-02 opening a 10.53 GB film's watch link: the
+ * three permalink round trips cost 8.34s in the browser against 3.5s with the
+ * server idle, while UserViews (842ms), SyncPlay (616ms), System/Info (418ms)
+ * and Branding (140ms) were in flight beside them on a two-core host.
+ *
+ * Deliberately tolerant of the deployment base and of a `/web` prefix, because
+ * this is asked of `window.location.pathname`, which carries both.
+ *
+ * @param pathname A location pathname, with or without a deployment base.
+ * @returns True while the path is a permalink route awaiting resolution.
+ */
+export function isPermalinkResolutionPath(pathname: string): boolean {
+    const segments = pathname.split('/').filter(Boolean);
+    const markerIndex = segments.findIndex(
+        segment => (PERMALINK_MARKER_SEGMENTS as readonly string[]).includes(segment)
+    );
+    if (markerIndex < 0) return false;
+    const id = segments[markerIndex + 1];
+    return !!id && parsePermalinkId(id) !== null;
+}
+
+/**
  * Parses a single path segment as a permalink id. Returns null when the
  * segment does not match any defined or reserved grammar -- callers must
  * treat that as "not a permalink", not as an error.

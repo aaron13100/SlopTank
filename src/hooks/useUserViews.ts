@@ -4,6 +4,8 @@ import { getUserViewsApi } from '@jellyfin/sdk/lib/utils/api/user-views-api';
 import { queryOptions, useQuery } from '@tanstack/react-query';
 import type { AxiosRequestConfig } from 'axios';
 
+import { isPermalinkResolutionPath } from 'components/router/permalinkId';
+
 import { useApi } from './useApi';
 
 const fetchUserViews = async (
@@ -27,7 +29,12 @@ export const getUserViewsQuery = (
     // On initial page load we request user views 3x. Setting a 1 second stale time
     // allows a single request to be made to resolve all 3.
     staleTime: 1000, // 1 second
-    enabled: !!api && !!userId
+    // Not while a permalink route is resolving. This feeds navigation chrome,
+    // and a permalink route replaces itself with the real route as soon as the
+    // server answers, so fetching it there competes with that answer and is
+    // then thrown away. It is requested again, normally, the moment the real
+    // route mounts. See isPermalinkResolutionPath for the measurements.
+    enabled: !!api && !!userId && !isPermalinkResolutionPath(window.location.pathname)
 });
 
 export const useUserViews = (

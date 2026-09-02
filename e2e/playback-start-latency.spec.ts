@@ -189,14 +189,19 @@ test.describe('playback start latency', () => {
             await waitUntilPlaying(page);
             await minted;
 
-            // Pause the first playback so the measurement below is not
-            // competing with a video still streaming on a two-core host, but
-            // leave the tab where it is. Navigating it away aborts the mint,
-            // which the client issues as a background enhancement, and an
-            // aborted mint leaves the alias mid-mutation: opening the link then
-            // took 186.91s waiting for that to settle, against under 4s of
-            // server work for a settled one. That abandonment is a real defect,
-            // and it is not this budget's subject.
+            // Pause the first playback so the measurement is not competing with
+            // a video still streaming on a two-core host, and leave the tab
+            // where it is.
+            //
+            // Navigating it away was tried and is worse on both counts. Before
+            // the mint returns it aborts it, and an aborted mint leaves the
+            // alias mid-mutation: opening the link then took 186.91s waiting
+            // for that to settle, against under 4s of server work for a settled
+            // one. After the mint it merely adds a second page load's worth of
+            // in-flight requests to the window being measured, which moved the
+            // figure from 13.31s to 16.23s without making the model any more
+            // faithful. Neither variant is what a real recipient has, and this
+            // one is the quieter of the two.
             await page.evaluate(() => document.querySelector('video')?.pause());
 
             // The link is opened in a NEW tab of the same browser, which is

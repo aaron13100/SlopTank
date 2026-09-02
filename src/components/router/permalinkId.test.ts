@@ -4,6 +4,7 @@ import {
     buildPermalinkPath,
     buildPermalinkShareUrl,
     getExternalPermalinkId,
+    isPermalinkResolutionPath,
     parsePermalinkId,
     permalinkStartSecondsToTicks
 } from './permalinkId';
@@ -147,5 +148,32 @@ describe('permalinkStartSecondsToTicks', () => {
         expect(permalinkStartSecondsToTicks('5.5')).toBeNull();
         expect(permalinkStartSecondsToTicks('abc')).toBeNull();
         expect(permalinkStartSecondsToTicks('9'.repeat(400))).toBeNull();
+    });
+});
+
+describe('isPermalinkResolutionPath', () => {
+    it('recognises a permalink route in every shape the address bar produces', () => {
+        expect(isPermalinkResolutionPath('/w/tt35231039')).toBe(true);
+        expect(isPermalinkResolutionPath('/p/tt35231039')).toBe(true);
+        expect(isPermalinkResolutionPath('/web/w/tt35231039')).toBe(true);
+        expect(isPermalinkResolutionPath('/deploy-base/web/w/tt35231039')).toBe(true);
+        expect(isPermalinkResolutionPath('/w/sk-2f3k2m9qbd8x4w1r0ehtyc5vnz')).toBe(true);
+        expect(isPermalinkResolutionPath('/w/tm-mv-12345')).toBe(true);
+    });
+
+    it('does not claim a route that merely looks like one', () => {
+        // The negative control that matters: gating navigation data on this
+        // predicate means a false positive silently strips the chrome from a
+        // real page, which is worse than the latency it was added to fix.
+        expect(isPermalinkResolutionPath('/web/video?id=abc')).toBe(false);
+        expect(isPermalinkResolutionPath('/web/details?id=abc')).toBe(false);
+        expect(isPermalinkResolutionPath('/web/index.html')).toBe(false);
+        expect(isPermalinkResolutionPath('/')).toBe(false);
+        expect(isPermalinkResolutionPath('')).toBe(false);
+        // A marker segment with nothing usable after it is not a permalink.
+        expect(isPermalinkResolutionPath('/w/')).toBe(false);
+        expect(isPermalinkResolutionPath('/w/not-an-id')).toBe(false);
+        // Reserved namespaces never resolve, so they are not a permalink route.
+        expect(isPermalinkResolutionPath('/w/mb-1234')).toBe(false);
     });
 });
