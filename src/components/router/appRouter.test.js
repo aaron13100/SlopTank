@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { AppRouter } from './appRouter';
 import { clearRememberedPermalinkAliases } from './permalinkSession';
+import { trackVideoOsdMount } from '../playback/videoOsdPresence';
 
 /**
  * These tests drive AppRouter over a real history implementation (the same
@@ -60,10 +61,21 @@ describe('appRouter video OSD navigation', () => {
             '/web/video?id=ep1&serverId=s1'
         ]);
 
-        // Next episode starts while the OSD is already showing.
-        await settleNavigation(appRouter.showVideoOsd({ Id: 'ep2', ServerId: 's1' }));
-        expect(fullPath(memoryHistory)).toBe('/web/video?id=ep2&serverId=s1');
-        expect(memoryHistory.index).toBe(1);
+        // "While the OSD is already showing" is now asked of the mounted view
+        // rather than of the address (the player has two addresses once its
+        // link canonicalizes), so the precondition has to be declared through
+        // the same seam the mounted view uses. Without this the harness holds
+        // a player URL that nothing is mounted on, which is the state of a
+        // fresh tab, and a push is the correct answer to it.
+        const releaseOsd = trackVideoOsdMount();
+        try {
+            // Next episode starts while the OSD is already showing.
+            await settleNavigation(appRouter.showVideoOsd({ Id: 'ep2', ServerId: 's1' }));
+            expect(fullPath(memoryHistory)).toBe('/web/video?id=ep2&serverId=s1');
+            expect(memoryHistory.index).toBe(1);
+        } finally {
+            releaseOsd();
+        }
 
         // Back must leave the player, not step to the previous episode.
         memoryHistory.back();
@@ -130,5 +142,60 @@ describe('appRouter canonical library navigation', () => {
         expect(appRouter.getRouteUrl(view, { context: collectionType })).toBe(expected);
         expect(appRouter.getRouteUrl(view, { context: collectionType, section: 'latest' }))
             .toBe(`${expected}?tab=1`);
+    });
+});
+
+describe('appRouter canonicalizeAddressBar preserves the entry it re-spells', () => {
+    // A canonicalization re-spells the history entry already on screen, so
+    // everything that entry was carrying is still true afterwards. It used to
+    // hand history.replace() a state object built from scratch, which silently
+    // destroyed every key another feature had put there.
+    //
+    // dialogHelper is the load-bearing victim: it records open dialogs in
+    // `state.dialogs` and closes any dialog whose hash disappears from a
+    // history update. So a permalink canonicalization landing while a menu was
+    // open ripped that menu out of the DOM mid-click. Observed against the live
+    // server 2026-09-03: the "More" menu on an item page vanished under the
+    // pointer whenever the alias was minted after the menu opened, which is the
+    // normal ordering whenever the mint round trip is slow.
+    //
+    // @covers video.permalink.canonicalization_preserves_open_dialog
+    it('merges its state over the current entry rather than replacing it', () => {
+        const { memoryHistory, appRouter } = createHarness(['/web/details?id=item1&serverId=s1']);
+        memoryHistory.replace('/web/details?id=item1&serverId=s1', { dialogs: [ 'dlg-1' ] });
+
+        const rewritten = appRouter.canonicalizeAddressBar('/sk-3n5ragpyv3ys689v2m9bty98fd', {
+            canonicalizedFrom: '/web/details'
+        });
+
+        expect(rewritten).toBe(true);
+        expect(memoryHistory.location.state).toMatchObject({
+            dialogs: [ 'dlg-1' ],
+            canonicalizedFrom: '/web/details'
+        });
+    });
+
+    it('lets the canonicalization win when a key collides', () => {
+        const { memoryHistory, appRouter } = createHarness(['/web/details?id=item1&serverId=s1']);
+        memoryHistory.replace('/web/details?id=item1&serverId=s1', {
+            dialogs: [ 'dlg-1' ],
+            canonicalizedFrom: '/web/stale'
+        });
+
+        appRouter.canonicalizeAddressBar('/sk-3n5ragpyv3ys689v2m9bty98fd', {
+            canonicalizedFrom: '/web/details'
+        });
+
+        expect(memoryHistory.location.state.canonicalizedFrom).toBe('/web/details');
+        expect(memoryHistory.location.state.dialogs).toEqual([ 'dlg-1' ]);
+    });
+
+    it('carries the existing state through when the caller adds nothing', () => {
+        const { memoryHistory, appRouter } = createHarness(['/web/details?id=item1&serverId=s1']);
+        memoryHistory.replace('/web/details?id=item1&serverId=s1', { dialogs: [ 'dlg-1' ] });
+
+        appRouter.canonicalizeAddressBar('/sk-3n5ragpyv3ys689v2m9bty98fd');
+
+        expect(memoryHistory.location.state).toMatchObject({ dialogs: [ 'dlg-1' ] });
     });
 });

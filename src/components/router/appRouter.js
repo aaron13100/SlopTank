@@ -148,8 +148,18 @@ export class AppRouter {
      * router re-read window.location, match the permalink route and unmount
      * the player mid-movie (fixed 2026-08-11, reported 2026-08-09).
      *
+     * The caller's state is MERGED over the entry being re-spelled, never
+     * substituted for it. A canonicalization changes only how the current
+     * entry is spelled, so everything that entry was already carrying is still
+     * true afterwards, and other features legitimately keep their own keys
+     * there. dialogHelper is the one that bites: it records the open dialog
+     * stack in `state.dialogs` and closes any dialog whose hash is missing
+     * from a history update, so a wholesale replace tore open menus out of the
+     * DOM. Merging here rather than at each call site is what makes that
+     * impossible for every caller, present and future.
+     *
      * @param {string} path Router path, relative to the deployment basename.
-     * @param {object} state History state carried to the destination route.
+     * @param {object} [state] Keys to add to the current entry's state.
      * @returns {boolean} Whether the address bar was rewritten.
      */
     canonicalizeAddressBar(path, state) {
@@ -158,7 +168,7 @@ export class AppRouter {
         const current = this.history.location.pathname + this.history.location.search;
         if (current === path) return false;
 
-        this.history.replace(path, state);
+        this.history.replace(path, { ...this.history.location.state, ...state });
         return true;
     }
 

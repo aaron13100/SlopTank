@@ -49,6 +49,15 @@
           "requiredAssertions": [
             "routes_home_instead_of_hanging"
           ]
+        },
+        {
+          "id": "video.permalink.canonicalization_preserves_open_dialog",
+          "type": "unhappy",
+          "failureClass": "domain",
+          "requiredAssertions": [
+            "existing_history_state_preserved",
+            "canonicalization_keys_applied"
+          ]
         }
       ]
     },
