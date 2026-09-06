@@ -34,8 +34,13 @@ import { VIDEO_ROUTE, expect, login, test } from './fixtures';
 // spec below forces a real ffmpeg transcode restart, observed taking up to
 // ~90s per restart across three chained restarts. 180s was too tight and
 // failed the assertion mid-restart even though the underlying fix worked;
-// 300s gives headroom without masking a genuine hang.
-test.setTimeout(300_000);
+// 300s gave headroom for that.
+// Measured 2026-09-06: this host now also runs a library-wide audio backfill
+// plus unrelated project workloads sustaining load averages of 30-90 for
+// many minutes at a time, on top of the transcode restarts above. A real run
+// under that contention took just under 10 minutes end to end; 600s gives
+// headroom for the current steady state without masking a genuine hang.
+test.setTimeout(600_000);
 
 const RESUME_POSITION_TICKS = 6_000_000_000; // 10 minutes
 
@@ -93,7 +98,14 @@ interface PlaybackTestWindow extends Window {
 
 async function playCurrentDetailsWithHls(page: Page): Promise<void> {
     await page.locator('.mainDetailButtons .btnPlay:visible').click();
-    await page.waitForURL(VIDEO_ROUTE, { timeout: 60_000 });
+    // Measured 2026-09-06: this host also runs a library-wide audio-normalization
+    // backfill and unrelated project workloads that are not throttled against
+    // interactive work, sustaining load averages of 30-90 (single-digit-to-20%
+    // idle CPU) for many minutes at a stretch, not just brief spikes. 60s was
+    // tuned before that steady contention existed and now times out navigation
+    // that is otherwise healthy (confirmed via server-side ffmpeg logs showing
+    // the underlying transcode itself completing at 2x realtime).
+    await page.waitForURL(VIDEO_ROUTE, { timeout: 120_000 });
     await expect(page.locator('video').first()).toBeVisible({ timeout: 20_000 });
     await expect.poll(
         () => page.evaluate(() => typeof (window as unknown as PlaybackTestWindow).Hls === 'function'),
@@ -101,22 +113,50 @@ async function playCurrentDetailsWithHls(page: Page): Promise<void> {
     ).toBe(true);
 }
 
+// The details route is hash-based while the video route is a real
+// history-mode path, so leaving playback via page.goto(details) changes both
+// path and query, not just the fragment: Chromium treats that as a real
+// cross-document navigation (confirmed via the captured trace: three
+// separate GET /web/ document requests, one per goto in this test) that
+// discards window.Hls, which the app only re-populates from a dynamic
+// import() once playback restarts. A one-shot page.evaluate patch applied
+// after that goto is already too late. Install the patch as an init script
+// instead, before the goto that triggers the reload, so it re-runs on the
+// fresh document ahead of any app code, via a property trap on window.Hls
+// that patches attachMedia the instant the app assigns the constructor.
 async function captureNextHlsInstance(page: Page): Promise<void> {
-    await page.evaluate(() => {
+    await page.addInitScript(() => {
         const testWindow = window as unknown as PlaybackTestWindow;
-        const HlsConstructor = testWindow.Hls!;
-        const originalAttachMedia = HlsConstructor.prototype.attachMedia;
-        HlsConstructor.prototype.attachMedia = function(this: HlsTestInstance, media: HTMLMediaElement) {
-            testWindow.__fatalErrorTestHls = this;
-            const generation = (testWindow.__fatalErrorTestGeneration ?? 0) + 1;
-            testWindow.__fatalErrorTestGeneration = generation;
-            this.on(HlsConstructor.Events.FRAG_BUFFERED, () => {
-                if (testWindow.__fatalErrorTestHls === this) {
-                    testWindow.__fatalErrorTestReadyGeneration = generation;
+        let currentHls: HlsTestConstructor | undefined;
+        Object.defineProperty(testWindow, 'Hls', {
+            configurable: true,
+            get() {
+                return currentHls;
+            },
+            set(HlsConstructor: HlsTestConstructor) {
+                currentHls = HlsConstructor;
+                const patchable = HlsConstructor.prototype as unknown as { __fatalErrorTestPatched?: boolean };
+                // A stream restart within the same document reuses the same
+                // cached module (same constructor, hence same prototype), so
+                // guard against wrapping attachMedia a second time.
+                if (patchable.__fatalErrorTestPatched) {
+                    return;
                 }
-            });
-            return originalAttachMedia.call(this, media);
-        };
+                patchable.__fatalErrorTestPatched = true;
+                const originalAttachMedia = HlsConstructor.prototype.attachMedia;
+                HlsConstructor.prototype.attachMedia = function(this: HlsTestInstance, media: HTMLMediaElement) {
+                    testWindow.__fatalErrorTestHls = this;
+                    const generation = (testWindow.__fatalErrorTestGeneration ?? 0) + 1;
+                    testWindow.__fatalErrorTestGeneration = generation;
+                    this.on(HlsConstructor.Events.FRAG_BUFFERED, () => {
+                        if (testWindow.__fatalErrorTestHls === this) {
+                            testWindow.__fatalErrorTestReadyGeneration = generation;
+                        }
+                    });
+                    return originalAttachMedia.call(this, media);
+                };
+            }
+        });
     });
 }
 
@@ -248,6 +288,16 @@ test('resume of an audio-transcode item starts playing and advances', async ({ p
 test('fatal hls.js network errors surface a playback error instead of freezing the video page', async ({ page, config }) => {
     const itemId = requireTranscodeItemId();
 
+    // Matches the forensics pattern in the resume spec above: this test drives
+    // real playback and real fallback restarts, so a failure needs to show
+    // what the client actually did, not just which assertion timed out.
+    const consoleLog: string[] = [];
+    page.on('console', (message) => {
+        if (message.type() === 'error' || message.type() === 'warning') {
+            consoleLog.push(`console.${message.type()}: ${message.text().slice(0, 300)}`);
+        }
+    });
+
     await login(page, config.username, config.password);
 
     // First playback loads the same hls.js constructor used by the production
@@ -258,8 +308,11 @@ test('fatal hls.js network errors surface a playback error instead of freezing t
     // Leave playback, then capture the next real Hls instance at the public
     // attachMedia boundary. This keeps the event injection at the platform
     // boundary while the details-page Play button remains the entry point.
-    await page.goto(`/web/#/details?id=${itemId}&serverId=${config.serverId}`);
+    // Register the capture BEFORE the goto below: that navigation reloads
+    // the document (see captureNextHlsInstance's comment), so the patch must
+    // already be queued as an init script to re-apply on the fresh page.
     await captureNextHlsInstance(page);
+    await page.goto(`/web/#/details?id=${itemId}&serverId=${config.serverId}`);
 
     await playCurrentDetailsWithHls(page);
     await expect.poll(
@@ -286,7 +339,7 @@ test('fatal hls.js network errors surface a playback error instead of freezing t
             ),
             {
                 message: `HLS generation ${currentGeneration} should buffer media before its steady-state failure`,
-                timeout: 90_000
+                timeout: 120_000
             }
         ).toBe(true);
         await emitFatalHlsTimeoutSequence(page);
@@ -307,12 +360,22 @@ test('fatal hls.js network errors surface a playback error instead of freezing t
             },
             {
                 message: `terminal HLS failure ${terminalFailure + 1} should surface or enter playbackManager fallback`,
-                timeout: 90_000
+                timeout: 120_000
             }
         ).toBe(true);
     }
 
-    await expect(errorHeading).toBeVisible({ timeout: 20_000 });
+    try {
+        await expect(errorHeading).toBeVisible({ timeout: 20_000 });
+    } catch (error) {
+        console.log('=== FATAL HLS FORENSICS ===');
+        console.log('url:', page.url());
+        console.log('body text:', (await page.locator('body').innerText().catch((e) => String(e))).slice(0, 500));
+        console.log('--- console ---');
+        console.log(consoleLog.slice(-30).join('\n'));
+        console.log('=== END FORENSICS ===');
+        throw error;
+    }
     await expect(page.getByText('Playback failed due to a network error.', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Got It' })).toBeVisible();
 });
