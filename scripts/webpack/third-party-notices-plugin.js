@@ -108,6 +108,7 @@ function extractLicenseIds(expression) {
 class ThirdPartyNoticesPlugin {
     constructor(options) {
         this.licenseFile = options.licenseFile;
+        this.attributionsFile = options.attributionsFile;
         this.licenseTextsDir = options.licenseTextsDir;
         this.outputLicenseName = options.outputLicenseName || 'LICENSE';
         this.outputNoticesName = options.outputNoticesName || 'THIRD-PARTY-NOTICES.txt';
@@ -207,7 +208,17 @@ class ThirdPartyNoticesPlugin {
             .map(entry => entry.text)
             .join('\n\n========================================================================\n\n');
 
-        return `${header}\n\n${body}\n`;
+        // Dependency metadata cannot cover source-tree artwork, translation,
+        // and inherited contributor records. Append the audited source file
+        // so every binary distribution carries those notices as well.
+        const assetAttributions = fs.readFileSync(this.attributionsFile, 'utf8').trim();
+        const assetSection = [
+            'Bundled Asset and Translation Attributions',
+            '',
+            assetAttributions
+        ].join('\n');
+
+        return `${header}\n\n${body}\n\n========================================================================\n\n${assetSection}\n`;
     }
 
     buildEntry(dir, packageJson) {

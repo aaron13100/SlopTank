@@ -82,6 +82,10 @@ function buildFixtureProject() {
         path.join(root, 'PROJECT-LICENSE'),
         'GNU GENERAL PUBLIC LICENSE\nVersion 2, June 1991\n\n(fixture project license text)\n'
     );
+    fs.writeFileSync(
+        path.join(root, 'ATTRIBUTIONS.md'),
+        '# Fixture asset attributions\n\nFixture-generated-avatar.png: GPL-2.0-only\n'
+    );
 
     return root;
 }
@@ -125,6 +129,7 @@ function runWebpackBuild(root) {
             new HtmlWebpackPlugin({ template: path.join(root, 'index.html') }),
             new ThirdPartyNoticesPlugin({
                 licenseFile: path.join(root, 'PROJECT-LICENSE'),
+                attributionsFile: path.join(root, 'ATTRIBUTIONS.md'),
                 licenseTextsDir: repositoryLicenseTextsDir
             })
         ]
@@ -181,6 +186,11 @@ test('a real webpack build emits dist/LICENSE and dist/THIRD-PARTY-NOTICES.txt c
         assert.match(notices, /Full text of referenced license "LGPL-2\.1-or-later"/);
         assert.match(notices, /GNU LESSER GENERAL PUBLIC LICENSE/);
         assert.match(notices, /Version 2\.1, February 1999/);
+
+        // Non-package assets and translations are covered by the audited
+        // source-tree attribution file in the same shipped notice.
+        assert.match(notices, /Bundled Asset and Translation Attributions/);
+        assert.match(notices, /Fixture-generated-avatar\.png: GPL-2\.0-only/);
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }

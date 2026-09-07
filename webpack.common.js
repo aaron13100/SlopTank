@@ -120,6 +120,7 @@ const config = {
         // Part 2.3.
         new ThirdPartyNoticesPlugin({
             licenseFile: path.resolve(__dirname, 'LICENSE'),
+            attributionsFile: path.resolve(__dirname, 'ATTRIBUTIONS.md'),
             licenseTextsDir: path.resolve(__dirname, 'scripts/license-texts')
         })
     ],
