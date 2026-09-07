@@ -60,6 +60,7 @@ import { PluginType } from '../../types/plugin.ts';
 import Events from '../../utils/events.ts';
 import { includesAny } from '../../utils/container.ts';
 import { isHls } from '../../utils/mediaSource.ts';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 /**
  * Returns resolved URL.
@@ -131,7 +132,8 @@ function enableNativeTrackSupport(mediaSource, track) {
 }
 
 function requireHlsPlayer(callback) {
-    import('hls.js/dist/hls.js').then(({ default: hls }) => {
+    loadDynamicModule(() => import('hls.js/dist/hls.js'),
+        'hls.js/dist/hls.js').then(({ default: hls }) => {
         hls.DefaultConfig.lowLatencyMode = false;
         hls.DefaultConfig.backBufferLength = Infinity;
         hls.DefaultConfig.liveBackBufferLength = 90;
@@ -709,7 +711,8 @@ export class HtmlVideoPlayer {
      * @private
      */
     setSrcWithFlvJs(elem, options, url) {
-        return import('flv.js').then(({ default: flvjs }) => {
+        return loadDynamicModule(() => import('flv.js'),
+                   'flv.js').then(({ default: flvjs }) => {
             const flvPlayer = flvjs.createPlayer({
                 type: 'flv',
                 url: url
@@ -1825,7 +1828,8 @@ export class HtmlVideoPlayer {
         });
         const htmlVideoPlayer = this;
         const isCurrentRequest = () => this.isCurrentSubtitleRenderGeneration(rendererIndex, generation);
-        import('@jellyfin/libass-wasm').then(({ default: SubtitlesOctopus }) => {
+        loadDynamicModule(() => import('@jellyfin/libass-wasm'),
+            '@jellyfin/libass-wasm').then(({ default: SubtitlesOctopus }) => {
             if (!isCurrentRequest()) {
                 return;
             }
@@ -2210,7 +2214,8 @@ export class HtmlVideoPlayer {
     renderPgs(videoElement, track, item) {
         const generation = this.#subtitleRenderGenerations[PRIMARY_TEXT_TRACK_INDEX];
         this.setSubtitleRenderPath('pending');
-        import('libpgs').then((libpgs) => {
+        loadDynamicModule(() => import('libpgs'),
+            'libpgs').then((libpgs) => {
             // A stale completion must not install a renderer over a
             // superseded selection or a torn-down player.
             if (!this.isCurrentSubtitleRenderGeneration(PRIMARY_TEXT_TRACK_INDEX, generation) || !this.#mediaElement) {
@@ -2892,7 +2897,8 @@ export class HtmlVideoPlayer {
         const dlg = document.querySelector('.videoPlayerContainer');
 
         if (!dlg) {
-            return import('./style.scss').then(() => {
+            return loadDynamicModule(() => import('./style.scss'),
+                       './style.scss').then(() => {
                 if (options.fullscreen && !options.alreadyOnVideoOsd) loading.show();
 
                 const playerDlg = document.createElement('div');
@@ -3199,7 +3205,7 @@ export class HtmlVideoPlayer {
         this.#documentPictureInPictureAppearanceOverlay?.destroy();
 
         const { default: SubtitleSizer } =
-            await import('../../components/subtitlesizer/subtitlesizer');
+            await loadDynamicModule(() => import('../../components/subtitlesizer/subtitlesizer'), '../../components/subtitlesizer/subtitlesizer');
         if (!this.#documentPictureInPictureWindow || !this.#videoDialog) {
             return;
         }

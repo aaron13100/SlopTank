@@ -4,6 +4,7 @@ import '../elements/emby-tabs/emby-tabs';
 import '../elements/emby-button/emby-button';
 import '../elements/emby-scroller/emby-scroller';
 import LibraryMenu from '../scripts/libraryMenu';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 class HomeView extends TabbedView {
     setTitle() {
@@ -49,7 +50,8 @@ class HomeView extends TabbedView {
         }
 
         const instance = this;
-        return import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../controllers/${depends}`).then(({ default: ControllerFactory }) => {
+        return loadDynamicModule(() => import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../controllers/${depends}`),
+                   '../controllers/${depends}').then(({ default: ControllerFactory }) => {
             let controller = instance.tabControllers[index];
 
             if (!controller) {

@@ -7,6 +7,7 @@ import 'elements/emby-checkbox/emby-checkbox';
 import 'elements/emby-select/emby-select';
 import Dashboard from 'utils/dashboard';
 import { getParameterByName } from 'utils/url';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function isM3uVariant(type) {
     return ['nextpvr'].indexOf(type || '') !== -1;
@@ -114,7 +115,8 @@ function submitForm(page) {
 }
 
 function getDetectedDevice() {
-    return import('components/tunerPicker').then(({ default: TunerPicker }) => {
+    return loadDynamicModule(() => import('components/tunerPicker'),
+               'components/tunerPicker').then(({ default: TunerPicker }) => {
         return new TunerPicker().show({
             serverId: ApiClient.serverId()
         });
@@ -240,7 +242,8 @@ export default function (view, params) {
         });
     });
     view.querySelector('.btnSelectPath').addEventListener('click', function () {
-        import('components/directorybrowser/directorybrowser').then(({ default: DirectoryBrowser }) => {
+        loadDynamicModule(() => import('components/directorybrowser/directorybrowser'),
+            'components/directorybrowser/directorybrowser').then(({ default: DirectoryBrowser }) => {
             const picker = new DirectoryBrowser();
             picker.show({
                 includeFiles: true,

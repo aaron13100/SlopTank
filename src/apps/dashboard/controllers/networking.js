@@ -4,6 +4,7 @@ import 'elements/emby-checkbox/emby-checkbox';
 import 'elements/emby-select/emby-select';
 import Dashboard from 'utils/dashboard';
 import alert from 'components/alert';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function onSubmit(e) {
     const form = this;
@@ -159,7 +160,8 @@ export default function (view) {
         }
     });
     view.querySelector('#btnSelectCertPath').addEventListener('click', function () {
-        import('components/directorybrowser/directorybrowser').then(({ default: DirectoryBrowser }) => {
+        loadDynamicModule(() => import('components/directorybrowser/directorybrowser'),
+            'components/directorybrowser/directorybrowser').then(({ default: DirectoryBrowser }) => {
             const picker = new DirectoryBrowser();
             picker.show({
                 includeFiles: true,

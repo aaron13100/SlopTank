@@ -10,6 +10,7 @@ import { playbackManager } from '../../components/playback/playbackmanager';
 import { setFilterStatus } from 'components/filterdialog/filterIndicator';
 
 import '../../elements/emby-itemscontainer/emby-itemscontainer';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 export default function (view, params, tabContent, options) {
     const onViewStyleChange = () => {
@@ -108,7 +109,8 @@ export default function (view, params, tabContent, options) {
         isLoading = false;
         loading.hide();
 
-        import('../../components/autoFocuser').then(({ default: autoFocuser }) => {
+        loadDynamicModule(() => import('../../components/autoFocuser'),
+            '../../components/autoFocuser').then(({ default: autoFocuser }) => {
             autoFocuser.autoFocus(tabContent);
         });
     };
@@ -307,7 +309,8 @@ export default function (view, params, tabContent, options) {
     query = userSettings.loadQuerySettings(savedQueryKey, query);
 
     this.showFilterMenu = function () {
-        import('../../components/filterdialog/filterdialog').then(({ default: FilterDialog }) => {
+        loadDynamicModule(() => import('../../components/filterdialog/filterdialog'),
+            '../../components/filterdialog/filterdialog').then(({ default: FilterDialog }) => {
             const filterDialog = new FilterDialog({
                 query: query,
                 mode: 'movies',

@@ -23,6 +23,7 @@ import { useSyncPlayGroups } from 'hooks/useSyncPlayGroups';
 import globalize from 'lib/globalize';
 import { PluginType } from 'types/plugin';
 import Events, { Event } from 'utils/events';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 export const ID = 'app-sync-play-menu';
 
@@ -105,7 +106,7 @@ const SyncPlayMenu: FC<SyncPlayMenuProps> = ({
         if (!syncPlay) return;
 
         // TODO: Rewrite settings UI
-        const SyncPlaySettingsEditor = (await import('../../../../../plugins/syncPlay/ui/settings/SettingsEditor')).default;
+        const SyncPlaySettingsEditor = (await loadDynamicModule(() => import('../../../../../plugins/syncPlay/ui/settings/SettingsEditor'), '../../../../../plugins/syncPlay/ui/settings/SettingsEditor')).default;
         new SyncPlaySettingsEditor(
             __legacyApiClient__,
             syncPlay.Manager.getTimeSyncCore(),

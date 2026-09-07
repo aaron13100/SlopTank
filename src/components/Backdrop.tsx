@@ -1,9 +1,10 @@
 import React, { useEffect } from 'react';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 const Backdrop = () => {
     useEffect(() => {
         // Initialize the UI components after first render
-        void import('../scripts/autoBackdrops');
+        void loadDynamicModule(() => import('../scripts/autoBackdrops'), '../scripts/autoBackdrops');
     }, []);
 
     return (

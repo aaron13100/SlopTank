@@ -13,6 +13,7 @@ import focusManager from '../../components/focusManager';
 import { ServerConnections } from 'lib/jellyfin-apiclient';
 import serverNotifications from '../../scripts/serverNotifications';
 import Events from '../../utils/events.ts';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 const ItemsContainerPrototype = Object.create(HTMLDivElement.prototype);
 
@@ -71,7 +72,8 @@ ItemsContainerPrototype.enableMultiSelect = function (enabled) {
     }
 
     const self = this;
-    import('../../components/multiSelect/multiSelect').then(({ default: MultiSelect }) => {
+    loadDynamicModule(() => import('../../components/multiSelect/multiSelect'),
+        '../../components/multiSelect/multiSelect').then(({ default: MultiSelect }) => {
         self.multiSelect = new MultiSelect({
             container: self,
             bindOnClick: false
@@ -145,7 +147,8 @@ ItemsContainerPrototype.enableDragReordering = function (enabled) {
 function onUserDataChanged(e, apiClient, userData) {
     const itemsContainer = this;
 
-    import('../../components/cardbuilder/cardBuilder').then((cardBuilder) => {
+    loadDynamicModule(() => import('../../components/cardbuilder/cardBuilder'),
+        '../../components/cardbuilder/cardBuilder').then((cardBuilder) => {
         cardBuilder.onUserDataChanged(userData, itemsContainer);
     });
 
@@ -180,7 +183,8 @@ function onTimerCreated(e, apiClient, data) {
     // This could be null, not supported by all tv providers
     const newTimerId = data.Id;
 
-    import('../../components/cardbuilder/cardBuilder').then((cardBuilder) => {
+    loadDynamicModule(() => import('../../components/cardbuilder/cardBuilder'),
+        '../../components/cardbuilder/cardBuilder').then((cardBuilder) => {
         cardBuilder.onTimerCreated(programId, newTimerId, itemsContainer);
     });
 }
@@ -199,7 +203,8 @@ function onTimerCancelled(e, apiClient, data) {
         return;
     }
 
-    import('../../components/cardbuilder/cardBuilder').then((cardBuilder) => {
+    loadDynamicModule(() => import('../../components/cardbuilder/cardBuilder'),
+        '../../components/cardbuilder/cardBuilder').then((cardBuilder) => {
         cardBuilder.onTimerCancelled(data.Id, itemsContainer);
     });
 }
@@ -211,7 +216,8 @@ function onSeriesTimerCancelled(e, apiClient, data) {
         return;
     }
 
-    import('../../components/cardbuilder/cardBuilder').then((cardBuilder) => {
+    loadDynamicModule(() => import('../../components/cardbuilder/cardBuilder'),
+        '../../components/cardbuilder/cardBuilder').then((cardBuilder) => {
         cardBuilder.onSeriesTimerCancelled(data.Id, itemsContainer);
     });
 }

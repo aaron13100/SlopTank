@@ -41,6 +41,7 @@ import Movies from 'apps/experimental/routes/movies';
 import Music from 'apps/experimental/routes/music';
 import Shows from 'apps/experimental/routes/shows';
 import HomeVideos from 'apps/experimental/routes/homevideos';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 const layoutMode = browser.tv ? LayoutMode.Tv : localStorage.getItem(LAYOUT_SETTING_KEY);
 const isExperimentalLayout = !layoutMode || layoutMode === LayoutMode.Experimental;
@@ -87,7 +88,7 @@ const router = createBrowserRouter([
                 // only a spelling change, so it must not unmount AppBody and
                 // erase the imperative legacy view container (c159).
                 ...(isExperimentalLayout ?
-                    { lazy: () => import('./apps/experimental/AppLayout') } :
+                    { lazy: () => loadDynamicModule(() => import('./apps/experimental/AppLayout'), './apps/experimental/AppLayout') } :
                     { Component: AppLayout }),
                 children: [
                     {

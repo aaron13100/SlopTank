@@ -8,6 +8,7 @@ import './actionSheet.scss';
 import 'material-design-icons-iconfont';
 import '../../styles/scrollstyles.scss';
 import '../../components/listview/listview.scss';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 /**
  * Typed rejection for a sheet dismissed without a selection, so callers can
@@ -143,7 +144,8 @@ function getPosition(positionTo: Element, options: Options, dlg: HTMLElement) {
 }
 
 function centerFocus(elem: Element, horiz: boolean, on: boolean) {
-    import('../../scripts/scrollHelper').then((scrollHelper) => {
+    loadDynamicModule(() => import('../../scripts/scrollHelper'),
+        '../../scripts/scrollHelper').then((scrollHelper) => {
         const fn = on ? 'on' : 'off';
         scrollHelper.centerFocus[fn](elem, horiz);
     }).catch(e => {

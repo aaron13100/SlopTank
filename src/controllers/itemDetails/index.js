@@ -48,6 +48,7 @@ import 'elements/emby-scroller/emby-scroller';
 import 'elements/emby-select/emby-select';
 
 import 'styles/scrollstyles.scss';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 /** Item types that use a list view for their children. */
 const LIST_VIEW_TYPES = [
@@ -58,7 +59,8 @@ const LIST_VIEW_TYPES = [
 ];
 
 function autoFocus(container) {
-    import('../../components/autoFocuser').then(({ default: autoFocuser }) => {
+    loadDynamicModule(() => import('../../components/autoFocuser'),
+        '../../components/autoFocuser').then(({ default: autoFocuser }) => {
         autoFocuser.autoFocus(container);
     });
 }
@@ -175,7 +177,8 @@ function renderSeriesTimerEditor(page, item, apiClient, user) {
     }
 
     if (user.Policy.EnableLiveTvManagement) {
-        import('../../components/recordingcreator/seriesrecordingeditor').then(({ default: seriesRecordingEditor }) => {
+        loadDynamicModule(() => import('../../components/recordingcreator/seriesrecordingeditor'),
+            '../../components/recordingcreator/seriesrecordingeditor').then(({ default: seriesRecordingEditor }) => {
             seriesRecordingEditor.embed(item, apiClient.serverId(), {
                 context: page.querySelector('.seriesRecordingEditor')
             });
@@ -704,7 +707,8 @@ function showRecordingFields(instance, page, item, user) {
         const recordingFieldsElement = page.querySelector('.recordingFields');
 
         if (item.Type == 'Program' && user.Policy.EnableLiveTvManagement) {
-            import('../../components/recordingcreator/recordingfields').then(({ default: RecordingFields }) => {
+            loadDynamicModule(() => import('../../components/recordingcreator/recordingfields'),
+                '../../components/recordingcreator/recordingfields').then(({ default: RecordingFields }) => {
                 instance.currentRecordingFields = new RecordingFields({
                     parent: recordingFieldsElement,
                     programId: item.Id,
@@ -1543,13 +1547,15 @@ function renderChildren(page, item) {
 }
 
 function renderItemsByName(page, item) {
-    import('../../scripts/itemsByName').then(({ default: ItemsByName }) => {
+    loadDynamicModule(() => import('../../scripts/itemsByName'),
+        '../../scripts/itemsByName').then(({ default: ItemsByName }) => {
         ItemsByName.renderItems(page, item);
     });
 }
 
 function renderPlaylistItems(page, item) {
-    import('../../scripts/playlistViewer').then(({ default: PlaylistViewer }) => {
+    loadDynamicModule(() => import('../../scripts/playlistViewer'),
+        '../../scripts/playlistViewer').then(({ default: PlaylistViewer }) => {
         PlaylistViewer.render(page, item);
     });
 }
@@ -1826,7 +1832,8 @@ function renderScenes(page, item) {
         page.querySelector('#scenesCollapsible').classList.remove('hide');
         const scenesContent = page.querySelector('#scenesContent');
 
-        import('../../components/cardbuilder/chaptercardbuilder').then(({ default: chaptercardbuilder }) => {
+        loadDynamicModule(() => import('../../components/cardbuilder/chaptercardbuilder'),
+            '../../components/cardbuilder/chaptercardbuilder').then(({ default: chaptercardbuilder }) => {
             chaptercardbuilder.buildChapterCards(item, chapters, {
                 itemsContainer: scenesContent,
                 backdropShape: 'overflowBackdrop',
@@ -1868,7 +1875,8 @@ function renderCast(page, item, people) {
     page.querySelector('#castCollapsible').classList.remove('hide');
     const castContent = page.querySelector('#castContent');
 
-    import('../../components/cardbuilder/peoplecardbuilder').then(({ default: peoplecardbuilder }) => {
+    loadDynamicModule(() => import('../../components/cardbuilder/peoplecardbuilder'),
+        '../../components/cardbuilder/peoplecardbuilder').then(({ default: peoplecardbuilder }) => {
         peoplecardbuilder.buildPeopleCards(people, {
             itemsContainer: castContent,
             coverImage: true,
@@ -1888,7 +1896,8 @@ function renderGuestCast(page, item, people) {
     page.querySelector('#guestCastCollapsible').classList.remove('hide');
     const guestCastContent = page.querySelector('#guestCastContent');
 
-    import('../../components/cardbuilder/peoplecardbuilder').then(({ default: peoplecardbuilder }) => {
+    loadDynamicModule(() => import('../../components/cardbuilder/peoplecardbuilder'),
+        '../../components/cardbuilder/peoplecardbuilder').then(({ default: peoplecardbuilder }) => {
         peoplecardbuilder.buildPeopleCards(people, {
             itemsContainer: guestCastContent,
             coverImage: true,
@@ -2036,7 +2045,8 @@ export default function (view, params) {
     }
 
     function onCancelSeriesTimerClick() {
-        import('../../components/recordingcreator/recordinghelper').then(({ default: recordingHelper }) => {
+        loadDynamicModule(() => import('../../components/recordingcreator/recordinghelper'),
+            '../../components/recordingcreator/recordinghelper').then(({ default: recordingHelper }) => {
             recordingHelper.cancelSeriesTimerWithConfirmation(currentItem.Id, currentItem.ServerId).then(function () {
                 Dashboard.navigate('livetv');
             });
@@ -2044,7 +2054,8 @@ export default function (view, params) {
     }
 
     function onCancelTimerClick() {
-        import('../../components/recordingcreator/recordinghelper').then(({ default: recordingHelper }) => {
+        loadDynamicModule(() => import('../../components/recordingcreator/recordinghelper'),
+            '../../components/recordingcreator/recordinghelper').then(({ default: recordingHelper }) => {
             recordingHelper.cancelTimer(ServerConnections.getApiClient(currentItem.ServerId), currentItem.TimerId).then(function () {
                 reload(self, view, params);
             });

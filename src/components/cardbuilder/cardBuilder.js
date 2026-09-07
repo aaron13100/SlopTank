@@ -41,6 +41,7 @@ import {
     resolveCardImageContainerCssClasses,
     resolveMixedShapeByAspectRatio
 } from './cardBuilderUtils';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 const enableFocusTransform = !browser.slow && !browser.edge;
 
@@ -873,7 +874,7 @@ let refreshIndicatorLoaded;
 function importRefreshIndicator() {
     if (!refreshIndicatorLoaded) {
         refreshIndicatorLoaded = true;
-        import('../../elements/emby-itemrefreshindicator/emby-itemrefreshindicator');
+        loadDynamicModule(() => import('../../elements/emby-itemrefreshindicator/emby-itemrefreshindicator'), '../../elements/emby-itemrefreshindicator/emby-itemrefreshindicator');
     }
 }
 
@@ -1162,14 +1163,14 @@ function getHoverMenuHtml(item, action) {
     const userData = item.UserData || {};
 
     if (itemHelper.canMarkPlayed(item)) {
-        import('../../elements/emby-playstatebutton/emby-playstatebutton');
+        loadDynamicModule(() => import('../../elements/emby-playstatebutton/emby-playstatebutton'), '../../elements/emby-playstatebutton/emby-playstatebutton');
         html += `<button is="emby-playstatebutton" type="button" data-action="${ItemAction.None}" class="${btnCssClass}" data-id="${item.Id}" data-serverid="${item.ServerId}" data-itemtype="${item.Type}" data-played="${userData.Played}"><span class="material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover check" aria-hidden="true"></span></button>`;
     }
 
     if (itemHelper.canRate(item)) {
         const likes = userData.Likes == null ? '' : userData.Likes;
 
-        import('../../elements/emby-ratingbutton/emby-ratingbutton');
+        loadDynamicModule(() => import('../../elements/emby-ratingbutton/emby-ratingbutton'), '../../elements/emby-ratingbutton/emby-ratingbutton');
         html += `<button is="emby-ratingbutton" type="button" data-action="${ItemAction.None}" class="${btnCssClass}" data-id="${item.Id}" data-serverid="${item.ServerId}" data-itemtype="${item.Type}" data-likes="${likes}" data-isfavorite="${userData.IsFavorite}"><span class="material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover favorite" aria-hidden="true"></span></button>`;
     }
 

@@ -8,9 +8,11 @@ import '../../elements/emby-input/emby-input';
 import '../../elements/emby-select/emby-select';
 import '../formdialog.scss';
 import template from './personEditor.template.html';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function centerFocus(elem, horiz, on) {
-    import('../../scripts/scrollHelper').then((scrollHelper) => {
+    loadDynamicModule(() => import('../../scripts/scrollHelper'),
+        '../../scripts/scrollHelper').then((scrollHelper) => {
         const fn = on ? 'on' : 'off';
         scrollHelper.centerFocus[fn](elem, horiz);
     });

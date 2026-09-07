@@ -15,6 +15,7 @@ import dom from '../utils/dom';
 import recordingHelper from './recordingcreator/recordinghelper';
 import toast from './toast/toast';
 import * as userSettings from '../scripts/settings/userSettings';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function playAllFromHere(card, serverId, queue) {
     const parent = card.parentNode;
@@ -73,7 +74,8 @@ function playAllFromHere(card, serverId, queue) {
 }
 
 function showProgramDialog(item) {
-    import('./recordingcreator/recordingcreator').then(({ default:recordingCreator }) => {
+    loadDynamicModule(() => import('./recordingcreator/recordingcreator'),
+        './recordingcreator/recordingcreator').then(({ default:recordingCreator }) => {
         recordingCreator.show(item.Id, item.ServerId);
     });
 }
@@ -131,7 +133,7 @@ function showContextMenu(card, options = {}) {
 
         Promise.all([
             // Import the item menu component
-            import('./itemContextMenu'),
+            loadDynamicModule(() => import('./itemContextMenu'), './itemContextMenu'),
             // Fetch the current user
             apiClient.getCurrentUser(),
             // Fetch playlist perms if item is a child of a playlist
@@ -202,7 +204,8 @@ function getItemInfoFromCard(card) {
 function showPlayMenu(card, target) {
     const item = getItemInfoFromCard(card);
 
-    import('./playmenu').then((playMenu) => {
+    loadDynamicModule(() => import('./playmenu'),
+        './playmenu').then((playMenu) => {
         playMenu.show({
 
             item: item,
@@ -344,7 +347,8 @@ function executeAction(card, target, action) {
 }
 
 function addToPlaylist(item) {
-    import('./playlisteditor/playlisteditor').then(({ default: PlaylistEditor }) => {
+    loadDynamicModule(() => import('./playlisteditor/playlisteditor'),
+        './playlisteditor/playlisteditor').then(({ default: PlaylistEditor }) => {
         const playlistEditor = new PlaylistEditor();
         playlistEditor.show({
             items: [item.Id],
@@ -373,16 +377,19 @@ function editItem(item, serverId) {
 
         if (item.Type === 'Timer') {
             if (item.ProgramId) {
-                import('./recordingcreator/recordingcreator').then(({ default: recordingCreator }) => {
+                loadDynamicModule(() => import('./recordingcreator/recordingcreator'),
+                    './recordingcreator/recordingcreator').then(({ default: recordingCreator }) => {
                     recordingCreator.show(item.ProgramId, currentServerId).then(resolve, reject);
                 });
             } else {
-                import('./recordingcreator/recordingeditor').then(({ default: recordingEditor }) => {
+                loadDynamicModule(() => import('./recordingcreator/recordingeditor'),
+                    './recordingcreator/recordingeditor').then(({ default: recordingEditor }) => {
                     recordingEditor.show(item.Id, currentServerId).then(resolve, reject);
                 });
             }
         } else {
-            import('./metadataEditor/metadataEditor').then(({ default: metadataEditor }) => {
+            loadDynamicModule(() => import('./metadataEditor/metadataEditor'),
+                './metadataEditor/metadataEditor').then(({ default: metadataEditor }) => {
                 metadataEditor.show(item.Id, currentServerId).then(resolve, reject);
             });
         }

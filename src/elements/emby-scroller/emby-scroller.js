@@ -6,6 +6,7 @@ import focusManager from '../../components/focusManager';
 import browser from '../../scripts/browser';
 import 'webcomponents.js/webcomponents-lite';
 import './emby-scroller.scss';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 const ScrollerPrototype = Object.create(HTMLDivElement.prototype);
 
@@ -154,7 +155,8 @@ ScrollerPrototype.attachedCallback = function () {
 };
 
 function loadScrollButtons(buttonsScroller) {
-    import('../emby-scrollbuttons/emby-scrollbuttons').then(() => {
+    loadDynamicModule(() => import('../emby-scrollbuttons/emby-scrollbuttons'),
+        '../emby-scrollbuttons/emby-scrollbuttons').then(() => {
         buttonsScroller.insertAdjacentHTML('beforebegin', '<div is="emby-scrollbuttons" class="emby-scrollbuttons padded-right"></div>');
     });
 }

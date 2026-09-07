@@ -1,4 +1,5 @@
 import React, { FC, useEffect } from 'react';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 interface AppHeaderParams {
     isHidden?: boolean
@@ -9,7 +10,7 @@ const AppHeader: FC<AppHeaderParams> = ({
 }) => {
     useEffect(() => {
         // Initialize the UI components after first render
-        void import('../scripts/libraryMenu');
+        void loadDynamicModule(() => import('../scripts/libraryMenu'), '../scripts/libraryMenu');
     }, []);
 
     return (

@@ -2,6 +2,7 @@ import banner from 'assets/img/branding/sloptank-wordmark.svg';
 
 import { PluginType } from '../../types/plugin.ts';
 import { randomInt } from '../../utils/number.ts';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 export default function () {
     const self = this;
@@ -127,7 +128,8 @@ export default function () {
     }
 
     self.show = function () {
-        import('./style.scss').then(() => {
+        loadDynamicModule(() => import('./style.scss'),
+            './style.scss').then(() => {
             let elem = document.querySelector('.logoScreenSaver');
 
             if (!elem) {

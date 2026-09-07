@@ -35,6 +35,7 @@ import '../elements/emby-button/paper-icon-button-light';
 import 'material-design-icons-iconfont';
 import '../styles/scrollstyles.scss';
 import '../styles/flexstyles.scss';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function renderHeader() {
     let html = '';
@@ -90,7 +91,8 @@ function getCurrentApiClient() {
 }
 
 function lazyLoadViewMenuBarImages() {
-    import('../components/images/imageLoader').then((imageLoader) => {
+    loadDynamicModule(() => import('../components/images/imageLoader'),
+        '../components/images/imageLoader').then((imageLoader) => {
         imageLoader.lazyChildren(skinHeader);
     });
 }
@@ -276,7 +278,8 @@ function onPlaybackStop(e, stopInfo) {
 function onCastButtonClicked() {
     const btn = this;
 
-    import('../components/playback/playerSelectionMenu').then((playerSelectionMenu) => {
+    loadDynamicModule(() => import('../components/playback/playerSelectionMenu'),
+        '../components/playback/playerSelectionMenu').then((playerSelectionMenu) => {
         playerSelectionMenu.show(btn);
     });
 }
@@ -677,7 +680,8 @@ function loadNavDrawer() {
     navDrawerScrollContainer = navDrawerElement.querySelector('.scrollContainer');
     navDrawerScrollContainer.addEventListener('click', onMainDrawerClick);
     return new Promise(function (resolve) {
-        import('../lib/navdrawer/navdrawer').then(({ default: NavDrawer }) => {
+        loadDynamicModule(() => import('../lib/navdrawer/navdrawer'),
+            '../lib/navdrawer/navdrawer').then(({ default: NavDrawer }) => {
             navDrawerInstance = new NavDrawer(getNavDrawerOptions());
 
             if (!layoutManager.tv) {
@@ -713,7 +717,8 @@ let requiresUserRefresh = true;
 function setTabs (type, selectedIndex, builder) {
     Events.trigger(document, EventType.SET_TABS, type ? [ type, selectedIndex, builder()] : []);
 
-    import('../components/maintabsmanager').then((mainTabsManager) => {
+    loadDynamicModule(() => import('../components/maintabsmanager'),
+        '../components/maintabsmanager').then((mainTabsManager) => {
         if (type) {
             mainTabsManager.setTabs(viewManager.currentView(), selectedIndex, builder, function () {
                 return [];

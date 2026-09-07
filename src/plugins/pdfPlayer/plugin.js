@@ -13,6 +13,7 @@ import Events from '../../utils/events.ts';
 
 import './style.scss';
 import '../../elements/emby-button/paper-icon-button-light';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 export class PdfPlayer {
     constructor() {
@@ -209,7 +210,8 @@ export class PdfPlayer {
             }
         };
 
-        return import('pdfjs-dist').then(({ GlobalWorkerOptions, getDocument }) => {
+        return loadDynamicModule(() => import('pdfjs-dist'),
+                   'pdfjs-dist').then(({ GlobalWorkerOptions, getDocument }) => {
             const api = toApi(ServerConnections.getApiClient(item));
             const downloadHref = getLibraryApi(api).getDownloadUrl({ itemId: item.Id });
 

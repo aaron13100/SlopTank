@@ -3,6 +3,7 @@ import PlaylistAdd from '@mui/icons-material/PlaylistAdd';
 import Button from '@mui/material/Button';
 
 import globalize from 'lib/globalize';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 interface NewPlaylistButtonProps {
     isTextVisible: boolean;
@@ -12,7 +13,8 @@ const NewPlaylistButton: FC<NewPlaylistButtonProps> = ({
     isTextVisible
 }) => {
     const showPlaylistEditor = useCallback(() => {
-        import('components/playlisteditor/playlisteditor').then(
+        loadDynamicModule(() => import('components/playlisteditor/playlisteditor'),
+            'components/playlisteditor/playlisteditor').then(
             ({ default: PlaylistEditor }) => {
                 const serverId = window.ApiClient.serverId();
                 const playlistEditor = new PlaylistEditor();

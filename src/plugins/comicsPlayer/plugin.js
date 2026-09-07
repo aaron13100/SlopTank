@@ -12,6 +12,7 @@ import * as userSettings from '../../scripts/settings/userSettings';
 import { PluginType } from '../../types/plugin.ts';
 
 import './style.scss';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 // supported book file extensions
 const FILE_EXTENSIONS = ['.cbr', '.cbt', '.cbz', '.cb7'];
@@ -300,11 +301,11 @@ export class ComicsPlayer {
         this.archiveSource = new ArchiveSource(downloadUrl);
 
         //eslint-disable-next-line import/no-unresolved
-        import('swiper/css/bundle');
+        loadDynamicModule(() => import('swiper/css/bundle'), 'swiper/css/bundle');
 
         return this.archiveSource.load()
             // eslint-disable-next-line import/no-unresolved
-            .then(() => import('swiper/bundle'))
+            .then(() => loadDynamicModule(() => import('swiper/bundle'), 'swiper/bundle'))
             .then(({ Swiper }) => {
                 loading.hide();
 

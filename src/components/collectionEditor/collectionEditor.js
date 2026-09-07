@@ -15,6 +15,7 @@ import 'material-design-icons-iconfont';
 import '../formdialog.scss';
 import '../../styles/flexstyles.scss';
 import toast from '../toast/toast';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 let currentServerId;
 
@@ -198,7 +199,8 @@ function initEditor(content, items) {
 }
 
 function centerFocus(elem, horiz, on) {
-    import('../../scripts/scrollHelper').then((scrollHelper) => {
+    loadDynamicModule(() => import('../../scripts/scrollHelper'),
+        '../../scripts/scrollHelper').then((scrollHelper) => {
         const fn = on ? 'on' : 'off';
         scrollHelper.centerFocus[fn](elem, horiz);
     });

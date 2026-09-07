@@ -5,6 +5,7 @@ import { setBackdropTransparency, TRANSPARENCY_LEVEL } from '../../components/ba
 import globalize from '../../lib/globalize';
 import { PluginType } from '../../types/plugin.ts';
 import Events from '../../utils/events.ts';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 /* globals YT */
 
@@ -57,7 +58,8 @@ function createMediaElement(instance, options) {
         const dlg = document.querySelector('.youtubePlayerContainer');
 
         if (!dlg) {
-            import('./style.scss').then(() => {
+            loadDynamicModule(() => import('./style.scss'),
+                './style.scss').then(() => {
                 loading.show();
 
                 const playerDlg = document.createElement('div');

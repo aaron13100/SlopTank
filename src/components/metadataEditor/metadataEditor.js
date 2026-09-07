@@ -24,6 +24,7 @@ import { appRouter } from '../router/appRouter';
 import template from './metadataEditor.template.html';
 import { BaseItemKind } from '@jellyfin/sdk/lib/generated-client/models/base-item-kind';
 import { SeriesStatus } from '@jellyfin/sdk/lib/generated-client/models/series-status';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 let currentContext;
 let metadataEditorInfo;
@@ -212,7 +213,8 @@ function getListValues(list) {
 }
 
 function addElementToList(source, sortCallback) {
-    import('../prompt/prompt').then(({ default: prompt }) => {
+    loadDynamicModule(() => import('../prompt/prompt'),
+        '../prompt/prompt').then(({ default: prompt }) => {
         prompt({
             label: 'Value:'
         }).then(function (text) {
@@ -230,7 +232,8 @@ function removeElementFromList(source) {
 }
 
 function editPerson(context, person, index) {
-    import('./personEditor').then(({ default: personEditor }) => {
+    loadDynamicModule(() => import('./personEditor'),
+        './personEditor').then(({ default: personEditor }) => {
         personEditor.show(person).then(function (updatedPerson) {
             const isNew = index === -1;
 
@@ -254,7 +257,8 @@ function afterDeleted(context, item) {
 }
 
 function showMoreMenu(context, button, user) {
-    import('../itemContextMenu').then(({ default: itemContextMenu }) => {
+    loadDynamicModule(() => import('../itemContextMenu'),
+        '../itemContextMenu').then(({ default: itemContextMenu }) => {
         const item = currentItem;
 
         itemContextMenu.show({
@@ -1066,7 +1070,8 @@ function reload(context, itemId, serverId) {
 }
 
 function centerFocus(elem, horiz, on) {
-    import('../../scripts/scrollHelper').then((scrollHelper) => {
+    loadDynamicModule(() => import('../../scripts/scrollHelper'),
+        '../../scripts/scrollHelper').then((scrollHelper) => {
         const fn = on ? 'on' : 'off';
         scrollHelper.centerFocus[fn](elem, horiz);
     });

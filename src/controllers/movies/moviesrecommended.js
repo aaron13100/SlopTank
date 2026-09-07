@@ -19,6 +19,7 @@ import 'elements/emby-scroller/emby-scroller';
 import 'elements/emby-itemscontainer/emby-itemscontainer';
 import 'elements/emby-tabs/emby-tabs';
 import 'elements/emby-button/emby-button';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function enableScrollX() {
     return !layoutManager.desktop;
@@ -185,7 +186,8 @@ function loadSuggestions(page, userId) {
 }
 
 function autoFocus(page) {
-    import('../../components/autoFocuser').then(({ default: autoFocuser }) => {
+    loadDynamicModule(() => import('../../components/autoFocuser'),
+        '../../components/autoFocuser').then(({ default: autoFocuser }) => {
         autoFocuser.autoFocus(page);
     });
 }
@@ -294,7 +296,8 @@ export default function (view, params) {
                 break;
         }
 
-        import(`../movies/${depends}`).then(({ default: ControllerFactory }) => {
+        loadDynamicModule(() => import(`../movies/${depends}`),
+            '../movies/${depends}').then(({ default: ControllerFactory }) => {
             let tabContent;
 
             if (index === suggestionsTabIndex) {

@@ -1,4 +1,5 @@
 import enUS from 'date-fns/locale/en-US';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 const LOCALE_MAP: Record<string, string> = {
     'af': 'af',
@@ -68,7 +69,7 @@ let localeString = DEFAULT_LOCALE;
 let locale = enUS;
 
 export function fetchLocale(localeName: string) {
-    return import(`date-fns/locale/${localeName}/index.js`);
+    return loadDynamicModule(() => import(`date-fns/locale/${localeName}/index.js`), 'date-fns/locale/${localeName}/index.js');
 }
 
 export function normalizeLocale(localeName: string) {

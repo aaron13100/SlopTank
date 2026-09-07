@@ -8,6 +8,7 @@ import { toViewManagerPageRoute } from 'components/router/LegacyRoute';
 import { LEGACY_ADMIN_ROUTES } from './_legacyRoutes';
 import ServerContentPage from 'components/ServerContentPage';
 import ErrorBoundary from 'components/router/ErrorBoundary';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 export const DASHBOARD_APP_PATHS = {
     Dashboard: 'dashboard',
@@ -20,7 +21,7 @@ export const DASHBOARD_APP_ROUTES: RouteObject[] = [
         element: <ConnectionRequired level='admin' />,
         children: [
             {
-                lazy: () => import('../AppLayout'),
+                lazy: () => loadDynamicModule(() => import('../AppLayout'), '../AppLayout'),
                 children: [
                     {
                         path: DASHBOARD_APP_PATHS.Dashboard,

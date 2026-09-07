@@ -1,6 +1,7 @@
 import type { RouteObject } from 'react-router-dom';
 
 import { AppType } from 'constants/appType';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 export interface AsyncRoute {
     /** The URL path for this route. */
@@ -17,11 +18,11 @@ export interface AsyncRoute {
 const importRoute = (page: string, type: AppType) => {
     switch (type) {
         case AppType.Dashboard:
-            return import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/dashboard/routes/${page}`);
+            return loadDynamicModule(() => import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/dashboard/routes/${page}`), '../../apps/dashboard/routes/${page}');
         case AppType.Experimental:
-            return import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/experimental/routes/${page}`);
+            return loadDynamicModule(() => import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/experimental/routes/${page}`), '../../apps/experimental/routes/${page}');
         case AppType.Stable:
-            return import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/stable/routes/${page}`);
+            return loadDynamicModule(() => import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/stable/routes/${page}`), '../../apps/stable/routes/${page}');
     }
 };
 

@@ -21,6 +21,7 @@ import baseAlert from '../../../components/alert';
 import { getDefaultBackgroundClass } from '../../../components/cardbuilder/cardBuilderUtils';
 
 import './login.scss';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 const enableFocusTransform = !browser.slow && !browser.edge;
 
@@ -222,7 +223,8 @@ export default function (view, params) {
         view.querySelector('.manualLoginForm').classList.add('hide');
         view.querySelector('.btnManual').classList.remove('hide');
 
-        import('../../../components/autoFocuser').then(({ default: autoFocuser }) => {
+        loadDynamicModule(() => import('../../../components/autoFocuser'),
+            '../../../components/autoFocuser').then(({ default: autoFocuser }) => {
             autoFocuser.autoFocus(view);
         });
     }

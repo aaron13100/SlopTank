@@ -10,6 +10,7 @@ import alert from '../alert';
 import confirm from '../confirm/confirm';
 import itemHelper from '../itemHelper';
 import datetime from '../../scripts/datetime';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 let selectedItems = [];
 let selectedElements = [];
@@ -233,7 +234,8 @@ function showMenuForSelectedItems(e) {
                 });
             }
 
-            import('../actionSheet/actionSheet').then((actionsheet) => {
+            loadDynamicModule(() => import('../actionSheet/actionSheet'),
+                '../actionSheet/actionSheet').then((actionsheet) => {
                 actionsheet.show({
                     items: menuItems,
                     positionTo: e.target,
@@ -256,7 +258,8 @@ function showMenuForSelectedItems(e) {
                                 }
                                 break;
                             case 'addtocollection':
-                                import('../collectionEditor/collectionEditor').then(({ default: CollectionEditor }) => {
+                                loadDynamicModule(() => import('../collectionEditor/collectionEditor'),
+                                    '../collectionEditor/collectionEditor').then(({ default: CollectionEditor }) => {
                                     const collectionEditor = new CollectionEditor();
                                     collectionEditor.show({
                                         items: items,
@@ -267,7 +270,8 @@ function showMenuForSelectedItems(e) {
                                 dispatchNeedsRefresh();
                                 break;
                             case 'playlist':
-                                import('../playlisteditor/playlisteditor').then(({ default: PlaylistEditor }) => {
+                                loadDynamicModule(() => import('../playlisteditor/playlisteditor'),
+                                    '../playlisteditor/playlisteditor').then(({ default: PlaylistEditor }) => {
                                     const playlistEditor = new PlaylistEditor();
                                     playlistEditor.show({
                                         items: items,
@@ -304,7 +308,8 @@ function showMenuForSelectedItems(e) {
                                 dispatchNeedsRefresh();
                                 break;
                             case 'refresh':
-                                import('../refreshdialog/refreshdialog').then(({ default: RefreshDialog }) => {
+                                loadDynamicModule(() => import('../refreshdialog/refreshdialog'),
+                                    '../refreshdialog/refreshdialog').then(({ default: RefreshDialog }) => {
                                     new RefreshDialog({
                                         itemIds: items,
                                         serverId: serverId
@@ -363,7 +368,8 @@ function combineVersions(apiClient, selection) {
 }
 
 function showSelections(initialCard, addInitialCheck) {
-    import('../../elements/emby-checkbox/emby-checkbox').then(() => {
+    loadDynamicModule(() => import('../../elements/emby-checkbox/emby-checkbox'),
+        '../../elements/emby-checkbox/emby-checkbox').then(() => {
         const cards = document.querySelectorAll('.card');
         for (let i = 0, length = cards.length; i < length; i++) {
             showSelection(cards[i], initialCard === cards[i], addInitialCheck);

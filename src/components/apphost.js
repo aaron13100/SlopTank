@@ -7,6 +7,7 @@ import globalize from '../lib/globalize';
 import profileBuilder from '../scripts/browserDeviceProfile';
 import { AppFeature } from 'constants/appFeature';
 import { LayoutMode } from 'constants/layoutMode';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 const appName = 'SlopTank';
 
@@ -324,7 +325,8 @@ function askForExit() {
         return;
     }
 
-    import('../components/actionSheet/actionSheet').then((actionsheet) => {
+    loadDynamicModule(() => import('../components/actionSheet/actionSheet'),
+        '../components/actionSheet/actionSheet').then((actionsheet) => {
         exitPromise = actionsheet.show({
             title: globalize.translate('MessageConfirmAppExit'),
             items: [

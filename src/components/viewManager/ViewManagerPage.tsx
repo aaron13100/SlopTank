@@ -9,6 +9,7 @@ import viewManager from './viewManager';
 import { AppType } from 'constants/appType';
 import { useVideoOsdPresence } from 'hooks/useVideoOsdPresence';
 import { setRouteSearchOverride } from 'utils/url';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 /** The view type every route that mounts the video player already declares. */
 const VIDEO_OSD_VIEW_TYPE = 'video-osd';
@@ -48,21 +49,21 @@ const importController = (
     switch (appType) {
         case AppType.Dashboard:
             return Promise.all([
-                import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/dashboard/controllers/${controller}`),
-                import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/dashboard/controllers/${view}`)
-                    .then(html => globalize.translateHtml(html))
+                loadDynamicModule(() => import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/dashboard/controllers/${controller}`), '../../apps/dashboard/controllers/${controller}'),
+                loadDynamicModule(() => import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/dashboard/controllers/${view}`),
+                    '../../apps/dashboard/controllers/${view}').then(html => globalize.translateHtml(html))
             ]);
         case AppType.Wizard:
             return Promise.all([
-                import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/wizard/controllers/${controller}`),
-                import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/wizard/controllers/${view}`)
-                    .then(html => globalize.translateHtml(html))
+                loadDynamicModule(() => import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/wizard/controllers/${controller}`), '../../apps/wizard/controllers/${controller}'),
+                loadDynamicModule(() => import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/wizard/controllers/${view}`),
+                    '../../apps/wizard/controllers/${view}').then(html => globalize.translateHtml(html))
             ]);
         default:
             return Promise.all([
-                import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../controllers/${controller}`),
-                import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../controllers/${view}`)
-                    .then(html => globalize.translateHtml(html))
+                loadDynamicModule(() => import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../controllers/${controller}`), '../../controllers/${controller}'),
+                loadDynamicModule(() => import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../controllers/${view}`),
+                    '../../controllers/${view}').then(html => globalize.translateHtml(html))
             ]);
     }
 };

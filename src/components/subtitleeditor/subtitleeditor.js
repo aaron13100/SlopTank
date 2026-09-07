@@ -22,6 +22,7 @@ import '../../styles/flexstyles.scss';
 import toast from '../toast/toast';
 import confirm from '../confirm/confirm';
 import template from './subtitleeditor.template.html';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 let currentItem;
 let hasChanges;
@@ -361,7 +362,8 @@ function showDownloadOptions(button, context, subtitleId) {
         id: 'download'
     });
 
-    import('../actionSheet/actionSheet').then((actionsheet) => {
+    loadDynamicModule(() => import('../actionSheet/actionSheet'),
+        '../actionSheet/actionSheet').then((actionsheet) => {
         actionsheet.show({
             items: items,
             positionTo: button
@@ -375,7 +377,8 @@ function showDownloadOptions(button, context, subtitleId) {
 }
 
 function centerFocus(elem, horiz, on) {
-    import('../../scripts/scrollHelper').then(({ default: scrollHelper }) => {
+    loadDynamicModule(() => import('../../scripts/scrollHelper'),
+        '../../scripts/scrollHelper').then(({ default: scrollHelper }) => {
         const fn = on ? 'on' : 'off';
         scrollHelper.centerFocus[fn](elem, horiz);
     });
@@ -386,7 +389,8 @@ function onOpenUploadMenu(e) {
     const selectLanguage = dialog.querySelector('#selectLanguage');
     const apiClient = ServerConnections.getApiClient(currentItem.ServerId);
 
-    import('../subtitleuploader/subtitleuploader').then(({ default: subtitleUploader }) => {
+    loadDynamicModule(() => import('../subtitleuploader/subtitleuploader'),
+        '../subtitleuploader/subtitleuploader').then(({ default: subtitleUploader }) => {
         subtitleUploader.show({
             languages: {
                 list: selectLanguage.innerHTML,

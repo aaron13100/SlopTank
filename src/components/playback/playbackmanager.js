@@ -32,6 +32,7 @@ import { MediaError } from 'types/mediaError';
 import { getMediaError } from 'utils/mediaError';
 import { toApi } from 'utils/jellyfin-apiclient/compat';
 import { bindSkipSegment } from './skipsegment.ts';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 const UNLIMITED_ITEMS = -1;
 
@@ -1157,7 +1158,8 @@ export class PlaybackManager {
                 if (!brightnessOsdLoaded) {
                     brightnessOsdLoaded = true;
                     // TODO: Have this trigger an event instead to get the osd out of here
-                    import('./brightnessosd').then();
+                    loadDynamicModule(() => import('./brightnessosd'),
+                        './brightnessosd').then();
                 }
                 player.setBrightness(val);
             }
@@ -3842,7 +3844,8 @@ export class PlaybackManager {
         };
 
         if (appHost.supports(AppFeature.RemoteControl)) {
-            import('../../scripts/serverNotifications').then(({ default: serverNotifications }) => {
+            loadDynamicModule(() => import('../../scripts/serverNotifications'),
+                '../../scripts/serverNotifications').then(({ default: serverNotifications }) => {
                 Events.on(serverNotifications, 'ServerShuttingDown', self.setDefaultPlayerActive.bind(self));
                 Events.on(serverNotifications, 'ServerRestarting', self.setDefaultPlayerActive.bind(self));
             });

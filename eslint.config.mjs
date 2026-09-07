@@ -381,7 +381,14 @@ export default tseslint.config(
             ],
             '@typescript-eslint/no-deprecated': 'warn',
             '@typescript-eslint/no-floating-promises': 'error',
-            '@typescript-eslint/prefer-string-starts-ends-with': 'error'
+            '@typescript-eslint/prefer-string-starts-ends-with': 'error',
+            'no-restricted-syntax': [
+                'error',
+                {
+                    selector: 'ImportExpression:not(CallExpression[callee.name="loadDynamicModule"] > ArrowFunctionExpression > ImportExpression)',
+                    message: 'Wrap dynamic imports with loadDynamicModule so failures preserve their cause and cannot become silent no-ops.'
+                }
+            ]
         }
     },
 

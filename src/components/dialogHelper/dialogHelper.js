@@ -10,6 +10,7 @@ import { appRouter } from '../router/appRouter';
 
 import './dialoghelper.scss';
 import '../../styles/scrollstyles.scss';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 let globalOnOpenCallback;
 
@@ -396,7 +397,8 @@ function removeBackdrop(dlg) {
 }
 
 function centerFocus(elem, horiz, on) {
-    import('../../scripts/scrollHelper').then((scrollHelper) => {
+    loadDynamicModule(() => import('../../scripts/scrollHelper'),
+        '../../scripts/scrollHelper').then((scrollHelper) => {
         const fn = on ? 'on' : 'off';
         scrollHelper.centerFocus[fn](elem, horiz);
     });

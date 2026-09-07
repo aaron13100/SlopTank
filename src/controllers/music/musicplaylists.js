@@ -2,6 +2,7 @@ import * as userSettings from '../../scripts/settings/userSettings';
 import cardBuilder from '../../components/cardbuilder/cardBuilder';
 import imageLoader from '../../components/images/imageLoader';
 import loading from '../../components/loading/loading';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 export default function (view, params, tabContent) {
     function getPageData() {
@@ -60,7 +61,8 @@ export default function (view, params, tabContent) {
             userSettings.saveQuerySettings(getSavedQueryKey(), query);
             loading.hide();
 
-            import('../../components/autoFocuser').then(({ default: autoFocuser }) => {
+            loadDynamicModule(() => import('../../components/autoFocuser'),
+                '../../components/autoFocuser').then(({ default: autoFocuser }) => {
                 autoFocuser.autoFocus(context);
             });
         });

@@ -7,6 +7,7 @@ import toast from 'components/toast/toast';
 import inputManager from 'scripts/inputManager';
 import Events from 'utils/events.ts';
 import { PluginType } from 'types/plugin.ts';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 const serverNotifications = {};
 
@@ -209,7 +210,8 @@ function bindEvents(apiClient) {
 // when this module is evaluated first. Resolve it via dynamic import once
 // the graph has settled; module evaluation always finishes before any
 // connection is made, so no api client can be missed.
-void import('lib/jellyfin-apiclient').then(({ ServerConnections }) => {
+void loadDynamicModule(() => import('lib/jellyfin-apiclient'),
+         'lib/jellyfin-apiclient').then(({ ServerConnections }) => {
     ServerConnections.getApiClients().forEach(bindEvents);
     Events.on(ServerConnections, 'apiclientcreated', function (e, newApiClient) {
         bindEvents(newApiClient);

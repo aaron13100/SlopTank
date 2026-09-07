@@ -32,9 +32,11 @@ import '../../styles/flexstyles.scss';
 import 'webcomponents.js/webcomponents-lite';
 
 import template from './tvguide.template.html';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function showViewSettings(instance) {
-    import('./guide-settings').then(({ default: guideSettingsDialog }) => {
+    loadDynamicModule(() => import('./guide-settings'),
+        './guide-settings').then(({ default: guideSettingsDialog }) => {
         guideSettingsDialog.show(instance.categoryOptions).then(function () {
             instance.refresh();
         });

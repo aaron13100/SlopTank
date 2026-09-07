@@ -21,6 +21,7 @@ import toast from '../toast/toast';
 import template from './lyricseditor.template.html';
 import templatePreview from './lyricspreview.template.html';
 import { deleteLyrics } from '../../scripts/deleteHelper';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 let currentItem;
 let hasChanges;
@@ -244,7 +245,8 @@ function showOptions(button, context, lyricsId, lyrics) {
         id: 'download'
     });
 
-    import('../actionSheet/actionSheet').then((actionsheet) => {
+    loadDynamicModule(() => import('../actionSheet/actionSheet'),
+        '../actionSheet/actionSheet').then((actionsheet) => {
         actionsheet.show({
             items: items,
             positionTo: button
@@ -261,7 +263,8 @@ function showOptions(button, context, lyricsId, lyrics) {
 }
 
 function centerFocus(elem, horiz, on) {
-    import('../../scripts/scrollHelper').then(({ default: scrollHelper }) => {
+    loadDynamicModule(() => import('../../scripts/scrollHelper'),
+        '../../scripts/scrollHelper').then(({ default: scrollHelper }) => {
         const fn = on ? 'on' : 'off';
         scrollHelper.centerFocus[fn](elem, horiz);
     });
@@ -271,7 +274,8 @@ function onOpenUploadMenu(e) {
     const dialog = dom.parentWithClass(e.target, 'lyricsEditorDialog');
     const apiClient = ServerConnections.getApiClient(currentItem.ServerId);
 
-    import('../lyricsuploader/lyricsuploader').then(({ default: lyricsUploader }) => {
+    loadDynamicModule(() => import('../lyricsuploader/lyricsuploader'),
+        '../lyricsuploader/lyricsuploader').then(({ default: lyricsUploader }) => {
         lyricsUploader.show({
             itemId: currentItem.Id,
             serverId: currentItem.ServerId

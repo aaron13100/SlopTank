@@ -42,6 +42,7 @@ import Button from 'elements/emby-button/Button';
 import { useApi } from 'hooks/useApi';
 
 import './userprofile.scss';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 interface ProfileAvatar {
     filename: string
@@ -81,7 +82,7 @@ const UserProfile: FunctionComponent = () => {
     const userId = searchParams.get('userId');
     const { data: user, isPending: isUserPending } = useUser(userId ? { userId } : undefined);
     const { refreshUser } = useApi();
-    const libraryMenu = useMemo(async () => ((await import('../../../../scripts/libraryMenu')).default), []);
+    const libraryMenu = useMemo(async () => ((await loadDynamicModule(() => import('../../../../scripts/libraryMenu'), '../../../../scripts/libraryMenu')).default), []);
     const uploadImageInput = useRef<HTMLInputElement>(null);
     const avatarGrid = useRef<HTMLDivElement>(null);
     const [ canEditImage, setCanEditImage ] = useState(false);

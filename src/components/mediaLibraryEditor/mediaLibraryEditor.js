@@ -22,6 +22,7 @@ import alert from '../alert';
 import toast from '../toast/toast';
 import confirm from '../confirm/confirm';
 import template from './mediaLibraryEditor.template.html';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 // eslint-disable-next-line sonarjs/no-invariant-returns
 function onEditLibrary() {
@@ -174,7 +175,8 @@ function onAddButtonClick() {
 }
 
 function showDirectoryBrowser(context, originalPath) {
-    import('../directorybrowser/directorybrowser').then(({ default: DirectoryBrowser }) => {
+    loadDynamicModule(() => import('../directorybrowser/directorybrowser'),
+        '../directorybrowser/directorybrowser').then(({ default: DirectoryBrowser }) => {
         const picker = new DirectoryBrowser();
         picker.show({
             pathReadOnly: originalPath != null,

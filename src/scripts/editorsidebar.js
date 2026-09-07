@@ -5,6 +5,7 @@ import 'material-design-icons-iconfont';
 import globalize from 'lib/globalize';
 import Dashboard from 'utils/dashboard';
 import { getParameterByName } from 'utils/url';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 // Disable the naming rules since jstree requires snake_case variables
 /* eslint-disable @typescript-eslint/naming-convention */
@@ -187,8 +188,8 @@ function scrollToNode(id) {
 
 function initializeTree(page, currentUser, openItems, selectedId) {
     Promise.all([
-        import('jstree'),
-        import('jstree/dist/themes/default/style.css')
+        loadDynamicModule(() => import('jstree'), 'jstree'),
+        loadDynamicModule(() => import('jstree/dist/themes/default/style.css'), 'jstree/dist/themes/default/style.css')
     ]).then(() => {
         initializeTreeInternal(page, currentUser, openItems, selectedId);
     });
@@ -304,7 +305,7 @@ let selectedNodeId;
 $(document).on('itemsaved', '.metadataEditorPage', function (e, item) {
     updateEditorNode(this, item);
 }).on('pagebeforeshow', '.metadataEditorPage', function () {
-    import('../styles/metadataeditor.scss');
+    loadDynamicModule(() => import('../styles/metadataeditor.scss'), '../styles/metadataeditor.scss');
 }).on('pagebeforeshow', '.metadataEditorPage', function () {
     const page = this;
     Dashboard.getCurrentUser().then(function (user) {

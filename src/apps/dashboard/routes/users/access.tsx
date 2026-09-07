@@ -11,6 +11,7 @@ import AccessContainer from '../../../../components/dashboard/users/AccessContai
 import CheckBoxElement from '../../../../elements/CheckBoxElement';
 import Page from '../../../../components/Page';
 import Toast from 'apps/dashboard/components/Toast';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 type ItemsArr = {
     Name?: string | null;
@@ -28,7 +29,7 @@ const UserLibraryAccess = () => {
     const [channelsItems, setChannelsItems] = useState<ItemsArr[]>([]);
     const [mediaFoldersItems, setMediaFoldersItems] = useState<ItemsArr[]>([]);
     const [devicesItems, setDevicesItems] = useState<ItemsArr[]>([]);
-    const libraryMenu = useMemo(async () => ((await import('../../../../scripts/libraryMenu')).default), []);
+    const libraryMenu = useMemo(async () => ((await loadDynamicModule(() => import('../../../../scripts/libraryMenu'), '../../../../scripts/libraryMenu')).default), []);
 
     const element = useRef<HTMLDivElement>(null);
 

@@ -15,6 +15,7 @@ import { useUsers } from 'hooks/useUsers';
 import Loading from 'components/loading/LoadingComponent';
 import { useDeleteUser } from 'apps/dashboard/features/users/api/useDeleteUser';
 import dom from 'utils/dom';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 type MenuEntry = {
     name?: string;
@@ -80,7 +81,8 @@ const UserProfiles = () => {
                 icon: 'delete'
             });
 
-            import('../../../../components/actionSheet/actionSheet').then(({ default: actionsheet }) => {
+            loadDynamicModule(() => import('../../../../components/actionSheet/actionSheet'),
+                '../../../../components/actionSheet/actionSheet').then(({ default: actionsheet }) => {
                 actionsheet.show({
                     items: menuItems,
                     positionTo: card,

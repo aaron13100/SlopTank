@@ -28,6 +28,7 @@ import 'elements/emby-select/emby-select';
 
 import 'material-design-icons-iconfont';
 import '../formdialog.scss';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 interface DialogElement extends HTMLDivElement {
     playlistId?: string
@@ -366,8 +367,8 @@ function centerFocus(elem: HTMLDivElement | null, horiz: boolean, on: boolean) {
         return;
     }
 
-    import('../../scripts/scrollHelper')
-        .then((scrollHelper) => {
+    loadDynamicModule(() => import('../../scripts/scrollHelper'),
+        '../../scripts/scrollHelper').then((scrollHelper) => {
             const fn = on ? 'on' : 'off';
             scrollHelper.centerFocus[fn](elem, horiz);
         })

@@ -5,6 +5,7 @@ import appSettings from 'scripts/settings/appSettings';
 import Dashboard from 'utils/dashboard';
 
 import 'elements/emby-button/emby-button';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function handleConnectionResult(page, result) {
     loading.hide();
@@ -57,7 +58,8 @@ export default function(view) {
     view.querySelector('.addServerForm').addEventListener('submit', onServerSubmit);
     view.querySelector('.btnCancel').addEventListener('click', goBack);
 
-    import('../../../components/autoFocuser').then(({ default: autoFocuser }) => {
+    loadDynamicModule(() => import('../../../components/autoFocuser'),
+        '../../../components/autoFocuser').then(({ default: autoFocuser }) => {
         autoFocuser.autoFocus(view);
     });
 
@@ -68,7 +70,8 @@ export default function(view) {
     }
 
     function goBack() {
-        import('../../../components/router/appRouter').then(({ appRouter }) => {
+        loadDynamicModule(() => import('../../../components/router/appRouter'),
+            '../../../components/router/appRouter').then(({ appRouter }) => {
             appRouter.back();
         });
     }

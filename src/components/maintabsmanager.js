@@ -3,6 +3,7 @@ import browser from '../scripts/browser';
 import Events from '../utils/events.ts';
 import '../elements/emby-tabs/emby-tabs';
 import '../elements/emby-button/emby-button';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 let tabOwnerView;
 const queryScope = document.querySelector('.skinHeader');
@@ -63,7 +64,8 @@ function configureSwipeTabs(view, currentElement) {
         }
     };
 
-    import('../scripts/touchHelper').then(({ default: TouchHelper }) => {
+    loadDynamicModule(() => import('../scripts/touchHelper'),
+        '../scripts/touchHelper').then(({ default: TouchHelper }) => {
         const touchHelper = new TouchHelper(view.parentNode.parentNode);
 
         Events.on(touchHelper, 'swipeleft', onSwipeLeft);

@@ -28,6 +28,7 @@ import '../../elements/emby-itemscontainer/emby-itemscontainer';
 import './remotecontrol.scss';
 import '../../elements/emby-ratingbutton/emby-ratingbutton';
 import '../../elements/emby-slider/emby-slider';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 let showMuteButton = true;
 let showVolumeSlider = true;
@@ -48,7 +49,8 @@ function showAudioMenu(context, player, button) {
         return menuItem;
     });
 
-    import('../actionSheet/actionSheet').then((actionsheet) => {
+    loadDynamicModule(() => import('../actionSheet/actionSheet'),
+        '../actionSheet/actionSheet').then((actionsheet) => {
         actionsheet.show({
             items: menuItems,
             positionTo: button,
@@ -80,7 +82,8 @@ function showSubtitleMenu(context, player, button) {
         selected: currentIndex == null
     });
 
-    import('../actionSheet/actionSheet').then((actionsheet) => {
+    loadDynamicModule(() => import('../actionSheet/actionSheet'),
+        '../actionSheet/actionSheet').then((actionsheet) => {
         actionsheet.show({
             items: menuItems,
             positionTo: button,
@@ -663,7 +666,8 @@ export default function () {
     }
 
     function savePlaylist() {
-        import('../playlisteditor/playlisteditor').then(({ default: PlaylistEditor }) => {
+        loadDynamicModule(() => import('../playlisteditor/playlisteditor'),
+            '../playlisteditor/playlisteditor').then(({ default: PlaylistEditor }) => {
             getSaveablePlaylistItems().then(function (items) {
                 const serverId = items.length ? items[0].ServerId : ApiClient.serverId();
                 const playlistEditor = new PlaylistEditor();

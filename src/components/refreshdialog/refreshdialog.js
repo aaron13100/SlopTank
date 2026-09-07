@@ -13,6 +13,7 @@ import '../../elements/emby-select/emby-select';
 import 'material-design-icons-iconfont';
 import '../formdialog.scss';
 import toast from '../toast/toast';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function getEditorHtml() {
     let html = '';
@@ -58,7 +59,8 @@ function getEditorHtml() {
 }
 
 function centerFocus(elem, horiz, on) {
-    import('../../scripts/scrollHelper').then((scrollHelper) => {
+    loadDynamicModule(() => import('../../scripts/scrollHelper'),
+        '../../scripts/scrollHelper').then((scrollHelper) => {
         const fn = on ? 'on' : 'off';
         scrollHelper.centerFocus[fn](elem, horiz);
     });

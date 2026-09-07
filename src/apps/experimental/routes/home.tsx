@@ -11,6 +11,7 @@ import Events from 'utils/events';
 import '../../../elements/emby-tabs/emby-tabs';
 import '../../../elements/emby-button/emby-button';
 import '../../../elements/emby-scroller/emby-scroller';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 type OnResumeOptions = {
     autoFocus?: boolean;
@@ -30,8 +31,8 @@ const Home = () => {
     const [ searchParams ] = useSearchParams();
     const initialTabIndex = parseInt(searchParams.get('tab') ?? '0', 10);
 
-    const libraryMenu = useMemo(async () => ((await import('../../../scripts/libraryMenu')).default), []);
-    const mainTabsManager = useMemo(() => import('../../../components/maintabsmanager'), []);
+    const libraryMenu = useMemo(async () => ((await loadDynamicModule(() => import('../../../scripts/libraryMenu'), '../../../scripts/libraryMenu')).default), []);
+    const mainTabsManager = useMemo(() => loadDynamicModule(() => import('../../../components/maintabsmanager'), '../../../components/maintabsmanager'), []);
     const tabController = useRef<ControllerProps | null>();
     const tabControllers = useMemo<ControllerProps[]>(() => [], []);
 
@@ -70,7 +71,8 @@ const Home = () => {
                 depends = 'favorites';
         }
 
-        return import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../../controllers/${depends}`).then(({ default: ControllerFactory }) => {
+        return loadDynamicModule(() => import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../../controllers/${depends}`),
+                   '../../../controllers/${depends}').then(({ default: ControllerFactory }) => {
             let controller = tabControllers[index];
 
             if (!controller) {

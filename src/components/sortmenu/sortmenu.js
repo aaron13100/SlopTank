@@ -9,6 +9,7 @@ import '../formdialog.scss';
 import '../../elements/emby-button/emby-button';
 import '../../styles/flexstyles.scss';
 import template from './sortmenu.template.html';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function onSubmit(e) {
     e.preventDefault();
@@ -23,7 +24,8 @@ function initEditor(context, settings) {
 }
 
 function centerFocus(elem, horiz, on) {
-    import('../../scripts/scrollHelper').then((scrollHelper) => {
+    loadDynamicModule(() => import('../../scripts/scrollHelper'),
+        '../../scripts/scrollHelper').then((scrollHelper) => {
         const fn = on ? 'on' : 'off';
         scrollHelper.centerFocus[fn](elem, horiz);
     });

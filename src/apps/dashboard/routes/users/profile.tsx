@@ -21,6 +21,7 @@ import { useChannels } from 'apps/dashboard/features/users/api/useChannels';
 import { useUpdateUser } from 'apps/dashboard/features/users/api/useUpdateUser';
 import { useUpdateUserPolicy } from 'apps/dashboard/features/users/api/useUpdateUserPolicy';
 import { useNetworkConfig } from 'apps/dashboard/features/users/api/useNetworkConfig';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 type ResetProvider = BaseItemDto & {
     checkedAttribute: string
@@ -36,7 +37,7 @@ const UserEdit = () => {
     const [ searchParams ] = useSearchParams();
     const userId = searchParams.get('userId');
     const [ deleteFoldersAccess, setDeleteFoldersAccess ] = useState<ResetProvider[]>([]);
-    const libraryMenu = useMemo(async () => ((await import('../../../../scripts/libraryMenu')).default), []);
+    const libraryMenu = useMemo(async () => ((await loadDynamicModule(() => import('../../../../scripts/libraryMenu'), '../../../../scripts/libraryMenu')).default), []);
 
     const [ authenticationProviderId, setAuthenticationProviderId ] = useState('');
     const [ passwordResetProviderId, setPasswordResetProviderId ] = useState('');

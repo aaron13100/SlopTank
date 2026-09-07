@@ -21,6 +21,7 @@ import dom from '../../utils/dom';
 import './style.scss';
 import 'material-design-icons-iconfont';
 import '../../elements/emby-button/paper-icon-button-light';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 /**
  * Name of transition event.
@@ -349,10 +350,11 @@ export default function (options) {
         }
 
         //eslint-disable-next-line import/no-unresolved
-        import('swiper/css/bundle');
+        loadDynamicModule(() => import('swiper/css/bundle'), 'swiper/css/bundle');
 
         // eslint-disable-next-line import/no-unresolved
-        import('swiper/bundle').then(({ Swiper }) => {
+        loadDynamicModule(() => import('swiper/bundle'),
+            'swiper/bundle').then(({ Swiper }) => {
             swiperInstance = new Swiper(dialogElement.querySelector('.slideshowSwiperContainer'), {
                 direction: 'horizontal',
                 // Loop is disabled due to the virtual slides option not supporting it.
@@ -484,7 +486,8 @@ export default function (options) {
     function download() {
         const imageInfo = getCurrentImageInfo();
 
-        import('../../scripts/fileDownloader').then((fileDownloader) => {
+        loadDynamicModule(() => import('../../scripts/fileDownloader'),
+            '../../scripts/fileDownloader').then((fileDownloader) => {
             fileDownloader.download([imageInfo]);
         });
     }

@@ -2,6 +2,7 @@
 import { ServerConnections } from 'lib/jellyfin-apiclient';
 import * as userSettings from 'scripts/settings/userSettings';
 import { PluginType } from 'types/plugin.ts';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 class BackdropScreensaver {
     constructor() {
@@ -26,7 +27,8 @@ class BackdropScreensaver {
         const apiClient = ServerConnections.currentApiClient();
         apiClient.getItems(apiClient.getCurrentUserId(), query).then((result) => {
             if (result.Items.length) {
-                import('../../components/slideshow/slideshow').then(({ default: Slideshow }) => {
+                loadDynamicModule(() => import('../../components/slideshow/slideshow'),
+                    '../../components/slideshow/slideshow').then(({ default: Slideshow }) => {
                     const newSlideShow = new Slideshow({
                         showTitle: true,
                         cover: true,

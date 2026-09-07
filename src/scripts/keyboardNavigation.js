@@ -7,6 +7,7 @@ import browser from './browser';
 import inputManager from './inputManager';
 import layoutManager from '../components/layoutManager';
 import appSettings from './settings/appSettings';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 /**
  * Key name mapping.
@@ -286,7 +287,7 @@ export function canEnableGamepad() {
 function attachGamepadScript() {
     console.log('Gamepad connected! Attaching gamepadtokey.js script');
     window.removeEventListener('gamepadconnected', attachGamepadScript);
-    import('./gamepadtokey');
+    loadDynamicModule(() => import('./gamepadtokey'), './gamepadtokey');
 }
 
 // No need to check for gamepads manually at load time, the eventhandler will be fired for that

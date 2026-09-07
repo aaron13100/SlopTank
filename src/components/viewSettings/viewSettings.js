@@ -11,6 +11,7 @@ import 'material-design-icons-iconfont';
 import '../formdialog.scss';
 import '../../styles/flexstyles.scss';
 import template from './viewSettings.template.html';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function onSubmit(e) {
     e.preventDefault();
@@ -39,7 +40,8 @@ function saveValues(context, settings, settingsKey) {
 }
 
 function centerFocus(elem, horiz, on) {
-    import('../../scripts/scrollHelper').then((scrollHelper) => {
+    loadDynamicModule(() => import('../../scripts/scrollHelper'),
+        '../../scripts/scrollHelper').then((scrollHelper) => {
         const fn = on ? 'on' : 'off';
         scrollHelper.centerFocus[fn](elem, horiz);
     });

@@ -21,9 +21,11 @@ import '../../../../elements/emby-button/paper-icon-button-light';
 import '../../../../elements/emby-checkbox/emby-checkbox';
 import '../../../../components/listview/listview.scss';
 import '../../../../components/formdialog.scss';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function centerFocus(elem, horiz, on) {
-    import('../../../../scripts/scrollHelper').then((scrollHelper) => {
+    loadDynamicModule(() => import('../../../../scripts/scrollHelper'),
+        '../../../../scripts/scrollHelper').then((scrollHelper) => {
         const fn = on ? 'on' : 'off';
         scrollHelper.centerFocus[fn](elem, horiz);
     });
@@ -55,7 +57,7 @@ class SettingsEditor {
         this.context = dialogHelper.createDialog(dialogOptions);
         this.context.classList.add('formDialog');
 
-        const { default: editorTemplate } = await import('./editor.html');
+        const { default: editorTemplate } = await loadDynamicModule(() => import('./editor.html'), './editor.html');
         this.context.innerHTML = globalize.translateHtml(editorTemplate, 'core');
 
         // Set callbacks for form submission

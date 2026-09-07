@@ -15,6 +15,7 @@ import 'elements/emby-tabs/emby-tabs';
 import 'elements/emby-button/emby-button';
 
 import 'styles/scrollstyles.scss';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function enableScrollX() {
     return !layoutManager.desktop;
@@ -51,7 +52,8 @@ function loadRecommendedPrograms(page) {
         });
         loading.hide();
 
-        import('../../components/autoFocuser').then(({ default: autoFocuser }) => {
+        loadDynamicModule(() => import('../../components/autoFocuser'),
+            '../../components/autoFocuser').then(({ default: autoFocuser }) => {
             autoFocuser.autoFocus(page);
         });
     });
@@ -263,7 +265,8 @@ export default function (view, params) {
                 break;
         }
 
-        import(`../livetv/${depends}`).then(({ default: ControllerFactory }) => {
+        loadDynamicModule(() => import(`../livetv/${depends}`),
+            '../livetv/${depends}').then(({ default: ControllerFactory }) => {
             let tabContent;
 
             if (index === 0) {

@@ -44,6 +44,7 @@ import EpisodePlaybackMenu from './EpisodePlaybackMenu';
 import VolumeControl from './VolumeControl';
 import TransportControl from './TransportControl';
 import { selectTrickplayResolution, TrickplayDiscovery } from './trickplayDiscovery';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function getOpenedDialog() {
     return document.querySelector('.dialogContainer .dialog.opened');
@@ -79,7 +80,8 @@ export default function (view) {
 
         ServerConnections.getApiClient(item.ServerId).getCurrentUser().then(function (user) {
             if (user.Policy.EnableLiveTvManagement) {
-                import('../../../components/recordingcreator/recordingbutton').then(({ default: RecordingButton }) => {
+                loadDynamicModule(() => import('../../../components/recordingcreator/recordingbutton'),
+                    '../../../components/recordingcreator/recordingbutton').then(({ default: RecordingButton }) => {
                     if (recordingButtonManager) {
                         recordingButtonManager.refreshItem(item);
                         return;
@@ -845,7 +847,8 @@ export default function (view) {
     }
 
     function showComingUpNext(player) {
-        import('../../../components/upnextdialog/upnextdialog').then(({ default: UpNextDialog }) => {
+        loadDynamicModule(() => import('../../../components/upnextdialog/upnextdialog'),
+            '../../../components/upnextdialog/upnextdialog').then(({ default: UpNextDialog }) => {
             if (!(currentVisibleMenu || currentUpNextDialog)) {
                 currentVisibleMenu = 'upnext';
                 comingUpNextDisplayed = true;
@@ -1035,7 +1038,8 @@ export default function (view) {
     function onSettingsButtonClick() {
         const btn = this;
 
-        import('../../../components/playback/playersettingsmenu').then((playerSettingsMenu) => {
+        loadDynamicModule(() => import('../../../components/playback/playersettingsmenu'),
+            '../../../components/playback/playersettingsmenu').then((playerSettingsMenu) => {
             const player = currentPlayer;
 
             if (player) {
@@ -1089,14 +1093,16 @@ export default function (view) {
             const messageKey = renderPath === 'burned' || (renderPath === null && hasSubtitleOn) ?
                 'SubtitleOffsetUnavailableBurnedIn' :
                 'SubtitleOffsetEnableSubtitleFirst';
-            import('../../../components/toast/toast').then(({ default: toast }) => {
+            loadDynamicModule(() => import('../../../components/toast/toast'),
+                '../../../components/toast/toast').then(({ default: toast }) => {
                 toast(globalize.translate(messageKey));
             });
         }
     }
 
     function toggleStats() {
-        import('../../../components/playerstats/playerstats').then(({ default: PlayerStats }) => {
+        loadDynamicModule(() => import('../../../components/playerstats/playerstats'),
+            '../../../components/playerstats/playerstats').then(({ default: PlayerStats }) => {
             const player = currentPlayer;
 
             if (player) {
@@ -1136,7 +1142,8 @@ export default function (view) {
         });
         const positionTo = this;
 
-        import('../../../components/actionSheet/actionSheet').then(({ default: actionsheet }) => {
+        loadDynamicModule(() => import('../../../components/actionSheet/actionSheet'),
+            '../../../components/actionSheet/actionSheet').then(({ default: actionsheet }) => {
             actionsheet.show({
                 items: menuItems,
                 title: globalize.translate('Audio'),
@@ -1620,15 +1627,16 @@ export default function (view) {
     const subtitleTrackMenu = new SubtitleTrackMenu({
         button: view.querySelector('.btnSubtitles'),
         getPlayer: () => currentPlayer,
-        loadActionSheet: () => import('../../../components/actionSheet/actionSheet')
-            .then(({ default: actionSheet }) => actionSheet),
-        loadSizer: () => import('../../../components/subtitlesizer/subtitlesizer')
-            .then(({ default: SubtitleSizer }) => SubtitleSizer),
+        loadActionSheet: () => loadDynamicModule(() => import('../../../components/actionSheet/actionSheet'),
+            '../../../components/actionSheet/actionSheet').then(({ default: actionSheet }) => actionSheet),
+        loadSizer: () => loadDynamicModule(() => import('../../../components/subtitlesizer/subtitlesizer'),
+            '../../../components/subtitlesizer/subtitlesizer').then(({ default: SubtitleSizer }) => SubtitleSizer),
         playback: playbackManager,
         resetIdle,
         settings: userSettings,
         showToast: message => {
-            import('../../../components/toast/toast').then(({ default: toast }) => toast(message));
+            loadDynamicModule(() => import('../../../components/toast/toast'),
+                '../../../components/toast/toast').then(({ default: toast }) => toast(message));
         },
         translate: globalize.translate,
         toggleSubtitleSync
@@ -1665,7 +1673,8 @@ export default function (view) {
             const detail = status && !rawDetail.includes(String(status)) ? `HTTP ${status}: ${rawDetail}` : rawDetail;
             const message = `${globalize.translate(translationKey)} (${detail})`;
             console.error(`[EpisodePlaybackMenu] ${message}`, error);
-            import('../../../components/toast/toast').then(({ default: toast }) => toast(message))
+            loadDynamicModule(() => import('../../../components/toast/toast'),
+                '../../../components/toast/toast').then(({ default: toast }) => toast(message))
                 .catch(toastError => console.error('[EpisodePlaybackMenu] failed to show error toast', toastError));
         },
         translate: globalize.translate

@@ -12,9 +12,11 @@ import imageHelper from 'utils/image';
 
 import 'components/cardbuilder/card.scss';
 import 'elements/emby-itemrefreshindicator/emby-itemrefreshindicator';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function addVirtualFolder(page) {
-    import('components/mediaLibraryCreator/mediaLibraryCreator').then(({ default: MediaLibraryCreator }) => {
+    loadDynamicModule(() => import('components/mediaLibraryCreator/mediaLibraryCreator'),
+        'components/mediaLibraryCreator/mediaLibraryCreator').then(({ default: MediaLibraryCreator }) => {
         new MediaLibraryCreator({
             collectionTypeOptions: getCollectionTypeOptions().filter(function (f) {
                 return !f.hidden;
@@ -29,7 +31,8 @@ function addVirtualFolder(page) {
 }
 
 function editVirtualFolder(page, virtualFolder) {
-    import('components/mediaLibraryEditor/mediaLibraryEditor').then(({ default: MediaLibraryEditor }) => {
+    loadDynamicModule(() => import('components/mediaLibraryEditor/mediaLibraryEditor'),
+        'components/mediaLibraryEditor/mediaLibraryEditor').then(({ default: MediaLibraryEditor }) => {
         new MediaLibraryEditor({
             refresh: shouldRefreshLibraryAfterChanges(page),
             library: virtualFolder
@@ -65,7 +68,8 @@ function deleteVirtualFolder(page, virtualFolder) {
 }
 
 function refreshVirtualFolder(page, virtualFolder) {
-    import('components/refreshdialog/refreshdialog').then(({ default: RefreshDialog }) => {
+    loadDynamicModule(() => import('components/refreshdialog/refreshdialog'),
+        'components/refreshdialog/refreshdialog').then(({ default: RefreshDialog }) => {
         new RefreshDialog({
             itemIds: [virtualFolder.ItemId],
             serverId: ServerConnections.currentApiClient().serverId(),
@@ -75,7 +79,8 @@ function refreshVirtualFolder(page, virtualFolder) {
 }
 
 function renameVirtualFolder(page, virtualFolder) {
-    import('components/prompt/prompt').then(({ default: prompt }) => {
+    loadDynamicModule(() => import('components/prompt/prompt'),
+        'components/prompt/prompt').then(({ default: prompt }) => {
         prompt({
             label: globalize.translate('LabelNewName'),
             description: globalize.translate('MessageRenameMediaFolder'),
@@ -124,7 +129,8 @@ function showCardMenu(page, elem, virtualFolders) {
         icon: 'delete'
     });
 
-    import('components/actionSheet/actionSheet').then((actionsheet) => {
+    loadDynamicModule(() => import('components/actionSheet/actionSheet'),
+        'components/actionSheet/actionSheet').then((actionsheet) => {
         actionsheet.show({
             items: menuItems,
             positionTo: elem,
@@ -215,7 +221,8 @@ function reloadVirtualFolders(page, virtualFolders) {
 }
 
 function editImages(page, virtualFolder) {
-    import('components/imageeditor/imageeditor').then((imageEditor) => {
+    loadDynamicModule(() => import('components/imageeditor/imageeditor'),
+        'components/imageeditor/imageeditor').then((imageEditor) => {
         imageEditor.show({
             itemId: virtualFolder.ItemId,
             serverId: ServerConnections.currentApiClient().serverId()

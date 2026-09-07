@@ -16,6 +16,7 @@ import './recordingcreator.scss';
 import 'material-design-icons-iconfont';
 import '../../styles/flexstyles.scss';
 import template from './recordingeditor.template.html';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 let currentDialog;
 let recordingDeleted = false;
@@ -24,7 +25,8 @@ let currentServerId;
 let currentResolve;
 
 function deleteTimer(apiClient, timerId) {
-    return import('./recordinghelper').then(({ default: recordingHelper }) => {
+    return loadDynamicModule(() => import('./recordinghelper'),
+               './recordinghelper').then(({ default: recordingHelper }) => {
         recordingHelper.cancelTimerWithConfirmation(timerId, apiClient.serverId());
     });
 }

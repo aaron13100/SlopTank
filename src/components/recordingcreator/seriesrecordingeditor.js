@@ -17,6 +17,7 @@ import './recordingcreator.scss';
 import 'material-design-icons-iconfont';
 import '../../styles/flexstyles.scss';
 import template from './seriesrecordingeditor.template.html';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 let currentDialog;
 let recordingUpdated = false;
@@ -26,7 +27,8 @@ let currentServerId;
 
 function deleteTimer(apiClient, timerId) {
     return new Promise(function (resolve, reject) {
-        import('./recordinghelper').then(({ default: recordingHelper }) => {
+        loadDynamicModule(() => import('./recordinghelper'),
+            './recordinghelper').then(({ default: recordingHelper }) => {
             recordingHelper.cancelSeriesTimerWithConfirmation(timerId, apiClient.serverId()).then(resolve, reject);
         });
     });

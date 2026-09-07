@@ -18,6 +18,7 @@ import Page from '../../../../components/Page';
 import prompt from '../../../../components/prompt/prompt';
 import { ServerConnections } from 'lib/jellyfin-apiclient';
 import Toast from 'apps/dashboard/components/Toast';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 type NamedItem = {
     name: string;
@@ -75,7 +76,7 @@ const UserParentalControl = () => {
     const [ allowedTags, setAllowedTags ] = useState<string[]>([]);
     const [ blockedTags, setBlockedTags ] = useState<string[]>([]);
     const [ isSettingsSavedToastOpen, setIsSettingsSavedToastOpen ] = useState(false);
-    const libraryMenu = useMemo(async () => ((await import('../../../../scripts/libraryMenu')).default), []);
+    const libraryMenu = useMemo(async () => ((await loadDynamicModule(() => import('../../../../scripts/libraryMenu'), '../../../../scripts/libraryMenu')).default), []);
 
     const element = useRef<HTMLDivElement>(null);
     const parentalRatingsRef = useRef<ParentalRating[]>([]);
@@ -231,7 +232,8 @@ const UserParentalControl = () => {
 
         const showSchedulePopup = (schedule: AccessSchedule, index: number) => {
             schedule = schedule || {};
-            import('../../../../components/accessSchedule/accessSchedule').then(({ default: accessschedule }) => {
+            loadDynamicModule(() => import('../../../../components/accessSchedule/accessSchedule'),
+                '../../../../components/accessSchedule/accessSchedule').then(({ default: accessschedule }) => {
                 accessschedule.show({
                     schedule: schedule
                 }).then(function (updatedSchedule) {

@@ -8,6 +8,7 @@ import '../../elements/emby-button/paper-icon-button-light';
 import Dashboard from '../../utils/dashboard';
 import Events from '../../utils/events.ts';
 import dom from 'utils/dom';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function getTunerName(providerId) {
     switch (providerId.toLowerCase()) {
@@ -49,7 +50,8 @@ function refreshTunerDevices(page, providerInfo, devices) {
 function onSelectPathClick(e) {
     const page = dom.parentWithClass(e.target, 'xmltvForm');
 
-    import('../directorybrowser/directorybrowser').then(({ default: DirectoryBrowser }) => {
+    loadDynamicModule(() => import('../directorybrowser/directorybrowser'),
+        '../directorybrowser/directorybrowser').then(({ default: DirectoryBrowser }) => {
         const picker = new DirectoryBrowser();
         picker.show({
             includeFiles: true,

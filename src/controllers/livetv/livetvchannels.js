@@ -7,6 +7,7 @@ import Events from '../../utils/events.ts';
 import { setFilterStatus } from 'components/filterdialog/filterIndicator';
 
 import '../../elements/emby-itemscontainer/emby-itemscontainer';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 export default function (view, params, tabContent) {
     function getPageData() {
@@ -101,7 +102,8 @@ export default function (view, params, tabContent) {
     }
 
     function showFilterMenu(context) {
-        import('../../components/filterdialog/filterdialog').then(({ default: FilterDialog }) => {
+        loadDynamicModule(() => import('../../components/filterdialog/filterdialog'),
+            '../../components/filterdialog/filterdialog').then(({ default: FilterDialog }) => {
             const filterDialog = new FilterDialog({
                 query: getQuery(),
                 mode: 'livetvchannels',
@@ -127,7 +129,8 @@ export default function (view, params, tabContent) {
             loading.hide();
             isLoading = false;
 
-            import('../../components/autoFocuser').then(({ default: autoFocuser }) => {
+            loadDynamicModule(() => import('../../components/autoFocuser'),
+                '../../components/autoFocuser').then(({ default: autoFocuser }) => {
                 autoFocuser.autoFocus(context);
             });
         });

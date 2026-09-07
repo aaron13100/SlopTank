@@ -22,6 +22,7 @@ import './style.scss';
 import toast from '../toast/toast';
 import alert from '../alert';
 import template from './mediaLibraryCreator.template.html';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function onAddLibrary(e) {
     e.preventDefault();
@@ -119,7 +120,8 @@ function initEditor(page, collectionTypeOptions) {
 function onAddButtonClick() {
     const page = dom.parentWithClass(this, 'dlg-librarycreator');
 
-    import('../directorybrowser/directorybrowser').then(({ default: DirectoryBrowser }) => {
+    loadDynamicModule(() => import('../directorybrowser/directorybrowser'),
+        '../directorybrowser/directorybrowser').then(({ default: DirectoryBrowser }) => {
         const picker = new DirectoryBrowser();
         picker.show({
             callback: function (path) {

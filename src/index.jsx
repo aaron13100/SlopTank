@@ -1,6 +1,9 @@
 // Import legacy browser polyfills
 import 'lib/legacy';
 
+import { loadDynamicModule } from 'utils/dynamicImport';
+import { installDynamicImportFailureReporter } from 'utils/dynamicImportFailureReporter';
+
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -47,6 +50,8 @@ import './styles/dashboard.scss';
 import './styles/detailtable.scss';
 import './styles/librarybrowser.scss';
 
+installDynamicImportFailureReporter();
+
 async function init() {
     // Log current version to console to help out with issue triage and debugging
     console.info(
@@ -92,7 +97,7 @@ build: ${__JF_BUILD_VERSION__}`);
 
     // Load iOS specific styles
     if (browser.iOS) {
-        import('./styles/ios.scss');
+        loadDynamicModule(() => import('./styles/ios.scss'), './styles/ios.scss');
     }
 
     // Load frontend plugins
@@ -127,14 +132,14 @@ build: ${__JF_BUILD_VERSION__}`);
 function loadFonts() {
     if (browser.tv && !browser.android) {
         console.debug('using system fonts with explicit sizes');
-        import('./styles/fonts.sized.scss');
+        loadDynamicModule(() => import('./styles/fonts.sized.scss'), './styles/fonts.sized.scss');
     } else if (__USE_SYSTEM_FONTS__) {
         console.debug('using system fonts');
-        import('./styles/fonts.scss');
+        loadDynamicModule(() => import('./styles/fonts.scss'), './styles/fonts.scss');
     } else {
         console.debug('using default fonts');
-        import('./styles/fonts.scss');
-        import('./styles/fonts.noto.scss');
+        loadDynamicModule(() => import('./styles/fonts.scss'), './styles/fonts.scss');
+        loadDynamicModule(() => import('./styles/fonts.noto.scss'), './styles/fonts.noto.scss');
     }
 }
 
@@ -169,24 +174,24 @@ async function loadPlugins() {
 
 function loadPlatformFeatures() {
     if (!browser.tv && !browser.xboxOne && !browser.ps4) {
-        import('./components/nowPlayingBar/nowPlayingBar');
+        loadDynamicModule(() => import('./components/nowPlayingBar/nowPlayingBar'), './components/nowPlayingBar/nowPlayingBar');
     }
 
     if (appHost.supports(AppFeature.RemoteControl)) {
-        import('./components/playback/playerSelectionMenu');
-        import('./components/playback/remotecontrolautoplay');
+        loadDynamicModule(() => import('./components/playback/playerSelectionMenu'), './components/playback/playerSelectionMenu');
+        loadDynamicModule(() => import('./components/playback/remotecontrolautoplay'), './components/playback/remotecontrolautoplay');
     }
 
     if (!appHost.supports(AppFeature.PhysicalVolumeControl) || browser.touch) {
-        import('./components/playback/volumeosd');
+        loadDynamicModule(() => import('./components/playback/volumeosd'), './components/playback/volumeosd');
     }
 
     if (!browser.tv && !browser.xboxOne) {
-        import('./components/playback/playbackorientation');
+        loadDynamicModule(() => import('./components/playback/playbackorientation'), './components/playback/playbackorientation');
         registerServiceWorker();
 
         if (window.Notification) {
-            import('./components/notifications/notifications');
+            loadDynamicModule(() => import('./components/notifications/notifications'), './components/notifications/notifications');
         }
     }
 }

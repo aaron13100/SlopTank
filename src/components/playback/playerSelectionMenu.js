@@ -12,6 +12,7 @@ import '../../elements/emby-checkbox/emby-checkbox';
 import '../../elements/emby-button/emby-button';
 import dialog from '../dialog/dialog';
 import dialogHelper from '../dialogHelper/dialogHelper';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function getTargetSecondaryText(target) {
     if (target.user) {
@@ -83,7 +84,8 @@ export function show(button) {
             };
         });
 
-        import('../actionSheet/actionSheet').then((actionsheet) => {
+        loadDynamicModule(() => import('../actionSheet/actionSheet'),
+            '../actionSheet/actionSheet').then((actionsheet) => {
             loading.hide();
 
             const menuOptions = {

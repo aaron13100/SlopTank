@@ -21,6 +21,7 @@ import '../../elements/emby-button/paper-icon-button-light';
 
 import html from './template.html';
 import './style.scss';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 const THEMES = {
     'dark': { 'body': { 'color': '#d8dadc', 'background': '#000', 'font-size': 'medium' } },
@@ -370,7 +371,8 @@ export class BookPlayer {
         }
 
         return new Promise((resolve, reject) => {
-            import('epubjs').then(({ default: epubjs }) => {
+            loadDynamicModule(() => import('epubjs'),
+                'epubjs').then(({ default: epubjs }) => {
                 const api = toApi(ServerConnections.getApiClient(item));
                 const downloadHref = getLibraryApi(api).getDownloadUrl({ itemId: item.Id });
                 const book = epubjs(downloadHref, { openAs: 'epub' });

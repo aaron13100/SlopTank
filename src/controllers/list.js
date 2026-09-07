@@ -15,6 +15,7 @@ import LibraryMenu from '../scripts/libraryMenu';
 import { CollectionType } from '@jellyfin/sdk/lib/generated-client/models/collection-type';
 import { ItemSortBy } from '@jellyfin/sdk/lib/generated-client/models/item-sort-by';
 import { stopMultiSelect } from 'components/multiSelect/multiSelect';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function getInitialLiveTvQuery(instance, params, startIndex = 0, limit = 300) {
     const query = {
@@ -359,7 +360,8 @@ function getItem(params) {
 function showViewSettingsMenu() {
     const instance = this;
 
-    import('../components/viewSettings/viewSettings').then(({ default: ViewSettings }) => {
+    loadDynamicModule(() => import('../components/viewSettings/viewSettings'),
+        '../components/viewSettings/viewSettings').then(({ default: ViewSettings }) => {
         new ViewSettings().show({
             settingsKey: instance.getSettingsKey(),
             settings: instance.getViewSettings(),
@@ -374,7 +376,8 @@ function showViewSettingsMenu() {
 function showFilterMenu() {
     const instance = this;
 
-    import('../components/filtermenu/filtermenu').then(({ default: FilterMenu }) => {
+    loadDynamicModule(() => import('../components/filtermenu/filtermenu'),
+        '../components/filtermenu/filtermenu').then(({ default: FilterMenu }) => {
         new FilterMenu().show({
             settingsKey: instance.getSettingsKey(),
             settings: instance.getFilters(),
@@ -393,7 +396,8 @@ function showFilterMenu() {
 function showSortMenu() {
     const instance = this;
 
-    import('../components/sortmenu/sortmenu').then(({ default: SortMenu }) => {
+    loadDynamicModule(() => import('../components/sortmenu/sortmenu'),
+        '../components/sortmenu/sortmenu').then(({ default: SortMenu }) => {
         new SortMenu().show({
             settingsKey: instance.getSettingsKey(),
             settings: instance.getSortValues(),
@@ -411,7 +415,8 @@ function showSortMenu() {
 function onNewItemClick() {
     const instance = this;
 
-    import('../components/playlisteditor/playlisteditor').then(({ default: PlaylistEditor }) => {
+    loadDynamicModule(() => import('../components/playlisteditor/playlisteditor'),
+        '../components/playlisteditor/playlisteditor').then(({ default: PlaylistEditor }) => {
         const playlistEditor = new PlaylistEditor();
         playlistEditor.show({
             items: [],
@@ -796,7 +801,8 @@ class ItemsView {
         }
 
         function autoFocus() {
-            import('../components/autoFocuser').then(({ default: autoFocuser }) => {
+            loadDynamicModule(() => import('../components/autoFocuser'),
+                '../components/autoFocuser').then(({ default: autoFocuser }) => {
                 autoFocuser.autoFocus(view);
             });
         }

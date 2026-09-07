@@ -7,6 +7,7 @@ import loading from '../../loading/loading';
 import toast from '../../toast/toast';
 import Button from '../../../elements/emby-button/Button';
 import Input from '../../../elements/emby-input/Input';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 type IProps = {
     user: UserDto
@@ -14,7 +15,7 @@ type IProps = {
 
 const UserPasswordForm: FunctionComponent<IProps> = ({ user }: IProps) => {
     const element = useRef<HTMLDivElement>(null);
-    const libraryMenu = useMemo(async () => ((await import('../../../scripts/libraryMenu')).default), []);
+    const libraryMenu = useMemo(async () => ((await loadDynamicModule(() => import('../../../scripts/libraryMenu'), '../../../scripts/libraryMenu')).default), []);
 
     const loadUser = useCallback(async () => {
         const page = element.current;
@@ -45,7 +46,8 @@ const UserPasswordForm: FunctionComponent<IProps> = ({ user }: IProps) => {
         const canChangePassword = loggedInUser?.Policy?.IsAdministrator || user.Policy.EnableUserPreferenceAccess;
         (page.querySelector('.passwordSection') as HTMLDivElement).classList.toggle('hide', !canChangePassword);
 
-        import('../../autoFocuser').then(({ default: autoFocuser }) => {
+        loadDynamicModule(() => import('../../autoFocuser'),
+            '../../autoFocuser').then(({ default: autoFocuser }) => {
             autoFocuser.autoFocus(page);
         }).catch(err => {
             console.error('[UserPasswordForm] failed to load autofocuser', err);

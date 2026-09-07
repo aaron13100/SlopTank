@@ -4,6 +4,7 @@ import globalize from '../../../lib/globalize';
 import appSettings from '../../../scripts/settings/appSettings';
 import Events from '../../../utils/events.ts';
 import keyboardNavigation from 'scripts/keyboardNavigation';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 export default function (view) {
     function submit(e) {
@@ -29,7 +30,8 @@ export default function (view) {
         view.querySelector('form').addEventListener('submit', submit);
         view.querySelector('.btnSave').classList.remove('hide');
 
-        import('../../../components/autoFocuser').then(({ default: autoFocuser }) => {
+        loadDynamicModule(() => import('../../../components/autoFocuser'),
+            '../../../components/autoFocuser').then(({ default: autoFocuser }) => {
             autoFocuser.autoFocus(view);
         });
     });

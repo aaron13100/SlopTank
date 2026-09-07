@@ -19,6 +19,7 @@ import 'elements/emby-itemscontainer/emby-itemscontainer';
 import 'elements/emby-button/emby-button';
 
 import 'styles/scrollstyles.scss';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function getTabs() {
     return [{
@@ -267,7 +268,8 @@ export default function (view, params) {
                 break;
         }
 
-        import(`../shows/${depends}`).then(({ default: ControllerFactory }) => {
+        loadDynamicModule(() => import(`../shows/${depends}`),
+            '../shows/${depends}').then(({ default: ControllerFactory }) => {
             let tabContent;
 
             if (index === 1) {

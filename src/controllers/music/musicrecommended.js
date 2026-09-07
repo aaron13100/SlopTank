@@ -19,6 +19,7 @@ import 'elements/emby-button/emby-button';
 
 import 'styles/flexstyles.scss';
 import 'styles/scrollstyles.scss';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function itemsPerRow() {
     const screenWidth = dom.getWindowSize().innerWidth;
@@ -73,7 +74,8 @@ function loadLatest(page, parentId) {
         imageLoader.lazyChildren(elem);
         loading.hide();
 
-        import('../../components/autoFocuser').then(({ default: autoFocuser }) => {
+        loadDynamicModule(() => import('../../components/autoFocuser'),
+            '../../components/autoFocuser').then(({ default: autoFocuser }) => {
             autoFocuser.autoFocus(page);
         });
     });
@@ -169,7 +171,8 @@ function loadSuggestionsTab(page, tabContent, parentId) {
     loadRecentlyPlayed(tabContent, parentId);
     loadFrequentlyPlayed(tabContent, parentId);
 
-    import('../../components/favoriteitems').then(({ default: favoriteItems }) => {
+    loadDynamicModule(() => import('../../components/favoriteitems'),
+        '../../components/favoriteitems').then(({ default: favoriteItems }) => {
         favoriteItems.render(tabContent, ApiClient.getCurrentUserId(), parentId, ['favoriteArtists', 'favoriteAlbums', 'favoriteSongs']);
     });
 }
@@ -296,7 +299,8 @@ export default function (view, params) {
                 break;
         }
 
-        import(`../music/${depends}`).then(({ default: ControllerFactory }) => {
+        loadDynamicModule(() => import(`../music/${depends}`),
+            '../music/${depends}').then(({ default: ControllerFactory }) => {
             let tabContent;
 
             if (index == 1) {

@@ -20,6 +20,7 @@ import { buildShareUrl } from './router/permalinkShare';
 import toast from './toast/toast';
 import { getShareOrigin } from '../scripts/settings/webSettings';
 import * as userSettings from '../scripts/settings/userSettings';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 /** @typedef {import('@jellyfin/sdk/lib/generated-client/models/base-item-dto').BaseItemDto} BaseItemDto */
 
@@ -552,7 +553,8 @@ function executeCommand(item, id, options) {
                     .then(getResolveFunction(resolve, id, true), reject);
                 break;
             case 'addtocollection':
-                import('./collectionEditor/collectionEditor').then(({ default: CollectionEditor }) => {
+                loadDynamicModule(() => import('./collectionEditor/collectionEditor'),
+                    './collectionEditor/collectionEditor').then(({ default: CollectionEditor }) => {
                     const collectionEditor = new CollectionEditor();
                     collectionEditor.show({
                         items: [itemId],
@@ -561,7 +563,8 @@ function executeCommand(item, id, options) {
                 });
                 break;
             case 'addtoplaylist':
-                import('./playlisteditor/playlisteditor').then(({ default: PlaylistEditor }) => {
+                loadDynamicModule(() => import('./playlisteditor/playlisteditor'),
+                    './playlisteditor/playlisteditor').then(({ default: PlaylistEditor }) => {
                     const playlistEditor = new PlaylistEditor();
                     playlistEditor.show({
                         items: [itemId],
@@ -570,7 +573,8 @@ function executeCommand(item, id, options) {
                 });
                 break;
             case 'download':
-                import('../scripts/fileDownloader').then((fileDownloader) => {
+                loadDynamicModule(() => import('../scripts/fileDownloader'),
+                    '../scripts/fileDownloader').then((fileDownloader) => {
                     const url = getLibraryApi(api).getDownloadUrl({ itemId });
                     fileDownloader.download([{
                         url,
@@ -585,7 +589,8 @@ function executeCommand(item, id, options) {
                 break;
             case 'downloadall': {
                 const downloadItems = items => {
-                    import('../scripts/fileDownloader').then((fileDownloader) => {
+                    loadDynamicModule(() => import('../scripts/fileDownloader'),
+                        '../scripts/fileDownloader').then((fileDownloader) => {
                         const downloads = items
                             .filter(i => i.CanDownload)
                             .map(i => {
@@ -648,12 +653,14 @@ function executeCommand(item, id, options) {
                 break;
             }
             case 'editsubtitles':
-                import('./subtitleeditor/subtitleeditor').then(({ default: subtitleEditor }) => {
+                loadDynamicModule(() => import('./subtitleeditor/subtitleeditor'),
+                    './subtitleeditor/subtitleeditor').then(({ default: subtitleEditor }) => {
                     subtitleEditor.show(itemId, serverId).then(getResolveFunction(resolve, id, true), getResolveFunction(resolve, id));
                 });
                 break;
             case 'editlyrics':
-                import('./lyricseditor/lyricseditor').then(({ default: lyricseditor }) => {
+                loadDynamicModule(() => import('./lyricseditor/lyricseditor'),
+                    './lyricseditor/lyricseditor').then(({ default: lyricseditor }) => {
                     lyricseditor.show(itemId, serverId).then(getResolveFunction(resolve, id, true), getResolveFunction(resolve, id));
                 });
                 break;
@@ -661,7 +668,8 @@ function executeCommand(item, id, options) {
                 editItem(apiClient, item).then(getResolveFunction(resolve, id, true), getResolveFunction(resolve, id));
                 break;
             case 'editplaylist':
-                import('./playlisteditor/playlisteditor').then(({ default: PlaylistEditor }) => {
+                loadDynamicModule(() => import('./playlisteditor/playlisteditor'),
+                    './playlisteditor/playlisteditor').then(({ default: PlaylistEditor }) => {
                     const playlistEditor = new PlaylistEditor();
                     playlistEditor.show({
                         id: itemId,
@@ -670,7 +678,8 @@ function executeCommand(item, id, options) {
                 });
                 break;
             case 'editimages':
-                import('./imageeditor/imageeditor').then((imageEditor) => {
+                loadDynamicModule(() => import('./imageeditor/imageeditor'),
+                    './imageeditor/imageeditor').then((imageEditor) => {
                     imageEditor.show({
                         itemId: itemId,
                         serverId: serverId
@@ -678,17 +687,20 @@ function executeCommand(item, id, options) {
                 });
                 break;
             case 'identify':
-                import('./itemidentifier/itemidentifier').then((itemIdentifier) => {
+                loadDynamicModule(() => import('./itemidentifier/itemidentifier'),
+                    './itemidentifier/itemidentifier').then((itemIdentifier) => {
                     itemIdentifier.show(itemId, serverId).then(getResolveFunction(resolve, id, true), getResolveFunction(resolve, id));
                 });
                 break;
             case 'moremediainfo':
-                import('./itemMediaInfo/itemMediaInfo').then((itemMediaInfo) => {
+                loadDynamicModule(() => import('./itemMediaInfo/itemMediaInfo'),
+                    './itemMediaInfo/itemMediaInfo').then((itemMediaInfo) => {
                     itemMediaInfo.show(itemId, serverId).then(getResolveFunction(resolve, id), getResolveFunction(resolve, id));
                 });
                 break;
             case 'multiSelect':
-                import('./multiSelect/multiSelect').then(({ startMultiSelect }) => {
+                loadDynamicModule(() => import('./multiSelect/multiSelect'),
+                    './multiSelect/multiSelect').then(({ startMultiSelect }) => {
                     const card = dom.parentWithClass(options.positionTo, 'card');
                     startMultiSelect(card);
                 });
@@ -724,7 +736,8 @@ function executeCommand(item, id, options) {
                 playbackManager.clearQueue();
                 break;
             case 'record':
-                import('./recordingcreator/recordingcreator').then(({ default: recordingCreator }) => {
+                loadDynamicModule(() => import('./recordingcreator/recordingcreator'),
+                    './recordingcreator/recordingcreator').then(({ default: recordingCreator }) => {
                     recordingCreator.show(itemId, serverId).then(getResolveFunction(resolve, id, true), getResolveFunction(resolve, id));
                 });
                 break;
@@ -841,7 +854,8 @@ function executeCommand(item, id, options) {
 }
 
 function deleteTimer(apiClient, item, resolve, command) {
-    import('./recordingcreator/recordinghelper').then(({ default: recordingHelper }) => {
+    loadDynamicModule(() => import('./recordingcreator/recordinghelper'),
+        './recordingcreator/recordinghelper').then(({ default: recordingHelper }) => {
         const timerId = item.TimerId || item.Id;
         recordingHelper.cancelTimerWithConfirmation(timerId, item.ServerId).then(function () {
             getResolveFunction(resolve, command, true)();
@@ -850,7 +864,8 @@ function deleteTimer(apiClient, item, resolve, command) {
 }
 
 function deleteSeriesTimer(apiClient, item, resolve, command) {
-    import('./recordingcreator/recordinghelper').then(({ default: recordingHelper }) => {
+    loadDynamicModule(() => import('./recordingcreator/recordinghelper'),
+        './recordingcreator/recordinghelper').then(({ default: recordingHelper }) => {
         recordingHelper.cancelSeriesTimerWithConfirmation(item.Id, item.ServerId).then(function () {
             getResolveFunction(resolve, command, true)();
         });
@@ -898,15 +913,18 @@ function editItem(apiClient, item) {
         const serverId = apiClient.serverInfo().Id;
 
         if (item.Type === 'Timer') {
-            import('./recordingcreator/recordingeditor').then(({ default: recordingEditor }) => {
+            loadDynamicModule(() => import('./recordingcreator/recordingeditor'),
+                './recordingcreator/recordingeditor').then(({ default: recordingEditor }) => {
                 recordingEditor.show(item.Id, serverId).then(resolve, reject);
             });
         } else if (item.Type === 'SeriesTimer') {
-            import('./recordingcreator/seriesrecordingeditor').then(({ default: recordingEditor }) => {
+            loadDynamicModule(() => import('./recordingcreator/seriesrecordingeditor'),
+                './recordingcreator/seriesrecordingeditor').then(({ default: recordingEditor }) => {
                 recordingEditor.show(item.Id, serverId).then(resolve, reject);
             });
         } else {
-            import('./metadataEditor/metadataEditor').then(({ default: metadataEditor }) => {
+            loadDynamicModule(() => import('./metadataEditor/metadataEditor'),
+                './metadataEditor/metadataEditor').then(({ default: metadataEditor }) => {
                 metadataEditor.show(item.Id, serverId).then(resolve, reject);
             });
         }
@@ -915,7 +933,8 @@ function editItem(apiClient, item) {
 
 function deleteItem(apiClient, item) {
     return new Promise(function (resolve, reject) {
-        import('../scripts/deleteHelper').then((deleteHelper) => {
+        loadDynamicModule(() => import('../scripts/deleteHelper'),
+            '../scripts/deleteHelper').then((deleteHelper) => {
             deleteHelper.deleteItem({
                 item: item,
                 navigate: false
@@ -927,7 +946,8 @@ function deleteItem(apiClient, item) {
 }
 
 function refresh(apiClient, item) {
-    import('./refreshdialog/refreshdialog').then(({ default: RefreshDialog }) => {
+    loadDynamicModule(() => import('./refreshdialog/refreshdialog'),
+        './refreshdialog/refreshdialog').then(({ default: RefreshDialog }) => {
         new RefreshDialog({
             itemIds: [item.Id],
             serverId: apiClient.serverInfo().Id,

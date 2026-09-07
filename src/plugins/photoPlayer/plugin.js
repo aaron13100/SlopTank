@@ -1,6 +1,7 @@
 import { ServerConnections } from 'lib/jellyfin-apiclient';
 import * as userSettings from '../../scripts/settings/userSettings';
 import { PluginType } from 'types/plugin.ts';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 export default class PhotoPlayer {
     constructor() {
@@ -12,7 +13,8 @@ export default class PhotoPlayer {
 
     play(options) {
         return new Promise(function (resolve) {
-            import('../../components/slideshow/slideshow').then(({ default: Slideshow }) => {
+            loadDynamicModule(() => import('../../components/slideshow/slideshow'),
+                '../../components/slideshow/slideshow').then(({ default: Slideshow }) => {
                 const index = options.startIndex || 0;
 
                 const apiClient = ServerConnections.currentApiClient();

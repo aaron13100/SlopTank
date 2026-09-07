@@ -1,11 +1,13 @@
 import loading from 'components/loading/loading';
 import { getCurrentItemId, setCurrentItemId } from 'scripts/editorsidebar';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function reload(context, itemId) {
     loading.show();
 
     if (itemId) {
-        import('../components/metadataEditor/metadataEditor').then(({ default: metadataEditor }) => {
+        loadDynamicModule(() => import('../components/metadataEditor/metadataEditor'),
+            '../components/metadataEditor/metadataEditor').then(({ default: metadataEditor }) => {
             metadataEditor.embed(context.querySelector('.editPageInnerContent'), itemId, ApiClient.serverInfo().Id);
         });
     } else {

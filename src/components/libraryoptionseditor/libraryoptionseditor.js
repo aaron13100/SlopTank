@@ -15,6 +15,7 @@ import '../../elements/emby-input/emby-input';
 import '../../elements/emby-textarea/emby-textarea';
 import './style.scss';
 import template from './libraryoptionseditor.template.html';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function populateLanguages(parent) {
     return ApiClient.getCultures().then(languages => {
@@ -380,7 +381,8 @@ function adjustSortableListElement(elem) {
 }
 
 function showImageOptionsForType(type) {
-    import('../imageOptionsEditor/imageOptionsEditor').then(({ default: ImageOptionsEditor }) => {
+    loadDynamicModule(() => import('../imageOptionsEditor/imageOptionsEditor'),
+        '../imageOptionsEditor/imageOptionsEditor').then(({ default: ImageOptionsEditor }) => {
         let typeOptions = getTypeOptions(currentLibraryOptions, type);
         if (!typeOptions) {
             typeOptions = {

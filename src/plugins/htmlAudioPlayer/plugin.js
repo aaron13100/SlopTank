@@ -8,6 +8,7 @@ import profileBuilder from '../../scripts/browserDeviceProfile';
 import { getIncludeCorsCredentials } from '../../scripts/settings/webSettings';
 import { PluginType } from '../../types/plugin.ts';
 import Events from '../../utils/events.ts';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function getDefaultProfile() {
     return profileBuilder({});
@@ -51,7 +52,8 @@ function supportsFade() {
 }
 
 function requireHlsPlayer(callback) {
-    import('hls.js/dist/hls.js').then(({ default: hls }) => {
+    loadDynamicModule(() => import('hls.js/dist/hls.js'),
+        'hls.js/dist/hls.js').then(({ default: hls }) => {
         hls.DefaultConfig.lowLatencyMode = false;
         hls.DefaultConfig.backBufferLength = Infinity;
         hls.DefaultConfig.liveBackBufferLength = 90;
@@ -71,7 +73,8 @@ function enableHlsPlayer(url, item, mediaSource, mediaType) {
 
     // issue head request to get content type
     return new Promise(function (resolve, reject) {
-        import('../../utils/fetch').then((fetchHelper) => {
+        loadDynamicModule(() => import('../../utils/fetch'),
+            '../../utils/fetch').then((fetchHelper) => {
             fetchHelper.ajax({
                 url: url,
                 type: 'HEAD'
@@ -114,7 +117,8 @@ class HtmlAudioPlayer {
 
             let val = options.url;
             console.debug('playing url: ' + val);
-            import('../../scripts/settings/userSettings').then((userSettings) => {
+            loadDynamicModule(() => import('../../scripts/settings/userSettings'),
+                '../../scripts/settings/userSettings').then((userSettings) => {
                 let normalizationGain;
                 if (userSettings.selectAudioNormalization() == 'TrackGain') {
                     normalizationGain = options.item.NormalizationGain

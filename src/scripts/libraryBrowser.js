@@ -1,4 +1,5 @@
 import globalize from 'lib/globalize';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 export function showLayoutMenu (button, currentLayout, views) {
     let dispatchEvent = true;
@@ -17,7 +18,8 @@ export function showLayoutMenu (button, currentLayout, views) {
         };
     });
 
-    import('../components/actionSheet/actionSheet').then(({ default: actionsheet }) => {
+    loadDynamicModule(() => import('../components/actionSheet/actionSheet'),
+        '../components/actionSheet/actionSheet').then(({ default: actionsheet }) => {
         actionsheet.show({
             items: menuItems,
             positionTo: button,
@@ -82,8 +84,8 @@ export function getQueryPagingHtml (options) {
 
 export function showSortMenu (options) {
     Promise.all([
-        import('../components/dialogHelper/dialogHelper'),
-        import('../elements/emby-radio/emby-radio')
+        loadDynamicModule(() => import('../components/dialogHelper/dialogHelper'), '../components/dialogHelper/dialogHelper'),
+        loadDynamicModule(() => import('../elements/emby-radio/emby-radio'), '../elements/emby-radio/emby-radio')
     ]).then(([{ default: dialogHelper }]) => {
         function onSortByChange() {
             const newValue = this.value;

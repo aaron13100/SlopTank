@@ -7,6 +7,7 @@ import cardBuilder from '../../components/cardbuilder/cardBuilder';
 import * as userSettings from '../../scripts/settings/userSettings';
 import globalize from '../../lib/globalize';
 import '../../elements/emby-itemscontainer/emby-itemscontainer';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 export default function (view, params, tabContent) {
     function getPageData() {
@@ -189,7 +190,8 @@ export default function (view, params, tabContent) {
             loading.hide();
             isLoading = false;
 
-            import('../../components/autoFocuser').then(({ default: autoFocuser }) => {
+            loadDynamicModule(() => import('../../components/autoFocuser'),
+                '../../components/autoFocuser').then(({ default: autoFocuser }) => {
                 autoFocuser.autoFocus(page);
             });
         });
@@ -242,7 +244,8 @@ export default function (view, params, tabContent) {
             reloadItems(tabElement);
         });
         tabElement.querySelector('.btnNewCollection').addEventListener('click', () => {
-            import('../../components/collectionEditor/collectionEditor').then(({ default: CollectionEditor }) => {
+            loadDynamicModule(() => import('../../components/collectionEditor/collectionEditor'),
+                '../../components/collectionEditor/collectionEditor').then(({ default: CollectionEditor }) => {
                 const serverId = ApiClient.serverInfo().Id;
                 const collectionEditor = new CollectionEditor();
                 collectionEditor.show({

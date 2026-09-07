@@ -18,6 +18,7 @@ import './imageeditor.scss';
 import alert from '../alert';
 import confirm from '../confirm/confirm';
 import template from './imageeditor.template.html';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 const enableFocusTransform = !browser.slow && !browser.edge;
 
@@ -255,7 +256,8 @@ function renderBackdrops(page, apiClient, item, imageInfos, imageProviders) {
 }
 
 function showImageDownloader(page, imageType) {
-    import('../imageDownloader/imageDownloader').then((ImageDownloader) => {
+    loadDynamicModule(() => import('../imageDownloader/imageDownloader'),
+        '../imageDownloader/imageDownloader').then((ImageDownloader) => {
         ImageDownloader.show(
             currentItem.Id,
             currentItem.ServerId,
@@ -281,7 +283,8 @@ function showActionSheet(context, imageCard) {
     const providerCount = parseInt(imageCard.getAttribute('data-providers'), 10);
     const numImages = parseInt(imageCard.getAttribute('data-numimages'), 10);
 
-    import('../actionSheet/actionSheet').then(({ default: actionSheet }) => {
+    loadDynamicModule(() => import('../actionSheet/actionSheet'),
+        '../actionSheet/actionSheet').then(({ default: actionSheet }) => {
         const commands = [];
 
         commands.push({
@@ -352,7 +355,8 @@ function initEditor(context, options) {
     addListeners(context, 'btnOpenUploadMenu', 'click', function () {
         const imageType = this.getAttribute('data-imagetype');
 
-        import('../imageUploader/imageUploader').then(({ default: imageUploader }) => {
+        loadDynamicModule(() => import('../imageUploader/imageUploader'),
+            '../imageUploader/imageUploader').then(({ default: imageUploader }) => {
             imageUploader.show({
 
                 theme: options.theme,

@@ -1,5 +1,6 @@
 import loading from '../../components/loading/loading';
 import cardBuilder from '../../components/cardbuilder/cardBuilder';
+import { loadDynamicModule } from 'utils/dynamicImport';
 
 function getQuery(params) {
     const key = getSavedQueryKey(params);
@@ -47,7 +48,8 @@ function reloadItems(context, params, promise) {
         });
         loading.hide();
 
-        import('../../components/autoFocuser').then(({ default: autoFocuser }) => {
+        loadDynamicModule(() => import('../../components/autoFocuser'),
+            '../../components/autoFocuser').then(({ default: autoFocuser }) => {
             autoFocuser.autoFocus(context);
         });
     });
