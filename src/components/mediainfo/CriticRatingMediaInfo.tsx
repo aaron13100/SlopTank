@@ -1,6 +1,7 @@
 import React, { type FC } from 'react';
 import classNames from 'classnames';
 import Box from '@mui/material/Box';
+import globalize from 'lib/globalize';
 
 interface CriticRatingMediaInfoProps {
     className?: string;
@@ -15,11 +16,20 @@ const CriticRatingMediaInfo: FC<CriticRatingMediaInfoProps> = ({
         'mediaInfoCriticRating',
         'mediaInfoItem',
         criticRating >= 60 ?
-            'mediaInfoCriticRatingFresh' :
-            'mediaInfoCriticRatingRotten',
+            'mediaInfoCriticRatingPositive' :
+            'mediaInfoCriticRatingNegative',
         className
     );
-    return <Box className={cssClass}>{criticRating}</Box>;
+    const ratingLabel = `${globalize.translate('LabelCriticRating')}: ${criticRating}`;
+
+    return (
+        <Box className={cssClass} aria-label={ratingLabel}>
+            <span className='mediaInfoCriticRatingSymbol' aria-hidden='true'>
+                {criticRating >= 60 ? '+' : '−'}
+            </span>
+            {criticRating}
+        </Box>
+    );
 };
 
 export default CriticRatingMediaInfo;

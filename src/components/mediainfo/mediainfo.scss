@@ -57,29 +57,31 @@
 }
 
 .mediaInfoCriticRating {
-    background-repeat: no-repeat;
-    background-size: auto 1.2em;
     min-height: 1.2em;
     display: flex;
     align-items: center;
-
-    [dir="ltr"] & {
-        padding-left: 1.5em;
-        background-position: left center;
-    }
-
-    [dir="rtl"] & {
-        padding-right: 1.5em;
-        background-position: right center;
-    }
+    gap: 0.25em;
 }
 
-.mediaInfoCriticRatingFresh {
-    background-image: url(../../assets/img/fresh.svg);
+.mediaInfoCriticRatingSymbol {
+    align-items: center;
+    border: 0.12em solid currentcolor;
+    border-radius: 50%;
+    display: inline-flex;
+    font-size: 0.85em;
+    font-weight: bold;
+    height: 1.1em;
+    justify-content: center;
+    line-height: 1;
+    width: 1.1em;
 }
 
-.mediaInfoCriticRatingRotten {
-    background-image: url(../../assets/img/rotten.svg);
+.mediaInfoCriticRatingPositive .mediaInfoCriticRatingSymbol {
+    color: #66d17a;
+}
+
+.mediaInfoCriticRatingNegative .mediaInfoCriticRatingSymbol {
+    color: #ff8a80;
 }
 
 .mediaInfoProgramAttribute {

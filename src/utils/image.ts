@@ -11,87 +11,71 @@ function getWebDeviceIcon(browser: string | null | undefined) {
         case 'Opera':
         case 'Opera TV':
         case 'Opera Android':
-            return BASE_DEVICE_IMAGE_URL + 'opera.svg';
         case 'Chrome':
         case 'Chrome Android':
-            return BASE_DEVICE_IMAGE_URL + 'chrome.svg';
         case 'Firefox':
         case 'Firefox Android':
-            return BASE_DEVICE_IMAGE_URL + 'firefox.svg';
         case 'Safari':
         case 'Safari iPad':
         case 'Safari iPhone':
-            return BASE_DEVICE_IMAGE_URL + 'safari.svg';
         case 'Edge Chromium':
         case 'Edge Chromium Android':
         case 'Edge Chromium iPad':
         case 'Edge Chromium iPhone':
-            return BASE_DEVICE_IMAGE_URL + 'edgechromium.svg';
         case 'Edge':
-            return BASE_DEVICE_IMAGE_URL + 'edge.svg';
         case 'Internet Explorer':
-            return BASE_DEVICE_IMAGE_URL + 'msie.svg';
         case 'Titan OS':
-            return BASE_DEVICE_IMAGE_URL + 'titanos.svg';
         case 'Vega OS':
-            return BASE_DEVICE_IMAGE_URL + 'firetv.svg';
         default:
-            return BASE_DEVICE_IMAGE_URL + 'html5.svg';
+            return BASE_DEVICE_IMAGE_URL + 'browser.svg';
     }
 }
 
 export function getDeviceIcon(info: DeviceInfo | SessionInfo) {
     switch ((info as DeviceInfo).AppName || (info as SessionInfo).Client) {
         case 'Samsung Smart TV':
-            return BASE_DEVICE_IMAGE_URL + 'samsungtv.svg';
+            return BASE_DEVICE_IMAGE_URL + 'television.svg';
         case 'Xbox One':
-            return BASE_DEVICE_IMAGE_URL + 'xbox.svg';
         case 'Sony PS4':
-            return BASE_DEVICE_IMAGE_URL + 'playstation.svg';
+            return BASE_DEVICE_IMAGE_URL + 'game-console.svg';
         case 'Kodi':
         case 'Kodi JellyCon':
-            return BASE_DEVICE_IMAGE_URL + 'kodi.svg';
+            return BASE_DEVICE_IMAGE_URL + 'television.svg';
         case 'Jellyfin Android':
+            return BASE_DEVICE_IMAGE_URL + 'mobile.svg';
         case 'AndroidTV':
         case 'Android TV':
         case 'Jellyfin Android TV':
-        case 'Jellyfin for Android':
         case 'Jellyfin for Android TV':
-            return BASE_DEVICE_IMAGE_URL + 'android.svg';
+            return BASE_DEVICE_IMAGE_URL + 'television.svg';
+        case 'Jellyfin for Android':
         case 'Jellyfin Mobile (iOS)':
         case 'Jellyfin Mobile (iPadOS)':
         case 'Jellyfin iOS':
         case 'Jellyfin iPadOS':
-        case 'Jellyfin tvOS':
         case 'Swiftfin iPadOS':
         case 'Swiftfin iOS':
+            return BASE_DEVICE_IMAGE_URL + 'mobile.svg';
+        case 'Jellyfin tvOS':
         case 'Swiftfin tvOS':
+            return BASE_DEVICE_IMAGE_URL + 'television.svg';
         case 'Infuse':
         case 'Infuse-Direct':
         case 'Infuse-Library':
-            return BASE_DEVICE_IMAGE_URL + 'apple.svg';
+            return BASE_DEVICE_IMAGE_URL + 'media-player.svg';
         case 'Home Assistant':
-            return BASE_DEVICE_IMAGE_URL + 'home-assistant.svg';
+            return BASE_DEVICE_IMAGE_URL + 'home-automation.svg';
         case 'Jellyfin for WebOS':
         case 'LG Smart TV':
-            return BASE_DEVICE_IMAGE_URL + 'webos.svg';
         case 'Jellyfin Roku':
-            return BASE_DEVICE_IMAGE_URL + 'roku.svg';
         case 'Jellyfin for Titan OS':
-            return BASE_DEVICE_IMAGE_URL + 'titanos.svg';
+            return BASE_DEVICE_IMAGE_URL + 'television.svg';
         case 'Finamp':
-            return BASE_DEVICE_IMAGE_URL + 'finamp.svg';
+            return BASE_DEVICE_IMAGE_URL + 'audio-player.svg';
         case 'SlopTank':
             return getWebDeviceIcon((info as DeviceInfo).Name || (info as SessionInfo).DeviceName);
         default:
-            if (info.Capabilities?.IconUrl) {
-                try {
-                    return new URL(info.Capabilities.IconUrl).toString();
-                } catch (err) {
-                    console.error('[getDeviceIcon] device capabilities has invalid IconUrl', info, err);
-                }
-            }
-            return BASE_DEVICE_IMAGE_URL + 'other.svg';
+            return BASE_DEVICE_IMAGE_URL + 'device.svg';
     }
 }
 

@@ -10,48 +10,34 @@ Except where this file says otherwise, these assets are distributed as part of
 SlopTank under the repository's `GPL-2.0-only` licence. A copyright licence does
 not grant rights in a third party's trademark.
 
-## Device-identification artwork
+## Current generic interface artwork
 
-The following files were received through the Jellyfin Web repository. The
-source link is the upstream commit that first added that file to Jellyfin Web;
-the licence shown is the `GPL-2.0-only` licence under which Jellyfin Web made
-the source available. The names Android, Apple, Chrome, Edge, Finamp, Firefox,
-Fire TV, Home Assistant, HTML5, Internet Explorer, Kodi, Opera, PlayStation,
-Roku, Safari, Samsung, Titan OS, webOS, Windows, and Xbox, and their associated
-logos, may be trademarks of their respective owners.
+The eight SVGs under `src/assets/img/devices/` were drawn for SlopTank as
+simple category symbols: web browser, television, game console, mobile device,
+media player, audio player, home automation, and a general connected-device
+fallback. They contain no third-party name, logo, character, or copied vector.
+To the extent copyright or any other licensable rights exist in these files,
+the project owner licenses those rights under `GPL-2.0-only`.
 
-| File | Upstream source | Licence as received |
-| --- | --- | --- |
-| `src/assets/img/devices/android.svg` | [Jellyfin Web commit `a02e80a`](https://github.com/jellyfin/jellyfin-web/commit/a02e80a08cf14f3f7a43bafea865f4f129a76f05) | GPL-2.0-only |
-| `src/assets/img/devices/apple.svg` | [Jellyfin Web commit `dc4b817`](https://github.com/jellyfin/jellyfin-web/commit/dc4b817226949b7dde3d4bb5d8215a40fdf09b88) | GPL-2.0-only |
-| `src/assets/img/devices/chrome.svg` | [Jellyfin Web commit `f370715`](https://github.com/jellyfin/jellyfin-web/commit/f3707153a0bf0d025c13124b665a676a9e3668f4) | GPL-2.0-only |
-| `src/assets/img/devices/edge.svg` | [Jellyfin Web commit `f370715`](https://github.com/jellyfin/jellyfin-web/commit/f3707153a0bf0d025c13124b665a676a9e3668f4) | GPL-2.0-only |
-| `src/assets/img/devices/edgechromium.svg` | [Jellyfin Web commit `7e5be8e`](https://github.com/jellyfin/jellyfin-web/commit/7e5be8e05e5a4f24d527c88bf3fb43f9a379d9e2) | GPL-2.0-only |
-| `src/assets/img/devices/finamp.svg` | [Jellyfin Web commit `7d923f1`](https://github.com/jellyfin/jellyfin-web/commit/7d923f10f412ca0c7ffb5a9078bcc91e2873355f) | GPL-2.0-only |
-| `src/assets/img/devices/firefox.svg` | [Jellyfin Web commit `f370715`](https://github.com/jellyfin/jellyfin-web/commit/f3707153a0bf0d025c13124b665a676a9e3668f4) | GPL-2.0-only |
-| `src/assets/img/devices/firetv.svg` | [Jellyfin Web commit `5ec2eff`](https://github.com/jellyfin/jellyfin-web/commit/5ec2eff99a708454d57b17219d14dcd3cac5d17c) | GPL-2.0-only |
-| `src/assets/img/devices/home-assistant.svg` | [Jellyfin Web commit `0640bb9`](https://github.com/jellyfin/jellyfin-web/commit/0640bb9d43e2f6883f2cefc21b707a6017d6fe40) | GPL-2.0-only |
-| `src/assets/img/devices/html5.svg` | [Jellyfin Web commit `f370715`](https://github.com/jellyfin/jellyfin-web/commit/f3707153a0bf0d025c13124b665a676a9e3668f4) | GPL-2.0-only |
-| `src/assets/img/devices/kodi.svg` | [Jellyfin Web commit `a02e80a`](https://github.com/jellyfin/jellyfin-web/commit/a02e80a08cf14f3f7a43bafea865f4f129a76f05) | GPL-2.0-only |
-| `src/assets/img/devices/msie.svg` | [Jellyfin Web commit `f370715`](https://github.com/jellyfin/jellyfin-web/commit/f3707153a0bf0d025c13124b665a676a9e3668f4) | GPL-2.0-only |
-| `src/assets/img/devices/opera.svg` | [Jellyfin Web commit `f370715`](https://github.com/jellyfin/jellyfin-web/commit/f3707153a0bf0d025c13124b665a676a9e3668f4) | GPL-2.0-only |
-| `src/assets/img/devices/other.svg` | [Jellyfin Web commit `f370715`](https://github.com/jellyfin/jellyfin-web/commit/f3707153a0bf0d025c13124b665a676a9e3668f4) | GPL-2.0-only |
-| `src/assets/img/devices/playstation.svg` | [Jellyfin Web commit `f370715`](https://github.com/jellyfin/jellyfin-web/commit/f3707153a0bf0d025c13124b665a676a9e3668f4) | GPL-2.0-only |
-| `src/assets/img/devices/roku.svg` | [Jellyfin Web commit `7d923f1`](https://github.com/jellyfin/jellyfin-web/commit/7d923f10f412ca0c7ffb5a9078bcc91e2873355f) | GPL-2.0-only |
-| `src/assets/img/devices/safari.svg` | [Jellyfin Web commit `f370715`](https://github.com/jellyfin/jellyfin-web/commit/f3707153a0bf0d025c13124b665a676a9e3668f4) | GPL-2.0-only |
-| `src/assets/img/devices/samsungtv.svg` | [Jellyfin Web commit `f370715`](https://github.com/jellyfin/jellyfin-web/commit/f3707153a0bf0d025c13124b665a676a9e3668f4) | GPL-2.0-only |
-| `src/assets/img/devices/titanos.svg` | [Jellyfin Web commit `91cfc15`](https://github.com/jellyfin/jellyfin-web/commit/91cfc15e1c2dcf7178d9c745413bd6cbd3762176) | GPL-2.0-only |
-| `src/assets/img/devices/webos.svg` | [Jellyfin Web commit `bc9537d`](https://github.com/jellyfin/jellyfin-web/commit/bc9537d80fe397c24f991d1e778302506bf185dd) | GPL-2.0-only |
-| `src/assets/img/devices/windows.svg` | [Jellyfin Web commit `f370715`](https://github.com/jellyfin/jellyfin-web/commit/f3707153a0bf0d025c13124b665a676a9e3668f4) | GPL-2.0-only |
-| `src/assets/img/devices/xbox.svg` | [Jellyfin Web commit `f370715`](https://github.com/jellyfin/jellyfin-web/commit/f3707153a0bf0d025c13124b665a676a9e3668f4) | GPL-2.0-only |
+Critic scores use the text symbols `+` and `−`, an accessible text label, and
+colour as a redundant cue. They do not use rating-service artwork. Product and
+platform names returned by the server remain visible as factual session
+metadata where needed to identify a client's software or device.
 
-## Rating-source artwork
+## Removed legacy artwork
 
-`src/assets/img/fresh.svg` and `src/assets/img/rotten.svg` were received from
-[Jellyfin Web commit `a9833ba`](https://github.com/jellyfin/jellyfin-web/commit/a9833ba3981425515a426d0692ae41d1c57bbf00)
-under `GPL-2.0-only`. They identify ratings supplied by Rotten Tomatoes.
-Rotten Tomatoes and its associated marks are the property of their respective
-owner; SlopTank is not affiliated with or endorsed by Rotten Tomatoes.
+The fork previously contained 22 device/platform SVGs received through
+Jellyfin Web and the `fresh.svg` and `rotten.svg` rating graphics received in
+[Jellyfin Web commit `a9833ba`](https://github.com/jellyfin/jellyfin-web/commit/a9833ba3981425515a426d0692ae41d1c57bbf00).
+They were available under the inherited `GPL-2.0-only` licence, but many
+depicted third-party marks. SlopTank removed all 24 files before commercial
+distribution; their provenance remains available in repository history.
+
+The removed device filenames were: `android.svg`, `apple.svg`, `chrome.svg`,
+`edge.svg`, `edgechromium.svg`, `finamp.svg`, `firefox.svg`, `firetv.svg`,
+`home-assistant.svg`, `html5.svg`, `kodi.svg`, `msie.svg`, `opera.svg`,
+`other.svg`, `playstation.svg`, `roku.svg`, `safari.svg`, `samsungtv.svg`,
+`titanos.svg`, `webos.svg`, `windows.svg`, and `xbox.svg`.
 
 ## SlopTank profile avatars
 

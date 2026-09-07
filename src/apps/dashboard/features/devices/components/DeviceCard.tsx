@@ -171,7 +171,7 @@ const DeviceCard = ({ device }: DeviceCardProps) => {
                                 maxWidth: '2.5em',
                                 maxHeight: '2.5em'
                             }}
-                            alt={device.DeviceName || ''}
+                            alt={device.Client || device.DeviceName || globalize.translate('LabelDevice')}
                         />
                         <Stack>
                             <Typography>{device.DeviceName}</Typography>
