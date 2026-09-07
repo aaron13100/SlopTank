@@ -1,0 +1,18 @@
+{
+  "schema": "org.sloptank.build-recipe/v1",
+  "artifact_kind": "web",
+  "working_directory": ".",
+  "dependency_locks": [
+    "package-lock.json"
+  ],
+  "toolchain_constraints": {
+    "node": ">=24.0.0",
+    "npm": ">=11.0.0"
+  },
+  "commands": [
+    ["npm", "ci"],
+    ["npm", "run", "build:production"]
+  ],
+  "output": "dist",
+  "license_policy": "inherited-web=GPL-2.0;owner-increments=GPL-2.0-or-later"
+}
