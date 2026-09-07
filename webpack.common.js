@@ -7,6 +7,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const { DefinePlugin, IgnorePlugin } = require('webpack');
 const packageJson = require('./package.json');
+const ProductionModuleBoundaryPlugin = require('./scripts/webpack/production-module-boundary-plugin');
 const ThirdPartyNoticesPlugin = require('./scripts/webpack/third-party-notices-plugin');
 
 const Assets = [
@@ -122,7 +123,13 @@ const config = {
             licenseFile: path.resolve(__dirname, 'LICENSE'),
             attributionsFile: path.resolve(__dirname, 'ATTRIBUTIONS.md'),
             licenseTextsDir: path.resolve(__dirname, 'scripts/license-texts')
-        })
+        }),
+        ...DEV_MODE ? [] : [
+            new ProductionModuleBoundaryPlugin({
+                projectRoot: __dirname,
+                packageLockFile: path.resolve(__dirname, 'package-lock.json')
+            })
+        ]
     ],
     output: {
         filename: pathData => (

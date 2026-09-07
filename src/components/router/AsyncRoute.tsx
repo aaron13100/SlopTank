@@ -17,11 +17,11 @@ export interface AsyncRoute {
 const importRoute = (page: string, type: AppType) => {
     switch (type) {
         case AppType.Dashboard:
-            return import(/* webpackChunkName: "[request]" */ `../../apps/dashboard/routes/${page}`);
+            return import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/dashboard/routes/${page}`);
         case AppType.Experimental:
-            return import(/* webpackChunkName: "[request]" */ `../../apps/experimental/routes/${page}`);
+            return import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/experimental/routes/${page}`);
         case AppType.Stable:
-            return import(/* webpackChunkName: "[request]" */ `../../apps/stable/routes/${page}`);
+            return import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/stable/routes/${page}`);
     }
 };
 

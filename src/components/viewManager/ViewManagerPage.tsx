@@ -48,20 +48,20 @@ const importController = (
     switch (appType) {
         case AppType.Dashboard:
             return Promise.all([
-                import(/* webpackChunkName: "[request]" */ `../../apps/dashboard/controllers/${controller}`),
-                import(/* webpackChunkName: "[request]" */ `../../apps/dashboard/controllers/${view}`)
+                import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/dashboard/controllers/${controller}`),
+                import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/dashboard/controllers/${view}`)
                     .then(html => globalize.translateHtml(html))
             ]);
         case AppType.Wizard:
             return Promise.all([
-                import(/* webpackChunkName: "[request]" */ `../../apps/wizard/controllers/${controller}`),
-                import(/* webpackChunkName: "[request]" */ `../../apps/wizard/controllers/${view}`)
+                import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/wizard/controllers/${controller}`),
+                import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../apps/wizard/controllers/${view}`)
                     .then(html => globalize.translateHtml(html))
             ]);
         default:
             return Promise.all([
-                import(/* webpackChunkName: "[request]" */ `../../controllers/${controller}`),
-                import(/* webpackChunkName: "[request]" */ `../../controllers/${view}`)
+                import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../controllers/${controller}`),
+                import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../controllers/${view}`)
                     .then(html => globalize.translateHtml(html))
             ]);
     }

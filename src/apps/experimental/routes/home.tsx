@@ -70,7 +70,7 @@ const Home = () => {
                 depends = 'favorites';
         }
 
-        return import(/* webpackChunkName: "[request]" */ `../../../controllers/${depends}`).then(({ default: ControllerFactory }) => {
+        return import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../../controllers/${depends}`).then(({ default: ControllerFactory }) => {
             let controller = tabControllers[index];
 
             if (!controller) {
