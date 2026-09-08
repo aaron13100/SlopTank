@@ -3,25 +3,37 @@ import fetchLocal from '../../utils/fetchLocal.ts';
 import { trimTrailingSlashes } from '../../utils/url.ts';
 
 let data;
+let configPromise;
 
-async function getConfig() {
+export async function getConfig() {
     if (data) return Promise.resolve(data);
+    if (!configPromise) {
+        configPromise = (async () => {
+            try {
+                const response = await fetchLocal('config.json', {
+                    cache: 'no-store'
+                });
+
+                if (!response.ok) {
+                    throw new Error('network response was not ok');
+                }
+
+                data = await response.json();
+            } catch (error) {
+                console.warn('failed to fetch the web config file:', error);
+                data = DefaultConfig;
+            }
+
+            return data;
+        })();
+    }
+
     try {
-        const response = await fetchLocal('config.json', {
-            cache: 'no-store'
-        });
-
-        if (!response.ok) {
-            throw new Error('network response was not ok');
+        return await configPromise;
+    } finally {
+        if (!data) {
+            configPromise = undefined;
         }
-
-        data = await response.json();
-
-        return data;
-    } catch (error) {
-        console.warn('failed to fetch the web config file:', error);
-        data = DefaultConfig;
-        return data;
     }
 }
 

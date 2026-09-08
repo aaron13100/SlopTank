@@ -17,6 +17,7 @@ import dialogHelper from '../components/dialogHelper/dialogHelper';
 import itemIdentifier from '../components/itemidentifier/itemidentifier';
 import { getLocationSearch } from './url.ts';
 import { queryClient } from './query/queryClient';
+import { rememberPublicSystemInfo } from './publicSystemInfoHandoff';
 
 export function getCurrentUser() {
     return window.ApiClient.getCurrentUser(false);
@@ -81,6 +82,9 @@ export async function serverAddress() {
         return responses.filter(obj => obj?.config);
     }).then(configs => {
         const selection = configs.find(obj => !obj.config.StartupWizardCompleted) || configs[0];
+        if (selection) {
+            rememberPublicSystemInfo(selection.url, selection.config);
+        }
         return selection?.url;
     }).catch(error => {
         console.error(error);

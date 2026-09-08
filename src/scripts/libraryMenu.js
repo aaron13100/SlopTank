@@ -730,19 +730,15 @@ function setTabs (type, selectedIndex, builder) {
 }
 
 /**
- * Fetch the server name and update the document title.
+ * Use the connected server name to update the document title.
  * @param {ApiClient} [_apiClient] The current api client.
  */
 const fetchServerName = (_apiClient) => {
-    _apiClient
-        ?.getPublicSystemInfo()
-        .then(({ ServerName }) => {
-            documentTitle = ServerName || documentTitle;
-            document.title = documentTitle;
-        })
-        .catch(err => {
-            console.error('[LibraryMenu] failed to fetch system info', err);
-        });
+    const serverName = _apiClient?.serverName();
+    if (serverName) {
+        documentTitle = serverName;
+        document.title = documentTitle;
+    }
 };
 
 function setDefaultTitle () {
@@ -835,6 +831,10 @@ pageClassOn('pageshow', 'page', function (e) {
 
 Events.on(ServerConnections, 'apiclientcreated', (e, newApiClient) => {
     fetchServerName(newApiClient);
+});
+
+Events.on(ServerConnections, 'connected', (e, result) => {
+    fetchServerName(result.ApiClient);
 });
 
 Events.on(ServerConnections, 'localusersignedin', function (e, user) {

@@ -9,6 +9,8 @@ import { setUserInfo } from 'scripts/settings/userSettings';
 import Dashboard from 'utils/dashboard';
 import Events from 'utils/events.ts';
 import { toApi } from 'utils/jellyfin-apiclient/compat';
+import { invalidateBootstrapCurrentUser } from 'utils/bootstrapCurrentUser';
+import { queryClient } from 'utils/query/queryClient';
 
 import ConnectionManager from './connectionManager';
 
@@ -84,6 +86,12 @@ class ServerConnections extends ConnectionManager {
 
     setLocalApiClient(apiClient) {
         if (apiClient) {
+            if (this.localApiClient && this.localApiClient !== apiClient) {
+                invalidateBootstrapCurrentUser(this.localApiClient);
+                invalidateBootstrapCurrentUser(apiClient);
+                queryClient.removeQueries({ queryKey: [ 'SystemInfo' ] });
+                queryClient.removeQueries({ queryKey: [ 'BrandingOptions' ] });
+            }
             this.localApiClient = apiClient;
             window.ApiClient = apiClient;
         }

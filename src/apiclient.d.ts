@@ -38,6 +38,7 @@ declare module 'jellyfin-apiclient' {
         PluginInfo,
         PluginSecurityInfo,
         PreviousItemRequestDto,
+        PublicSystemInfo,
         QueryFiltersLegacy,
         QueueRequestDto,
         QuickConnectResult,
@@ -317,6 +318,7 @@ declare module 'jellyfin-apiclient' {
         ApiClient: ApiClient
         Servers: any[]
         State: ConnectionState
+        SystemInfo?: PublicSystemInfo
     }
 
     class ConnectionManager {

@@ -6,6 +6,10 @@ import { ApiClient } from 'jellyfin-apiclient';
 import events from 'utils/events';
 import { ajax } from 'utils/fetch';
 import { equalsIgnoreCase } from 'utils/string';
+import { getBootstrapCurrentUser, invalidateBootstrapCurrentUser } from 'utils/bootstrapCurrentUser';
+import { getPublicSystemInfoForConnection } from 'utils/publicSystemInfoHandoff';
+import { getSystemInfoQueryKey } from 'utils/query/bootstrapQueryKeys';
+import { queryClient } from 'utils/query/queryClient';
 
 import { ConnectionMode } from './connectionMode';
 import { ConnectionState } from './connectionState';
@@ -168,6 +172,7 @@ export default class ConnectionManager {
         };
 
         function onAuthenticated(apiClient, result, options, saveCredentials) {
+            invalidateBootstrapCurrentUser(apiClient);
             const credentials = credentialProvider.credentials();
             const servers = credentials.Servers.filter((s) => s.Id === result.ServerId);
 
@@ -245,6 +250,10 @@ export default class ConnectionManager {
             }).then(
                 (systemInfo) => {
                     updateServerInfo(server, systemInfo);
+                    queryClient.setQueryData(
+                        getSystemInfoQueryKey(serverUrl, server.UserId),
+                        systemInfo
+                    );
                     return Promise.resolve();
                 },
                 () => {
@@ -282,7 +291,7 @@ export default class ConnectionManager {
 
                 function onLocalUserDone() {
                     if (apiClient && apiClient.getCurrentUserId()) {
-                        apiClient.getCurrentUser().then((u) => {
+                        getBootstrapCurrentUser(apiClient).then((u) => {
                             localUser = u;
                             const image = getImageUrl(localUser);
 
@@ -328,6 +337,7 @@ export default class ConnectionManager {
         };
 
         function logoutOfServer(apiClient) {
+            invalidateBootstrapCurrentUser(apiClient);
             const serverInfo = apiClient.serverInfo() || {};
 
             const logoutInfo = {
@@ -440,24 +450,26 @@ export default class ConnectionManager {
         function getTryConnectPromise(url, connectionMode, state, resolve, reject) {
             console.log('getTryConnectPromise ' + url);
 
-            ajax({
+            const handleSuccess = (result) => {
+                if (!state.resolved) {
+                    state.resolved = true;
+
+                    console.log('Reconnect succeeded to ' + url);
+                    resolve({
+                        url: url,
+                        connectionMode: connectionMode,
+                        data: result
+                    });
+                }
+            };
+
+            getPublicSystemInfoForConnection(url, () => ajax({
                 url: `${url}/System/Info/Public`,
                 timeout: DEFAULT_CONNECTION_TIMEOUT,
                 type: 'GET',
                 dataType: 'json'
-            }).then(
-                (result) => {
-                    if (!state.resolved) {
-                        state.resolved = true;
-
-                        console.log('Reconnect succeeded to ' + url);
-                        resolve({
-                            url: url,
-                            connectionMode: connectionMode,
-                            data: result
-                        });
-                    }
-                },
+            })).then(
+                handleSuccess,
                 () => {
                     console.log('Reconnect failed to ' + url);
 
@@ -617,7 +629,7 @@ export default class ConnectionManager {
             if (result.State === ConnectionState.SignedIn) {
                 afterConnected(result.ApiClient, options);
 
-                result.ApiClient.getCurrentUser().then((user) => {
+                getBootstrapCurrentUser(result.ApiClient).then((user) => {
                     onLocalUserSignIn(server, serverUrl, user).then(resolveActions, resolveActions);
                 }, resolveActions);
             } else {

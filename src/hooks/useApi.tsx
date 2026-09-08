@@ -6,6 +6,7 @@ import React, { type FC, type PropsWithChildren, createContext, useCallback, use
 import { ServerConnections } from 'lib/jellyfin-apiclient';
 import events from 'utils/events';
 import { toApi } from 'utils/jellyfin-apiclient/compat';
+import { getBootstrapCurrentUser } from 'utils/bootstrapCurrentUser';
 
 export interface JellyfinApiContext {
     __legacyApiClient__?: ApiClient
@@ -36,7 +37,7 @@ export const ApiProvider: FC<PropsWithChildren<unknown>> = ({ children }) => {
             return;
         }
 
-        const newUser = await apiClient.getCurrentUser(false);
+        const newUser = await getBootstrapCurrentUser(apiClient, true);
         updateApiUser(undefined, newUser);
     }, [ updateApiUser ]);
 

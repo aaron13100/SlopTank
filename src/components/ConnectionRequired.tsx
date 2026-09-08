@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import type { ApiClient, ConnectResponse } from 'jellyfin-apiclient';
 
 import { ConnectionState, ServerConnections } from 'lib/jellyfin-apiclient';
+import { getBootstrapCurrentUser } from 'utils/bootstrapCurrentUser';
 
 import ConnectionErrorPage from './ConnectionErrorPage';
 import Loading from './loading/LoadingComponent';
@@ -38,17 +39,15 @@ const ERROR_STATES = [
     ConnectionState.Unavailable
 ];
 
-const fetchPublicSystemInfo = async (apiClient: ApiClient) => {
-    const infoResponse = await fetch(
-        `${apiClient.serverAddress()}/System/Info/Public`,
-        { cache: 'no-cache' }
-    );
-
-    if (!infoResponse.ok) {
-        throw new Error('Public system info request failed');
+const getPublicSystemInfo = (
+    apiClient: ApiClient,
+    connectionResponse?: ConnectResponse | null
+) => {
+    if (connectionResponse?.SystemInfo) {
+        return connectionResponse.SystemInfo;
     }
 
-    return infoResponse.json();
+    return apiClient.getPublicSystemInfo();
 };
 
 /**
@@ -107,7 +106,7 @@ const ConnectionRequired: FunctionComponent<ConnectionRequiredProps> = ({
             throw new Error('No ApiClient available');
         }
 
-        const systemInfo = await fetchPublicSystemInfo(apiClient);
+        const systemInfo = await getPublicSystemInfo(apiClient, firstConnection);
         if (systemInfo?.StartupWizardCompleted) {
             console.info('[ConnectionRequired] startup wizard is complete, redirecting home');
             navigate(BounceRoutes.Home);
@@ -123,7 +122,7 @@ const ConnectionRequired: FunctionComponent<ConnectionRequiredProps> = ({
         if (firstConnection.State === ConnectionState.ServerSignIn) {
             // Verify the wizard is complete
             try {
-                const systemInfo = await fetchPublicSystemInfo(firstConnection.ApiClient);
+                const systemInfo = await getPublicSystemInfo(firstConnection.ApiClient, firstConnection);
                 if (!systemInfo?.StartupWizardCompleted) {
                     // Update the current ApiClient
                     // TODO: Is there a better place to handle this?
@@ -166,7 +165,7 @@ const ConnectionRequired: FunctionComponent<ConnectionRequiredProps> = ({
         // If this is an admin route, ensure the user has access
         if (level === AccessLevel.Admin) {
             try {
-                const user = await client?.getCurrentUser();
+                const user = client ? await getBootstrapCurrentUser(client) : undefined;
                 if (!user?.Policy?.IsAdministrator) {
                     console.warn('[ConnectionRequired] normal user attempted to access admin route');
                     bounce(await ServerConnections.connect())

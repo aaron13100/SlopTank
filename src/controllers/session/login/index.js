@@ -23,6 +23,9 @@ import { getDefaultBackgroundClass } from '../../../components/cardbuilder/cardB
 import './login.scss';
 import { handleBrandingFetchFailure, handlePublicUserFetchFailure } from './loginBootstrapFailure';
 import { loadDynamicModule } from 'utils/dynamicImport';
+import { getBrandingOptionsQuery } from 'utils/query/brandingOptions';
+import { queryClient } from 'utils/query/queryClient';
+import { toApi } from 'utils/jellyfin-apiclient/compat';
 
 const enableFocusTransform = !browser.slow && !browser.edge;
 
@@ -328,7 +331,7 @@ export default function (view, params) {
                 unableToConnectMessage: globalize.translate('MessageUnableToConnectToServer')
             });
         });
-        apiClient.getJSON(apiClient.getUrl('Branding/Configuration')).then(function (options) {
+        queryClient.fetchQuery(getBrandingOptionsQuery(toApi(apiClient))).then(function (options) {
             const loginDisclaimer = view.querySelector('.loginDisclaimer');
 
             // eslint-disable-next-line sonarjs/disabled-auto-escaping
