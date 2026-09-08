@@ -311,6 +311,20 @@ test.describe('playback start latency', () => {
             // it and lands on "Please sign in", so navigating this page there
             // would measure a login screen rather than a watch link.
             const shared = await page.context().newPage();
+            const permalinkRequests: string[] = [];
+            const capturePermalinkRequest = (request: import('@playwright/test').Request) => {
+                const path = new URL(request.url()).pathname;
+                if (/^\/Permalinks\/[^/]+\/Items$/.test(path)) {
+                    permalinkRequests.push(`${request.method()} /Permalinks/:id/Items`);
+                } else if (/^\/Permalinks\/Candidates\/[^/]+\/PlaybackReadyV1$/.test(path)) {
+                    permalinkRequests.push(
+                        `${request.method()} /Permalinks/Candidates/:handle/PlaybackReadyV1`
+                    );
+                } else if (path.startsWith('/Permalinks/')) {
+                    permalinkRequests.push(`${request.method()} ${path}`);
+                }
+            };
+            shared.on('request', capturePermalinkRequest);
             try {
                 const elapsedMs = await withServerPlayback(shared, itemId, async () => {
                     const started = nowMs();
@@ -326,7 +340,12 @@ test.describe('playback start latency', () => {
                     `opening watch link ${watchUrl} took ${(elapsedMs / 1000).toFixed(2)}s to reach a playing `
                     + `frame, over the ${PLAYBACK_START_BUDGET_MS / 1000}s a person will wait`
                 ).toBeLessThanOrEqual(PLAYBACK_START_BUDGET_MS);
+                expect(permalinkRequests).toEqual([
+                    'GET /Permalinks/:id/Items',
+                    'POST /Permalinks/Candidates/:handle/PlaybackReadyV1'
+                ]);
             } finally {
+                shared.off('request', capturePermalinkRequest);
                 await shared.close();
             }
         }
