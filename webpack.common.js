@@ -21,6 +21,9 @@ const Assets = [
     'pdfjs-dist/build/pdf.worker.js',
     'libpgs/dist/libpgs.worker.js'
 ];
+const CopiedRuntimeResources = Assets.map(asset =>
+    path.resolve(__dirname, 'node_modules', asset)
+);
 
 // CopyPlugin assets bypass webpack's module graph. Keep their package roots
 // in the distribution inventory explicitly so copied runtime code cannot be
@@ -140,7 +143,8 @@ const config = {
         ...DEV_MODE ? [] : [
             new ProductionModuleBoundaryPlugin({
                 projectRoot: __dirname,
-                packageLockFile: path.resolve(__dirname, 'package-lock.json')
+                packageLockFile: path.resolve(__dirname, 'package-lock.json'),
+                additionalResources: CopiedRuntimeResources
             })
         ]
     ],

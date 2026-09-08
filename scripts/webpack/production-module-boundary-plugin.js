@@ -42,9 +42,10 @@ function isTestResource(resourcePath) {
 }
 
 class ProductionModuleBoundaryPlugin {
-    constructor({ projectRoot, packageLockFile }) {
+    constructor({ projectRoot, packageLockFile, additionalResources = [] }) {
         this.projectRoot = canonicalPath(projectRoot);
         this.packageLockFile = path.resolve(packageLockFile);
+        this.additionalResources = additionalResources.map(canonicalPath);
     }
 
     apply(compiler) {
@@ -61,22 +62,34 @@ class ProductionModuleBoundaryPlugin {
                 }
 
                 const violations = [];
-                for (const module of modules) {
-                    const resource = module.resource?.split('?')[0];
-                    if (!resource) {
-                        continue;
-                    }
-
+                const shippedPackageDirs = new Set();
+                const inspectResource = resource => {
                     const relativeResource = normalizeRelativePath(this.projectRoot, resource);
                     if (!relativeResource.startsWith('../') && isTestResource(relativeResource)) {
                         violations.push(`test source: ${relativeResource}`);
                     }
 
                     const packageDir = findPackageDir(resource);
-                    if (!packageDir) {
-                        continue;
+                    if (packageDir) {
+                        shippedPackageDirs.add(packageDir);
                     }
+                };
+                for (const module of modules) {
+                    const resource = module.resource?.split('?')[0];
+                    if (resource) {
+                        inspectResource(resource);
+                    }
+                }
 
+                // Files copied directly into dist never enter webpack's module
+                // graph. Inspect both their source paths and package roots so
+                // copied tests, dev-only packages, and unknown packages cannot
+                // bypass this boundary.
+                for (const resource of this.additionalResources) {
+                    inspectResource(resource);
+                }
+
+                for (const packageDir of shippedPackageDirs) {
                     const lockKey = normalizeRelativePath(this.projectRoot, packageDir);
                     const lockEntry = lockPackages[lockKey];
                     if (!lockEntry) {
