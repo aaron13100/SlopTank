@@ -85,6 +85,47 @@ function canonicalLicenseId(id) {
     return LICENSE_ID_ALIASES[id] || id;
 }
 
+function normalizedMetadataText(value) {
+    return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+}
+
+function formatPerson(value) {
+    if (typeof value === 'string') {
+        return normalizedMetadataText(value);
+    }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return '';
+    }
+    const name = normalizedMetadataText(value.name);
+    const email = normalizedMetadataText(value.email);
+    const url = normalizedMetadataText(value.url);
+    return [
+        name,
+        email ? `<${email}>` : '',
+        url ? `(${url})` : ''
+    ].filter(Boolean).join(' ');
+}
+
+function packageAttributionLines(packageJson) {
+    const lines = [];
+    const copyright = normalizedMetadataText(packageJson.copyright);
+    const author = formatPerson(packageJson.author);
+    const contributors = (Array.isArray(packageJson.contributors) ?
+        packageJson.contributors : [ packageJson.contributors ])
+        .map(formatPerson)
+        .filter(Boolean);
+    if (copyright) {
+        lines.push(`Copyright: ${copyright}`);
+    }
+    if (author) {
+        lines.push(`Package author: ${author}`);
+    }
+    if (contributors.length) {
+        lines.push(`Package contributors: ${contributors.join('; ')}`);
+    }
+    return lines;
+}
+
 // Extracts the distinct license identifiers referenced by an SPDX-ish
 // expression. Every dependency license in this tree is a simple `ID`,
 // `(ID)`, `ID AND ID`, or `ID AND (ID OR ID)` shape with no `WITH`
@@ -240,7 +281,11 @@ class ThirdPartyNoticesPlugin {
         const isCompound = /\bAND\b|\bOR\b/.test(declared);
         const licenseIds = extractLicenseIds(declared);
 
-        const parts = [`${name} ${version}`, `Declared license: ${declared}`];
+        const parts = [
+            `${name} ${version}`,
+            `Declared license: ${declared}`,
+            ...packageAttributionLines(packageJson)
+        ];
 
         if (bundled) {
             parts.push(
