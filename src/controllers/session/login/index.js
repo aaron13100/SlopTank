@@ -21,6 +21,7 @@ import baseAlert from '../../../components/alert';
 import { getDefaultBackgroundClass } from '../../../components/cardbuilder/cardBuilderUtils';
 
 import './login.scss';
+import { handleBrandingFetchFailure, handlePublicUserFetchFailure } from './loginBootstrapFailure';
 import { loadDynamicModule } from 'utils/dynamicImport';
 
 const enableFocusTransform = !browser.slow && !browser.edge;
@@ -314,8 +315,18 @@ export default function (view, params) {
                 view.querySelector('#txtManualName').value = '';
                 showManualForm(view, false, false);
             }
-        }).catch().then(function () {
             loading.hide();
+        }, function (failure) {
+            handlePublicUserFetchFailure(failure, {
+                hideLoading: () => loading.hide(),
+                log: (message, cause) => console.error(message, cause),
+                showManualForm: () => {
+                    view.querySelector('#txtManualName').value = '';
+                    showManualForm(view, false, false);
+                },
+                showToast: message => toast(message),
+                unableToConnectMessage: globalize.translate('MessageUnableToConnectToServer')
+            });
         });
         apiClient.getJSON(apiClient.getUrl('Branding/Configuration')).then(function (options) {
             const loginDisclaimer = view.querySelector('.loginDisclaimer');
@@ -334,6 +345,11 @@ export default function (view, params) {
                     elem.tabIndex = -1;
                 }
             }
+        }, function (failure) {
+            handleBrandingFetchFailure(
+                failure,
+                (message, cause) => console.error(message, cause)
+            );
         });
     });
     view.addEventListener('viewhide', function () {
