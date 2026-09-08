@@ -35,6 +35,34 @@ notices and GPLv2 sections 0 and 9, not a warranty about every historical
 rightsholder's grant. A release remains blocked unless its exact runtime
 dependency graph is compatible with the elected option.
 
+## Handwritten source gate
+
+`scripts/handwritten-source-provenance.json` is the reviewed inventory for
+source comments that identify copied, adapted, or technique-derived
+handwritten code. It also records retained inline-licensed source, removed
+legacy source, and original replacements. The private release gate compares
+the inventory with markers in the current source tree and rejects an unknown
+derivation marker. `ATTRIBUTIONS.md` carries the corresponding human-readable
+notice.
+
+The old Chromecast lifecycle said it was based on Google's
+[`CastVideos-chrome`](https://github.com/googlecast/CastVideos-chrome/tree/e97c410d0f21d38f2717c990df10db8577958cc4)
+sample, which Google's repository distributes under
+[Apache License 2.0](https://github.com/googlecast/CastVideos-chrome/blob/e97c410d0f21d38f2717c990df10db8577958cc4/LICENSE).
+The Apache Software Foundation documents
+[Apache-2.0 as incompatible with GPL version 2](https://www.apache.org/licenses/GPL-compatibility.html).
+The old source comment linked a mutable branch and did not establish which
+historical sample revision was used. SlopTank therefore removed that
+implementation and replaced it with an original adapter written from the
+official
+[Cast Web Sender Base API](https://developers.google.com/cast/docs/reference/web_sender/chrome.cast)
+contracts. The old `fetchLocal.ts` comments pointing to `github/fetch` were
+also removed with an original browser-API implementation, and an unused copied
+filename sanitizer was removed. No claim is made that a text scan can prove
+the absence of undisclosed copying; the gate is a fail-closed control for
+declared derivation markers and the known implementation fingerprints reviewed
+for this release.
+
 ## Reproducing the web artifact
 
 Use the committed recipe in `release-source.json`. In summary, use the stated

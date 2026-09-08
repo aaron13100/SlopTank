@@ -3,14 +3,13 @@ import * as userSettings from '../../scripts/settings/userSettings';
 import { playbackManager } from '../../components/playback/playbackmanager';
 import globalize from '../../lib/globalize';
 import CastSenderApi from './castSenderApi';
+import CastTransport from './castTransport';
 import alert from '../../components/alert';
 import { ServerConnections } from 'lib/jellyfin-apiclient';
 import { PluginType } from '../../types/plugin.ts';
 import Events from '../../utils/events.ts';
 import { getItems } from '../../utils/jellyfin-apiclient/getItems.ts';
 import { getTextSizeMultiplier } from '../../components/subtitlesettings/subtitleappearancehelper';
-
-// Based on https://github.com/googlecast/CastVideos-chrome/blob/master/CastVideos.js
 
 const PlayerName = 'Google Cast';
 
@@ -38,140 +37,65 @@ function sendConnectionResult(isOk) {
     }
 }
 
-/**
- * Constants of states for Chromecast device
- **/
-const DEVICE_STATE = {
-    'IDLE': 0,
-    'ACTIVE': 1,
-    'WARNING': 2,
-    'ERROR': 3
-};
-
-/**
- * Constants of states for CastPlayer
- **/
-const PLAYER_STATE = {
-    'IDLE': 'IDLE',
-    'LOADING': 'LOADING',
-    'LOADED': 'LOADED',
-    'PLAYING': 'PLAYING',
-    'PAUSED': 'PAUSED',
-    'STOPPED': 'STOPPED',
-    'SEEKING': 'SEEKING',
-    'ERROR': 'ERROR'
-};
-
 const messageNamespace = 'urn:x-cast:com.connectsdk';
 
-class CastPlayer {
+class SlopTankCastBridge {
     constructor() {
-        /* device variables */
-        // @type {DEVICE_STATE} A state for device
-        this.deviceState = DEVICE_STATE.IDLE;
-
-        /* Cast player variables */
-        // @type {Object} a chrome.cast.media.Media object
-        this.currentMediaSession = null;
-
-        // @type {string} a chrome.cast.Session object
-        this.session = null;
-        // @type {PLAYER_STATE} A state for Cast media player
-        this.castPlayerState = PLAYER_STATE.IDLE;
-
-        this.hasReceivers = false;
-
-        // bind once - commit 2ebffc2271da0bc5e8b13821586aee2a2e3c7753
-        this.errorHandler = this.onError.bind(this);
-        this.mediaStatusUpdateHandler = this.onMediaStatusUpdate.bind(this);
-
-        this.initializeCastPlayer();
+        this.transport = new CastTransport({
+            namespace: messageNamespace,
+            getApplicationId: this.getApplicationId.bind(this),
+            onSession: this.onSessionConnected.bind(this),
+            onSessionEnded: this.onSessionEnded.bind(this),
+            onReceiverAvailability: this.onReceiverAvailability.bind(this),
+            onMessage: this.onMessage.bind(this),
+            onMedia: () => {},
+            onError: this.onError.bind(this)
+        });
+        this.ensureInitialized();
     }
 
-    /**
-     * Initialize Cast media player
-     * Initializes the API. Note that either successCallback and errorCallback will be
-     * invoked once the API has finished initialization. The sessionListener and
-     * receiverListener may be invoked at any time afterwards, and possibly more than once.
-     */
-    initializeCastPlayer() {
-        const chrome = window.chrome;
-        if (!chrome) {
-            console.warn('Not initializing chromecast: chrome object is missing');
-            return;
-        }
-
-        if (!chrome.cast?.isAvailable) {
-            // This used to retry forever without ever logging, so a Cast API
-            // that never became available looked identical to "no devices".
-            this.availabilityAttempts = (this.availabilityAttempts || 0) + 1;
-            if (this.availabilityAttempts > 15) {
-                console.warn('[chromecastPlayer] chrome.cast.isAvailable still false after '
-                    + `${this.availabilityAttempts} attempts; giving up on cast initialization.`);
-                return;
-            }
-            setTimeout(this.initializeCastPlayer.bind(this), 1000);
-            return;
-        }
-
+    getApplicationId() {
         const apiClient = ServerConnections.currentApiClient();
         const userId = apiClient.getCurrentUserId();
+        return apiClient.getUser(userId).then(user => user.Configuration.CastReceiverId);
+    }
 
-        apiClient.getUser(userId).then(user => {
-            const applicationID = user.Configuration.CastReceiverId;
-            if (!applicationID) {
-                console.warn(`Not initializing chromecast: CastReceiverId is ${applicationID}`);
-                return;
-            }
+    get isInitialized() {
+        return this.transport.isInitialized;
+    }
 
-            // request session
-            const sessionRequest = new chrome.cast.SessionRequest(applicationID);
-            const apiConfig = new chrome.cast.ApiConfig(sessionRequest,
-                this.sessionListener.bind(this),
-                this.receiverListener.bind(this));
+    get isConnected() {
+        return this.transport.isConnected;
+    }
 
-            console.debug(`chromecast.initialize (applicationId=${applicationID})`);
-            chrome.cast.initialize(apiConfig, this.onInitSuccess.bind(this), this.errorHandler);
+    get hasReceivers() {
+        return this.transport.hasReceivers;
+    }
+
+    get session() {
+        return this.transport.session;
+    }
+
+    ensureInitialized() {
+        return this.transport.start().then(() => {
+            console.debug('[chromecastPlayer] init success');
+        }).catch(error => {
+            console.warn('[chromecastPlayer] initialization failed:', error.message);
         });
     }
 
-    /**
-     * Callback function for init success
-     */
-    onInitSuccess() {
-        this.isInitialized = true;
-        console.debug('[chromecastPlayer] init success');
+    onError(error) {
+        console.debug('[chromecastPlayer] error:', error);
     }
 
-    /**
-     * Generic error callback function
-     */
-    onError() {
-        console.debug('[chromecastPlayer] error');
-    }
-
-    /**
-     * @param {!Object} e A new session
-     * This handles auto-join when a page is reloaded
-     * When active session is detected, playback will automatically
-     * join existing session and occur in Cast mode and media
-     * status gets synced up with current media of the session
-     */
-    sessionListener(e) {
-        this.session = e;
-        if (this.session) {
-            if (this.session.media[0]) {
-                this.onMediaDiscovered('activeSession', this.session.media[0]);
-            }
-
-            this.onSessionConnected(e);
-        }
-    }
-
-    // messageListener - receive callback messages from the Cast receiver
-    messageListener(namespace, message) {
+    onMessage(namespace, message) {
         if (typeof (message) === 'string') {
-            message = JSON.parse(message);
+            try {
+                message = JSON.parse(message);
+            } catch {
+                console.warn('[chromecastPlayer] receiver sent invalid JSON');
+                return;
+            }
         }
 
         if (message.type === 'playbackerror') {
@@ -188,71 +112,33 @@ class CastPlayer {
         }
     }
 
-    /**
-     * @param {string} e Receiver availability
-     * This indicates availability of receivers but
-     * does not provide a list of device IDs
-     */
-    receiverListener(e) {
-        if (e === 'available') {
+    onReceiverAvailability(isAvailable) {
+        if (isAvailable) {
             console.debug('[chromecastPlayer] receiver found');
-            this.hasReceivers = true;
         } else {
             console.debug('[chromecastPlayer] receiver list empty');
-            this.hasReceivers = false;
         }
     }
 
-    /**
-     * session update listener
-     */
-    sessionUpdateListener(isAlive) {
-        if (isAlive) {
-            console.debug('[chromecastPlayer] sessionUpdateListener: already alive');
-        } else {
-            this.session = null;
-            this.deviceState = DEVICE_STATE.IDLE;
-            this.castPlayerState = PLAYER_STATE.IDLE;
-            document.removeEventListener('volumeupbutton', onVolumeUpKeyDown, false);
-            document.removeEventListener('volumedownbutton', onVolumeDownKeyDown, false);
-
-            console.debug('[chromecastPlayer] sessionUpdateListener: setting currentMediaSession to null');
-            this.currentMediaSession = null;
-
-            sendConnectionResult(false);
-        }
+    onSessionEnded() {
+        document.removeEventListener('volumeupbutton', onVolumeUpKeyDown, false);
+        document.removeEventListener('volumedownbutton', onVolumeDownKeyDown, false);
+        console.debug('[chromecastPlayer] session ended');
+        sendConnectionResult(false);
     }
 
-    /**
-     * Requests that a receiver application session be created or joined. By default, the SessionRequest
-     * passed to the API at initialization time is used; this may be overridden by passing a different
-     * session request in opt_sessionRequest.
-     */
     launchApp() {
         console.debug('[chromecastPlayer] launching app...');
-        chrome.cast.requestSession(this.onRequestSessionSuccess.bind(this), this.onLaunchError.bind(this));
-    }
-
-    /**
-     * Callback function for request session success
-     * @param {Object} e A chrome.cast.Session object
-     */
-    onRequestSessionSuccess(e) {
-        console.debug('[chromecastPlayer] session success: ' + e.sessionId);
-        this.onSessionConnected(e);
+        this.transport.requestConnection().catch(error => {
+            console.debug('[chromecastPlayer] launch error:', error);
+            sendConnectionResult(false);
+        });
     }
 
     onSessionConnected(session) {
-        this.session = session;
-        this.deviceState = DEVICE_STATE.ACTIVE;
-
-        this.session.addMessageListener(messageNamespace, this.messageListener.bind(this));
-        this.session.addMediaListener(this.sessionMediaListener.bind(this));
-        this.session.addUpdateListener(this.sessionUpdateListener.bind(this));
-
         document.addEventListener('volumeupbutton', onVolumeUpKeyDown, false);
         document.addEventListener('volumedownbutton', onVolumeDownKeyDown, false);
-
+        console.debug('[chromecastPlayer] session connected: ' + session.sessionId);
         Events.trigger(this, 'connect');
         this.sendMessage({
             options: {},
@@ -260,44 +146,8 @@ class CastPlayer {
         });
     }
 
-    /**
-     * session update listener
-     */
-    sessionMediaListener(e) {
-        this.currentMediaSession = e;
-        this.currentMediaSession.addUpdateListener(this.mediaStatusUpdateHandler);
-    }
-
-    /**
-     * Callback function for launch error
-     */
-    onLaunchError() {
-        console.debug('[chromecastPlayer] launch error');
-        this.deviceState = DEVICE_STATE.ERROR;
-        sendConnectionResult(false);
-    }
-
-    /**
-     * Stops the running receiver application associated with the session.
-     */
     stopApp() {
-        if (this.session) {
-            this.session.stop(this.onStopAppSuccess.bind(this, 'Session stopped'), this.errorHandler);
-        }
-    }
-
-    /**
-     * Callback function for stop app success
-     */
-    onStopAppSuccess(message) {
-        console.debug(message);
-
-        this.deviceState = DEVICE_STATE.IDLE;
-        this.castPlayerState = PLAYER_STATE.IDLE;
-        document.removeEventListener('volumeupbutton', onVolumeUpKeyDown, false);
-        document.removeEventListener('volumedownbutton', onVolumeDownKeyDown, false);
-
-        this.currentMediaSession = null;
+        this.transport.stop().catch(this.onError.bind(this));
     }
 
     /**
@@ -330,11 +180,9 @@ class CastPlayer {
     }
 
     sendMessage(message) {
-        const player = this;
-
         let receiverName = null;
 
-        const session = player.session;
+        const session = this.session;
 
         if (session?.receiver?.friendlyName) {
             receiverName = session.receiver.friendlyName;
@@ -388,83 +236,13 @@ class CastPlayer {
             message.subtitleBurnIn = appSettings.get('subtitleburnin') || '';
         }
 
-        return player.sendMessageInternal(message);
+        return this.sendMessageInternal(message);
     }
 
     sendMessageInternal(message) {
-        message = JSON.stringify(message);
-
-        this.session.sendMessage(messageNamespace, message, this.onPlayCommandSuccess.bind(this), this.errorHandler);
-        return Promise.resolve();
-    }
-
-    onPlayCommandSuccess() {
-        console.debug('Message was sent to receiver ok.');
-    }
-
-    /**
-     * Callback function for loadMedia success
-     * @param {Object} mediaSession A new media object.
-     */
-    onMediaDiscovered(how, mediaSession) {
-        console.debug('[chromecastPlayer] new media session ID:' + mediaSession.mediaSessionId + ' (' + how + ')');
-        this.currentMediaSession = mediaSession;
-
-        if (how === 'loadMedia') {
-            this.castPlayerState = PLAYER_STATE.PLAYING;
-        }
-
-        if (how === 'activeSession') {
-            this.castPlayerState = mediaSession.playerState;
-        }
-
-        this.currentMediaSession.addUpdateListener(this.mediaStatusUpdateHandler);
-    }
-
-    /**
-     * Callback function for media status update from receiver
-     * @param {!Boolean} e true/false
-     */
-    onMediaStatusUpdate(e) {
-        console.debug('[chromecastPlayer] updating media: ' + e);
-        if (e === false) {
-            this.castPlayerState = PLAYER_STATE.IDLE;
-        }
-    }
-
-    /**
-     * Set media volume in Cast mode
-     * @param {Boolean} mute A boolean
-     */
-    setReceiverVolume(mute, vol) {
-        if (!this.currentMediaSession) {
-            console.debug('this.currentMediaSession is null');
-            return;
-        }
-
-        if (!mute) {
-            this.session.setReceiverVolumeLevel((vol || 1),
-                this.mediaCommandSuccessCallback.bind(this),
-                this.errorHandler);
-        } else {
-            this.session.setReceiverMuted(true,
-                this.mediaCommandSuccessCallback.bind(this),
-                this.errorHandler);
-        }
-    }
-
-    /**
-     * Mute CC
-     */
-    mute() {
-        this.setReceiverVolume(true);
-    }
-
-    /**
-     * Callback function for media command success
-     */
-    mediaCommandSuccessCallback(info) {
-        console.debug(info);
+        return this.transport.send(messageNamespace, message).then(() => {
+            console.debug('[chromecastPlayer] message sent');
+        });
     }
 }
 
@@ -536,7 +314,7 @@ function bindEventForRelay(instance, eventName) {
 
 function initializeChromecast() {
     const instance = this;
-    instance._castPlayer = new CastPlayer();
+    instance._castPlayer = new SlopTankCastBridge();
 
     // To allow the native android app to override
     document.dispatchEvent(new CustomEvent('chromecastloaded', {
@@ -560,7 +338,7 @@ function initializeChromecast() {
     Events.on(instance._castPlayer, 'playbackstart', function (e, data) {
         console.debug('[chromecastPlayer] playbackstart');
 
-        instance._castPlayer.initializeCastPlayer();
+        instance._castPlayer.ensureInitialized();
 
         const state = instance.getPlayerStateInternal(data);
         Events.trigger(instance, 'playbackstart', [state]);
@@ -675,7 +453,7 @@ class ChromecastPlayer {
     tryPair() {
         const castPlayer = this._castPlayer;
 
-        if (castPlayer.deviceState !== DEVICE_STATE.ACTIVE && castPlayer.isInitialized) {
+        if (!castPlayer.isConnected && castPlayer.isInitialized) {
             return new Promise(function (resolve, reject) {
                 _currentResolve = resolve;
                 _currentReject = reject;

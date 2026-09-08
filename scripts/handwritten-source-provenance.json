@@ -1,0 +1,70 @@
+{
+  "schema": "org.sloptank.handwritten-source-provenance/v1",
+  "policy": "Handwritten source copied or adapted from another work must retain its licence and required notices. Original replacements may rely on public API behavior documentation, but must not copy sample implementation text.",
+  "reviewed_markers": [
+    {
+      "path": "src/controllers/itemDetails/index.js",
+      "classification": "technique-reference",
+      "source": "https://stackoverflow.com/a/35157976",
+      "reason": "The comment credits a short overflow-comparison technique; no expressive source passage is copied."
+    },
+    {
+      "path": "src/lib/legacy/elementAppendPrepend.js",
+      "classification": "third-party-source",
+      "source": "https://github.com/jserz/js_piece/blob/master/DOM/ParentNode/append()/append().md",
+      "reason": "The complete MIT notice is retained inline."
+    }
+  ],
+  "third_party_source": [
+    {
+      "path": "src/lib/legacy/elementAppendPrepend.js",
+      "license": "MIT",
+      "notice": "inline",
+      "copyright": "Copyright (c) 2016-2025, jszhou"
+    },
+    {
+      "path": "src/scripts/gamepadtokey.js",
+      "license": "MIT",
+      "notice": "inline",
+      "copyright": "Copyright (c) 2016 Microsoft. All rights reserved."
+    }
+  ],
+  "removed_legacy_source": [
+    {
+      "path": "src/components/sanitizeFilename.js",
+      "source": "https://github.com/parshap/node-sanitize-filename",
+      "license": "ISC OR WTFPL",
+      "reason": "This unreferenced copied implementation was removed instead of adding another third-party source and licence surface. Repository history preserves its provenance; no tracked source imported it at removal."
+    }
+  ],
+  "original_replacements": [
+    {
+      "path": "src/plugins/chromecastPlayer/castTransport.js",
+      "provenance": "original",
+      "replaces": "The removed CastVideos-derived sender lifecycle implementation.",
+      "former_source_review": {
+        "marker": "https://github.com/googlecast/CastVideos-chrome/blob/master/CastVideos.js",
+        "reviewed_upstream_head": "e97c410d0f21d38f2717c990df10db8577958cc4",
+        "license": "Apache-2.0",
+        "exact_historical_revision": "Not established by the former mutable source marker; removed fail closed."
+      },
+      "behavior_sources": [
+        "https://developers.google.com/cast/docs/reference/web_sender/chrome.cast",
+        "https://developers.google.com/cast/docs/reference/web_sender/chrome.cast.ApiConfig",
+        "https://developers.google.com/cast/docs/reference/web_sender/chrome.cast.Session"
+      ],
+      "statement": "Authored for SlopTank from documented API contracts and SlopTank receiver-protocol requirements; no CastVideos sample implementation or sample text copied."
+    },
+    {
+      "path": "src/utils/fetchLocal.ts",
+      "provenance": "original",
+      "replaces": "The removed github/fetch-comment-derived local request helper.",
+      "behavior_sources": [
+        "https://developer.mozilla.org/docs/Web/API/Fetch_API",
+        "https://developer.mozilla.org/docs/Web/API/XMLHttpRequest",
+        "https://developer.mozilla.org/docs/Web/API/URL/URL"
+      ],
+      "statement": "Authored for SlopTank from browser API contracts: fetch handles web URLs and XMLHttpRequest is limited to packaged file URLs; no github/fetch implementation or comment text copied."
+    }
+  ]
+}

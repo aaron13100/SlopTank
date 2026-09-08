@@ -6,9 +6,11 @@ below. Product names and logos are used only to identify the client, platform,
 or rating source represented in the interface. No trademark licence or
 endorsement is implied.
 
-Except where this file says otherwise, these assets are distributed as part of
-SlopTank under the repository's `GPL-2.0-only` licence. A copyright licence does
-not grant rights in a third party's trademark.
+Inherited Jellyfin Web material is distributed under SlopTank's documented
+`GPL-2.0` election. Independently copyrightable post-fork additions owned by
+the SlopTank maintainer are offered under `GPL-2.0-or-later`. Third-party works
+listed below retain their own compatible licences and notices. A copyright
+licence does not grant rights in a third party's trademark.
 
 ## Current generic interface artwork
 
@@ -17,7 +19,7 @@ simple category symbols: web browser, television, game console, mobile device,
 media player, audio player, home automation, and a general connected-device
 fallback. They contain no third-party name, logo, character, or copied vector.
 To the extent copyright or any other licensable rights exist in these files,
-the project owner licenses those rights under `GPL-2.0-only`.
+the project owner licenses those rights under `GPL-2.0-or-later`.
 
 Critic scores use the text symbols `+` and `−`, an accessible text label, and
 colour as a redundant cue. They do not use rating-service artwork. Product and
@@ -47,7 +49,7 @@ published in [SlopTank commit `6b0caa3`](https://github.com/aaron13100/SlopTank/
 The prompts required unbranded objects with no text, logo, trademarked
 character, or watermark. To the extent copyright or any other licensable
 rights exist in the resulting files, the project owner licenses those rights
-under `GPL-2.0-only`. OpenAI does not sponsor or endorse SlopTank.
+under `GPL-2.0-or-later`. OpenAI does not sponsor or endorse SlopTank.
 
 - `astronaut-helmet.png`
 - `bicycle-helmet.png`
@@ -84,9 +86,48 @@ and its contributor identities and per-language history are preserved in the
 The SlopTank copy forked from upstream history at
 [`ef6d604`](https://github.com/jellyfin/jellyfin-web/commit/ef6d604873beb8807ae5ef79d2598a33bc1ba478)
 and includes later SlopTank-specific changes, primarily in `en-us.json`.
-The full corpus and SlopTank modifications are distributed under
-`GPL-2.0-only`; authorship is attributed through the retained Git history and
-the Weblate project rather than an incomplete hand-maintained name list.
+The inherited corpus is distributed under SlopTank's `GPL-2.0` election;
+independently copyrightable SlopTank-owned post-fork translation increments
+are offered under `GPL-2.0-or-later`. Authorship is attributed through the
+retained Git history and the Weblate project rather than an incomplete
+hand-maintained name list.
+
+## Handwritten source provenance
+
+The machine-readable inventory at
+`scripts/handwritten-source-provenance.json` records reviewed derivation
+markers, retained third-party handwritten source, removed legacy source, and
+original replacements. Two retained compatibility shims carry their complete
+MIT notices inline:
+
+- `src/lib/legacy/elementAppendPrepend.js`: jszhou, MIT
+- `src/scripts/gamepadtokey.js`: Microsoft, MIT
+
+The previous Chromecast sender lifecycle identified itself as based on
+Google's [`CastVideos-chrome`](https://github.com/googlecast/CastVideos-chrome/tree/e97c410d0f21d38f2717c990df10db8577958cc4)
+sample. Google's repository supplies the
+[Apache License 2.0](https://github.com/googlecast/CastVideos-chrome/blob/e97c410d0f21d38f2717c990df10db8577958cc4/LICENSE),
+while the Apache Software Foundation documents that
+[Apache-2.0 code cannot be combined under GPL version 2](https://www.apache.org/licenses/GPL-compatibility.html).
+The old mutable link did not identify an exact historical sample revision.
+Because SlopTank elects GPL version 2 for inherited web material, that
+implementation was removed rather than retrospectively relabelled.
+`src/plugins/chromecastPlayer/castTransport.js` is an original narrow adapter
+written from Google's published
+[Cast Web Sender Base API](https://developers.google.com/cast/docs/reference/web_sender/chrome.cast)
+contracts and SlopTank's existing receiver protocol; it copies no sample
+implementation text.
+
+`src/utils/fetchLocal.ts` was likewise rewritten from the browser
+[Fetch](https://developer.mozilla.org/docs/Web/API/Fetch_API),
+[URL](https://developer.mozilla.org/docs/Web/API/URL/URL), and
+[XMLHttpRequest](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest)
+API contracts so no implementation or comment text from the MIT-licensed
+[`github/fetch`](https://github.com/JakeChampion/fetch/blob/main/LICENSE)
+project remains. The unreferenced copied
+`src/components/sanitizeFilename.js` implementation was removed rather than
+carrying otherwise unused third-party source. Exact source URLs and the reason
+for each classification are preserved in the machine-readable inventory.
 
 ## Contributor list
 
