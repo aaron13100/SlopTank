@@ -22,6 +22,18 @@ const Assets = [
     'libpgs/dist/libpgs.worker.js'
 ];
 
+// CopyPlugin assets bypass webpack's module graph. Keep their package roots
+// in the distribution inventory explicitly so copied runtime code cannot be
+// omitted from THIRD-PARTY-NOTICES.txt (native-promise-only is currently the
+// concrete copied-only case).
+const CopiedRuntimePackageDirs = Array.from(new Set(Assets.map(asset => {
+    const parts = asset.split('/');
+    const packageName = parts[0].startsWith('@') ?
+        `${parts[0]}/${parts[1]}` :
+        parts[0];
+    return path.resolve(__dirname, 'node_modules', packageName);
+})));
+
 const DEV_MODE = process.env.NODE_ENV !== 'production';
 let COMMIT_SHA = '';
 try {
@@ -122,7 +134,8 @@ const config = {
         new ThirdPartyNoticesPlugin({
             licenseFile: path.resolve(__dirname, 'LICENSE'),
             attributionsFile: path.resolve(__dirname, 'ATTRIBUTIONS.md'),
-            licenseTextsDir: path.resolve(__dirname, 'scripts/license-texts')
+            licenseTextsDir: path.resolve(__dirname, 'scripts/license-texts'),
+            additionalPackageDirs: CopiedRuntimePackageDirs
         }),
         ...DEV_MODE ? [] : [
             new ProductionModuleBoundaryPlugin({

@@ -110,6 +110,7 @@ class ThirdPartyNoticesPlugin {
         this.licenseFile = options.licenseFile;
         this.attributionsFile = options.attributionsFile;
         this.licenseTextsDir = options.licenseTextsDir;
+        this.additionalPackageDirs = options.additionalPackageDirs || [];
         this.outputLicenseName = options.outputLicenseName || 'LICENSE';
         this.outputNoticesName = options.outputNoticesName || 'THIRD-PARTY-NOTICES.txt';
     }
@@ -160,9 +161,14 @@ class ThirdPartyNoticesPlugin {
     buildNotices(packageDirs) {
         const entries = [];
         const problems = [];
-        for (const dir of packageDirs) {
+        const shippedPackageDirs = new Set([
+            ...packageDirs,
+            ...this.additionalPackageDirs
+        ]);
+        for (const dir of shippedPackageDirs) {
             const packageJson = readPackageJson(dir);
             if (!packageJson || !packageJson.name) {
+                problems.push(`${dir}: package metadata is missing, malformed, or has no name`);
                 continue;
             }
             const entry = this.buildEntry(dir, packageJson);
@@ -199,7 +205,7 @@ class ThirdPartyNoticesPlugin {
             'canonical SPDX license list. Entries are ordered alphabetically by',
             'package name.',
             '',
-            `Derived from the actual production webpack module graph: ${entries.length} third-party packages were resolved into this bundle.`,
+            `Derived from the production webpack module graph and packages owning directly copied runtime assets: ${entries.length} third-party packages were resolved into this bundle.`,
             '',
             '========================================================================'
         ].join('\n');
