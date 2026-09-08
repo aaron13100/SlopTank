@@ -37,7 +37,7 @@ export const ApiProvider: FC<PropsWithChildren<unknown>> = ({ children }) => {
             return;
         }
 
-        const newUser = await getBootstrapCurrentUser(apiClient, true);
+        const newUser = await getBootstrapCurrentUser(apiClient);
         updateApiUser(undefined, newUser);
     }, [ updateApiUser ]);
 

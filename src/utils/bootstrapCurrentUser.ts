@@ -18,8 +18,7 @@ const getIdentity = (apiClient: ApiClient) => [
  * remains responsible for its resolved user cache and explicit refreshes.
  */
 export const getBootstrapCurrentUser = (
-    apiClient: ApiClient,
-    refresh = false
+    apiClient: ApiClient
 ) => {
     const identity = getIdentity(apiClient);
     const currentRequest = inFlightRequests.get(apiClient);
@@ -27,7 +26,12 @@ export const getBootstrapCurrentUser = (
         return currentRequest.promise;
     }
 
-    const promise = apiClient.getCurrentUser(refresh ? false : undefined);
+    // The legacy client's default cache path starts a network request and can
+    // then return an already-resolved persisted user instead of that request.
+    // Owning the network promise is what keeps the in-flight entry alive until
+    // the request actually settles; transport failures still use the client's
+    // own persisted-user fallback.
+    const promise = apiClient.getCurrentUser(false);
     inFlightRequests.set(apiClient, { identity, promise });
 
     const clearRequest = () => {
