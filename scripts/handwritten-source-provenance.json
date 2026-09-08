@@ -59,12 +59,21 @@
       "path": "src/utils/fetchLocal.ts",
       "provenance": "original",
       "replaces": "The removed github/fetch-comment-derived local request helper.",
+      "former_source_review": {
+        "source": "https://github.com/JakeChampion/fetch/pull/92#issuecomment-174730593",
+        "additional_discussion": "https://github.com/JakeChampion/fetch/pull/92#issuecomment-512187452",
+        "repository_license": "MIT",
+        "historical_jellyfin_introduction": "https://github.com/jellyfin/jellyfin-web/commit/6f7819366042c210c00aa46a867677a0d8519d55",
+        "similarity": "substantial-similarity",
+        "copyright_substantiality": "Not determined: the helper closely followed the cited short, idiomatic API wrapper, but this record is not a legal conclusion about protectable expression.",
+        "disposition": "The known similar implementation and its distinctive callback assignments and error text were removed fail closed; no conclusion about the discussion comment's licence was needed."
+      },
       "behavior_sources": [
         "https://developer.mozilla.org/docs/Web/API/Fetch_API",
         "https://developer.mozilla.org/docs/Web/API/XMLHttpRequest",
         "https://developer.mozilla.org/docs/Web/API/URL/URL"
       ],
-      "statement": "Authored for SlopTank from browser API contracts: fetch handles web URLs and XMLHttpRequest is limited to packaged file URLs; no github/fetch implementation or comment text copied."
+      "statement": "Authored for SlopTank from browser API contracts: fetch handles web URLs and a separately structured XMLHttpRequest helper is limited to packaged file URLs; no distinctive github/fetch discussion implementation or comment text remains."
     }
   ]
 }

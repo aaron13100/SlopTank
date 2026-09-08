@@ -110,6 +110,9 @@ sample. Google's repository supplies the
 while the Apache Software Foundation documents that
 [Apache-2.0 code cannot be combined under GPL version 2](https://www.apache.org/licenses/GPL-compatibility.html).
 The old mutable link did not identify an exact historical sample revision.
+The retained Jellyfin history begins this file at a 2019 repository-separation
+commit, after the sample-based implementation already existed, so it cannot
+recover that missing revision.
 Because SlopTank elects GPL version 2 for inherited web material, that
 implementation was removed rather than retrospectively relabelled.
 `src/plugins/chromecastPlayer/castTransport.js` is an original narrow adapter
@@ -118,13 +121,20 @@ written from Google's published
 contracts and SlopTank's existing receiver protocol; it copies no sample
 implementation text.
 
-`src/utils/fetchLocal.ts` was likewise rewritten from the browser
+The former `src/utils/fetchLocal.ts` closely followed a short XHR wrapper in
+the cited [`github/fetch` discussion](https://github.com/JakeChampion/fetch/pull/92#issuecomment-174730593),
+including its callback structure and distinctive error text. The repository is
+[MIT-licensed](https://github.com/JakeChampion/fetch/blob/main/LICENSE), but
+the project did not rely on that repository licence extending to discussion
+text: copyright substantiality of a short, idiomatic API wrapper was not
+decided, and the similar implementation was removed fail closed.
+`src/utils/fetchLocal.ts` was then rewritten from the browser
 [Fetch](https://developer.mozilla.org/docs/Web/API/Fetch_API),
 [URL](https://developer.mozilla.org/docs/Web/API/URL/URL), and
 [XMLHttpRequest](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest)
-API contracts so no implementation or comment text from the MIT-licensed
-[`github/fetch`](https://github.com/JakeChampion/fetch/blob/main/LICENSE)
-project remains. The unreferenced copied
+API contracts with a separately structured packaged-file request helper; the
+known discussion implementation fingerprints and comment text do not remain.
+The unreferenced copied
 `src/components/sanitizeFilename.js` implementation was removed rather than
 carrying otherwise unused third-party source. Exact source URLs and the reason
 for each classification are preserved in the machine-readable inventory.

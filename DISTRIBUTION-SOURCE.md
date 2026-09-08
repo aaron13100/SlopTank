@@ -52,12 +52,18 @@ sample, which Google's repository distributes under
 The Apache Software Foundation documents
 [Apache-2.0 as incompatible with GPL version 2](https://www.apache.org/licenses/GPL-compatibility.html).
 The old source comment linked a mutable branch and did not establish which
-historical sample revision was used. SlopTank therefore removed that
+historical sample revision was used; retained Jellyfin history starts after
+the sample-based file already existed. SlopTank therefore removed that
 implementation and replaced it with an original adapter written from the
 official
 [Cast Web Sender Base API](https://developers.google.com/cast/docs/reference/web_sender/chrome.cast)
 contracts. The old `fetchLocal.ts` comments pointing to `github/fetch` were
-also removed with an original browser-API implementation, and an unused copied
+attached to an implementation substantially similar in structure and error
+text to the cited short discussion snippet. Whether that idiomatic wrapper
+contained protectable expression, and whether the repository's MIT licence
+covered discussion text, were not relied upon: the similar code was removed
+fail closed and replaced with an independently structured browser-API
+implementation. An unused copied
 filename sanitizer was removed. No claim is made that a text scan can prove
 the absence of undisclosed copying; the gate is a fail-closed control for
 declared derivation markers and the known implementation fingerprints reviewed
