@@ -1,6 +1,6 @@
 import type { PublicSystemInfo } from '@jellyfin/sdk/lib/generated-client';
 
-const HANDOFF_TTL_MS = 5000;
+const HANDOFF_TTL_MS = 60_000;
 
 type PendingPublicInfo = {
     expiresAt: number
