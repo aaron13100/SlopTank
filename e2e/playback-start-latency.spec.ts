@@ -65,6 +65,18 @@ const PLAYBACK_START_CEILING_MS = 240_000;
  */
 const MINT_TIMEOUT_MS = 900_000;
 
+interface PlaybackReport {
+    ItemId: string;
+    PlaySessionId: string;
+    [key: string]: unknown;
+}
+
+interface CapturedPlayback {
+    authorizationHeaders: Record<string, string>;
+    report: PlaybackReport;
+    stoppedUrl: string;
+}
+
 /**
  * Chooses which items to measure, worst case first.
  *
@@ -110,6 +122,112 @@ async function waitUntilPlaying(page: import('@playwright/test').Page): Promise<
 }
 
 /**
+ * Runs one playback interaction and always releases a started session on the
+ * server, even when navigation or an assertion rejects midway through it.
+ *
+ * The stop report is cloned from the real client's latest start/progress
+ * request. That retains the actual item, play-session, media-source and
+ * position state instead of fabricating a second session model in the test.
+ */
+async function withServerPlayback<T>(
+    page: import('@playwright/test').Page,
+    itemId: string,
+    action: () => Promise<T>
+): Promise<T> {
+    let playback: CapturedPlayback | undefined;
+    let actionCompleted = false;
+    const capturePlaybackReport = (request: import('@playwright/test').Request) => {
+        const url = new URL(request.url());
+        if (
+            request.method() !== 'POST'
+            || !/\/Sessions\/Playing(?:\/Progress)?$/.test(url.pathname)
+        ) {
+            return;
+        }
+
+        const report = request.postDataJSON() as Partial<PlaybackReport> | null;
+        if (
+            !report
+            || report.ItemId !== itemId
+            || typeof report.PlaySessionId !== 'string'
+            || !report.PlaySessionId
+        ) {
+            return;
+        }
+
+        url.pathname = url.pathname.replace(
+            /\/Sessions\/Playing(?:\/Progress)?$/,
+            '/Sessions/Playing/Stopped'
+        );
+        url.search = '';
+        const requestHeaders = request.headers();
+        const authorizationHeaders: Record<string, string> = {};
+        for (const name of [ 'authorization', 'x-emby-authorization', 'x-emby-token' ]) {
+            const value = requestHeaders[name];
+            if (value) {
+                authorizationHeaders[name] = value;
+            }
+        }
+        playback = {
+            authorizationHeaders,
+            report: report as PlaybackReport,
+            stoppedUrl: url.toString()
+        };
+    };
+
+    page.on('request', capturePlaybackReport);
+    let actionResult: T | undefined;
+    let actionFailure: unknown;
+    let actionFailed = false;
+    try {
+        actionResult = await action();
+        actionCompleted = true;
+    } catch (error) {
+        actionFailed = true;
+        actionFailure = error;
+    } finally {
+        page.off('request', capturePlaybackReport);
+    }
+
+    let cleanupFailure: unknown;
+    try {
+        if (playback) {
+            const response = await page.context().request.post(playback.stoppedUrl, {
+                data: playback.report,
+                headers: playback.authorizationHeaders,
+                timeout: 30_000
+            });
+            if (!response.ok()) {
+                throw new Error(
+                    `server playback cleanup failed with HTTP ${response.status()} `
+                    + `for item ${playback.report.ItemId} session ${playback.report.PlaySessionId}`
+                );
+            }
+        } else if (actionCompleted) {
+            throw new Error(
+                `playback completed for item ${itemId} without a real play-session report to stop`
+            );
+        }
+    } catch (error) {
+        cleanupFailure = error;
+    }
+
+    if (actionFailed && cleanupFailure) {
+        throw new AggregateError(
+            [ actionFailure, cleanupFailure ],
+            `playback action and server cleanup both failed for item ${itemId}`
+        );
+    }
+    if (actionFailed) {
+        throw actionFailure;
+    }
+    if (cleanupFailure) {
+        throw cleanupFailure;
+    }
+    return actionResult as T;
+}
+
+/**
  * Reports one measurement into the test output, so a passing run is still
  * evidence rather than just a green tick.
  *
@@ -139,24 +257,20 @@ test.describe('playback start latency', () => {
             const playButton = page.locator('.mainDetailButtons .btnPlay:visible');
             await expect(playButton).toBeVisible({ timeout: 60_000 });
 
-            const started = nowMs();
-            await playButton.click();
-            await waitUntilPlaying(page);
-            const elapsedMs = nowMs() - started;
+            const elapsedMs = await withServerPlayback(page, itemId, async () => {
+                const started = nowMs();
+                await playButton.click();
+                await waitUntilPlaying(page);
+                await expect(page).toHaveURL(VIDEO_ROUTE);
+                return nowMs() - started;
+            });
 
             reportMeasurement('play-button', itemId, elapsedMs);
-            await expect(page).toHaveURL(VIDEO_ROUTE);
             expect.soft(
                 elapsedMs,
                 `pressing Play on item ${itemId} took ${(elapsedMs / 1000).toFixed(2)}s to reach a playing `
                 + `frame, over the ${PLAYBACK_START_BUDGET_MS / 1000}s a person will wait`
             ).toBeLessThanOrEqual(PLAYBACK_START_BUDGET_MS);
-
-            // Pause rather than navigate to a neutral page between items. The
-            // next iteration navigates to a details route anyway, and loading
-            // /web/index.html directly drops the session, so the following
-            // measurement would be timing a login screen.
-            await page.evaluate(() => document.querySelector('video')?.pause());
         }
     });
 
@@ -183,26 +297,13 @@ test.describe('playback start latency', () => {
                     && /^\/Items\/[^/]+\/Permalink$/.test(new URL(response.url()).pathname),
                 { timeout: MINT_TIMEOUT_MS }
             );
-            await page.locator('.mainDetailButtons .btnPlay:visible').click();
-            await page.waitForURL(WATCH_PERMALINK_ROUTE, { timeout: 180_000 });
-            const watchUrl = page.url();
-            await waitUntilPlaying(page);
-            await minted;
-
-            // Pause the first playback so the measurement is not competing with
-            // a video still streaming on a two-core host, and leave the tab
-            // where it is.
-            //
-            // Navigating it away was tried and is worse on both counts. Before
-            // the mint returns it aborts it, and an aborted mint leaves the
-            // alias mid-mutation: opening the link then took 186.91s waiting
-            // for that to settle, against under 4s of server work for a settled
-            // one. After the mint it merely adds a second page load's worth of
-            // in-flight requests to the window being measured, which moved the
-            // figure from 13.31s to 16.23s without making the model any more
-            // faithful. Neither variant is what a real recipient has, and this
-            // one is the quieter of the two.
-            await page.evaluate(() => document.querySelector('video')?.pause());
+            const watchUrl = await withServerPlayback(page, itemId, async () => {
+                await page.locator('.mainDetailButtons .btnPlay:visible').click();
+                await page.waitForURL(WATCH_PERMALINK_ROUTE, { timeout: 180_000 });
+                await waitUntilPlaying(page);
+                await minted;
+                return page.url();
+            });
 
             // The link is opened in a NEW tab of the same browser, which is
             // both what a person does with a link they were sent and the only
@@ -211,10 +312,13 @@ test.describe('playback start latency', () => {
             // would measure a login screen rather than a watch link.
             const shared = await page.context().newPage();
             try {
-                const started = nowMs();
-                await shared.goto(watchUrl);
-                await waitUntilPlaying(shared);
-                const elapsedMs = nowMs() - started;
+                const elapsedMs = await withServerPlayback(shared, itemId, async () => {
+                    const started = nowMs();
+                    await shared.goto(watchUrl);
+                    await waitUntilPlaying(shared);
+                    await expect(shared).toHaveURL(VIDEO_ROUTE);
+                    return nowMs() - started;
+                });
 
                 reportMeasurement('watch-link', itemId, elapsedMs);
                 expect.soft(
