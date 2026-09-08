@@ -21,5 +21,9 @@ export const getBrandingOptionsQuery = (
 ) => queryOptions({
     queryKey: getBrandingOptionsQueryKey(api?.basePath),
     queryFn: ({ signal }) => fetchBrandingOptions(api!, { signal }),
+    // Branding changes only through explicit administration and those writes
+    // invalidate this query. Keep sequential bootstrap consumers from
+    // immediately repeating the same request after the first one settles.
+    staleTime: Infinity,
     enabled: !!api
 });
