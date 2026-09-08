@@ -8,9 +8,8 @@ import {
     PermalinkRequestError,
     isPermalinkRequestError,
     discoverPermalinkCandidates,
-    exchangePermalinkPlaybackLease,
     redeemPermalinkDetails,
-    redeemPermalinkPlayback,
+    redeemPermalinkPlaybackReadyV1,
     type PermalinkCandidateEnvelope
 } from './permalinkApi';
 import type { ParsedPermalinkId, PermalinkKind } from './permalinkId';
@@ -139,19 +138,12 @@ async function resolveForWatch(
     request: PermalinkResolveRequest,
     candidate: PermalinkCandidateEnvelope
 ): Promise<PermalinkResolution> {
-    // The player route spends its details lease on the purpose exchange rather
-    // than on a DTO: the server re-checks the binding, the assignment head and
-    // the active aliases again on the way through, and the playback lease it
-    // returns is what freezes the plan actually played.
-    const playbackCandidate = await exchangePermalinkPlaybackLease({
+    // The versioned endpoint performs the established purpose exchange and
+    // playback redemption in one server request. Both purpose-bound leases,
+    // durable publication, revalidation steps and single-use checks remain.
+    const snapshot = await redeemPermalinkPlaybackReadyV1({
         api: request.api,
         candidate,
-        signal: request.signal
-    });
-
-    const snapshot = await redeemPermalinkPlayback({
-        api: request.api,
-        candidate: playbackCandidate,
         playbackSessionId: randomId(),
         signal: request.signal
     });

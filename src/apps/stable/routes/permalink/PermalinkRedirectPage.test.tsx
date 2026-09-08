@@ -407,14 +407,10 @@ describe('permalink info route (#/p/:permalinkId)', () => {
 describe('permalink watch route (#/w/:permalinkId)', () => {
     afterEach(cleanup);
 
-    it('exchanges the details lease for a playback lease and plays the item the frozen plan names', async () => {
+    it('redeems the details lease into a player-ready snapshot in one post', async () => {
         const server = createServer({
             ...discovery('tt0062622', [ CANDIDATE ]),
-            'POST /Permalinks/Candidates/handle-1/PlaybackLease': {
-                status: 200,
-                body: { Rank: 0, Namespace: 'external', Handle: 'handle-2', Lease: 'lease-2' }
-            },
-            'POST /Permalinks/Candidates/handle-2/Playback': {
+            'POST /Permalinks/Candidates/handle-1/PlaybackReadyV1': {
                 status: 200,
                 body: { ItemId: 'item-1', QueueCount: 1, PlaybackSessionId: 'session-1' }
             }
@@ -422,22 +418,17 @@ describe('permalink watch route (#/w/:permalinkId)', () => {
 
         renderPermalink(server, 'watch', '/w/tt0062622');
 
-        expect(await landingText()).toBe('/web/video?id=item-1&serverId=server-1');
+        expect(await landingText()).toBe('/web/video?id=item-1&serverId=server-1&permalinkPlayback=1');
         expect(server.calls).toEqual([
             'GET /Permalinks/tt0062622/Items',
-            'POST /Permalinks/Candidates/handle-1/PlaybackLease',
-            'POST /Permalinks/Candidates/handle-2/Playback'
+            'POST /Permalinks/Candidates/handle-1/PlaybackReadyV1'
         ]);
     });
 
     it('carries a valid start offset through to the player route', async () => {
         const server = createServer({
             ...discovery('tt0062622', [ CANDIDATE ]),
-            'POST /Permalinks/Candidates/handle-1/PlaybackLease': {
-                status: 200,
-                body: { Rank: 0, Namespace: 'external', Handle: 'handle-2', Lease: 'lease-2' }
-            },
-            'POST /Permalinks/Candidates/handle-2/Playback': {
+            'POST /Permalinks/Candidates/handle-1/PlaybackReadyV1': {
                 status: 200,
                 body: { ItemId: 'item-1', QueueCount: 1, PlaybackSessionId: 'session-1' }
             }
@@ -445,17 +436,13 @@ describe('permalink watch route (#/w/:permalinkId)', () => {
 
         renderPermalink(server, 'watch', '/w/tt0062622?t=90');
 
-        expect(await landingText()).toBe('/web/video?id=item-1&serverId=server-1&t=90');
+        expect(await landingText()).toBe('/web/video?id=item-1&serverId=server-1&permalinkPlayback=1&t=90');
     });
 
     it('drops a malformed start offset rather than guessing a position', async () => {
         const server = createServer({
             ...discovery('tt0062622', [ CANDIDATE ]),
-            'POST /Permalinks/Candidates/handle-1/PlaybackLease': {
-                status: 200,
-                body: { Rank: 0, Namespace: 'external', Handle: 'handle-2', Lease: 'lease-2' }
-            },
-            'POST /Permalinks/Candidates/handle-2/Playback': {
+            'POST /Permalinks/Candidates/handle-1/PlaybackReadyV1': {
                 status: 200,
                 body: { ItemId: 'item-1', QueueCount: 1, PlaybackSessionId: 'session-1' }
             }
@@ -463,17 +450,13 @@ describe('permalink watch route (#/w/:permalinkId)', () => {
 
         renderPermalink(server, 'watch', '/w/tt0062622?t=-5');
 
-        expect(await landingText()).toBe('/web/video?id=item-1&serverId=server-1');
+        expect(await landingText()).toBe('/web/video?id=item-1&serverId=server-1&permalinkPlayback=1');
     });
 
     it('surfaces a replacement race as a retriable conflict rather than playing the replaced file', async () => {
         const server = createServer({
             ...discovery('tt0062622', [ CANDIDATE ]),
-            'POST /Permalinks/Candidates/handle-1/PlaybackLease': {
-                status: 200,
-                body: { Rank: 0, Namespace: 'external', Handle: 'handle-2', Lease: 'lease-2' }
-            },
-            'POST /Permalinks/Candidates/handle-2/Playback': {
+            'POST /Permalinks/Candidates/handle-1/PlaybackReadyV1': {
                 status: 409,
                 body: { title: 'assignment-head-moved', detail: 'The item was replaced while this link was opening.', status: 409 }
             }
@@ -489,11 +472,7 @@ describe('permalink watch route (#/w/:permalinkId)', () => {
     it('never starts playback from a snapshot with no item id', async () => {
         const server = createServer({
             ...discovery('tt0062622', [ CANDIDATE ]),
-            'POST /Permalinks/Candidates/handle-1/PlaybackLease': {
-                status: 200,
-                body: { Rank: 0, Namespace: 'external', Handle: 'handle-2', Lease: 'lease-2' }
-            },
-            'POST /Permalinks/Candidates/handle-2/Playback': { status: 200, body: { QueueCount: 1 } }
+            'POST /Permalinks/Candidates/handle-1/PlaybackReadyV1': { status: 200, body: { QueueCount: 1 } }
         });
 
         renderPermalink(server, 'watch', '/w/tt0062622');
@@ -501,14 +480,10 @@ describe('permalink watch route (#/w/:permalinkId)', () => {
         expect(await messageText()).toContain('playback-snapshot-incomplete');
     });
 
-    it('re-runs the whole exchange on a second open, so append-only growth is never replayed from a spent lease', async () => {
+    it('re-runs the whole ready exchange on a second open, so append-only growth is never replayed', async () => {
         const beforeGrowth = createServer({
             ...discovery(SK_SERIES_ID, [ { ...CANDIDATE, Namespace: 'sloptank' } ]),
-            'POST /Permalinks/Candidates/handle-1/PlaybackLease': {
-                status: 200,
-                body: { Rank: 0, Namespace: 'sloptank', Handle: 'handle-2', Lease: 'lease-2' }
-            },
-            'POST /Permalinks/Candidates/handle-2/Playback': {
+            'POST /Permalinks/Candidates/handle-1/PlaybackReadyV1': {
                 status: 200,
                 body: { ItemId: 'episode-1', QueueCount: 1, PlaybackSessionId: 'session-1' }
             }
@@ -516,7 +491,7 @@ describe('permalink watch route (#/w/:permalinkId)', () => {
         const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
         const first = renderPermalink(beforeGrowth, 'watch', `/w/${SK_SERIES_ID}`, queryClient);
-        expect(await landingText()).toBe('/web/video?id=episode-1&serverId=server-1');
+        expect(await landingText()).toBe('/web/video?id=episode-1&serverId=server-1&permalinkPlayback=1');
         first.unmount();
         cleanup();
 
@@ -525,11 +500,7 @@ describe('permalink watch route (#/w/:permalinkId)', () => {
         // rather than reuse anything it learned on the first open.
         const afterGrowth = createServer({
             ...discovery(SK_SERIES_ID, [ { ...CANDIDATE, Namespace: 'sloptank', Handle: 'handle-3', Lease: 'lease-3' } ]),
-            'POST /Permalinks/Candidates/handle-3/PlaybackLease': {
-                status: 200,
-                body: { Rank: 0, Namespace: 'sloptank', Handle: 'handle-4', Lease: 'lease-4' }
-            },
-            'POST /Permalinks/Candidates/handle-4/Playback': {
+            'POST /Permalinks/Candidates/handle-3/PlaybackReadyV1': {
                 status: 200,
                 body: { ItemId: 'episode-1', QueueCount: 12, PlaybackSessionId: 'session-2' }
             }
@@ -537,22 +508,17 @@ describe('permalink watch route (#/w/:permalinkId)', () => {
 
         renderPermalink(afterGrowth, 'watch', `/w/${SK_SERIES_ID}`, queryClient);
 
-        expect(await landingText()).toBe('/web/video?id=episode-1&serverId=server-1');
+        expect(await landingText()).toBe('/web/video?id=episode-1&serverId=server-1&permalinkPlayback=1');
         expect(afterGrowth.calls).toEqual([
             `GET /Permalinks/${SK_SERIES_ID}/Items`,
-            'POST /Permalinks/Candidates/handle-3/PlaybackLease',
-            'POST /Permalinks/Candidates/handle-4/Playback'
+            'POST /Permalinks/Candidates/handle-3/PlaybackReadyV1'
         ]);
     });
 
     it('plays a no-provider item opened by its sk- watch link', async () => {
         const server = createServer({
             ...discovery(SK_MOVIE_ID, [ { ...CANDIDATE, Namespace: 'sloptank' } ]),
-            'POST /Permalinks/Candidates/handle-1/PlaybackLease': {
-                status: 200,
-                body: { Rank: 0, Namespace: 'sloptank', Handle: 'handle-2', Lease: 'lease-2' }
-            },
-            'POST /Permalinks/Candidates/handle-2/Playback': {
+            'POST /Permalinks/Candidates/handle-1/PlaybackReadyV1': {
                 status: 200,
                 body: { ItemId: 'item-9', QueueCount: 1, PlaybackSessionId: 'session-1' }
             }
@@ -560,6 +526,6 @@ describe('permalink watch route (#/w/:permalinkId)', () => {
 
         renderPermalink(server, 'watch', `/w/${SK_MOVIE_ID}`);
 
-        expect(await landingText()).toBe('/web/video?id=item-9&serverId=server-1');
+        expect(await landingText()).toBe('/web/video?id=item-9&serverId=server-1&permalinkPlayback=1');
     });
 });

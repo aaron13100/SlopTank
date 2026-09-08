@@ -144,6 +144,27 @@ interface PlaybackSnapshotBody {
     PlaybackSessionId?: string
 }
 
+function toPlaybackSnapshot(
+    body: PlaybackSnapshotBody,
+    url: string,
+    playbackSessionId: string
+): PermalinkPlaybackSnapshot {
+    if (!body.ItemId) {
+        throw new PermalinkRequestError({
+            kind: 'conflict',
+            code: 'playback-snapshot-incomplete',
+            message: 'The server returned a playback snapshot without an item id.',
+            hint: `Response from ${url} does not satisfy the snapshot contract; playback was not started.`
+        });
+    }
+
+    return {
+        itemId: body.ItemId,
+        queueCount: body.QueueCount ?? 1,
+        playbackSessionId: body.PlaybackSessionId ?? playbackSessionId
+    };
+}
+
 interface PermalinkRequest {
     api: Api
     method: 'GET' | 'POST'
@@ -332,6 +353,27 @@ export async function exchangePermalinkPlaybackLease({ api, candidate, signal }:
 }
 
 /**
+ * Runs the established details-to-playback exchange and redemption inside one
+ * versioned server request, returning the same immutable playback snapshot.
+ */
+export async function redeemPermalinkPlaybackReadyV1({ api, candidate, playbackSessionId, signal }: {
+    api: Api
+    candidate: PermalinkCandidateEnvelope
+    playbackSessionId: string
+    signal?: AbortSignal
+}): Promise<PermalinkPlaybackSnapshot> {
+    const url = `/Permalinks/Candidates/${encodeURIComponent(candidate.handle)}/PlaybackReadyV1`;
+    const body = await request<PlaybackSnapshotBody>({
+        api,
+        method: 'POST',
+        url,
+        body: { Lease: candidate.lease, PlaybackSessionId: playbackSessionId },
+        signal
+    });
+    return toPlaybackSnapshot(body, url, playbackSessionId);
+}
+
+/**
  * Consumes a playback lease and returns the immutable plan the server froze.
  *
  * @param options.api The SDK Api for the server being asked.
@@ -356,20 +398,7 @@ export async function redeemPermalinkPlayback({ api, candidate, playbackSessionI
         signal
     });
 
-    if (!body.ItemId) {
-        throw new PermalinkRequestError({
-            kind: 'conflict',
-            code: 'playback-snapshot-incomplete',
-            message: 'The server returned a playback snapshot without an item id.',
-            hint: `Response from ${url} does not satisfy the snapshot contract; playback was not started.`
-        });
-    }
-
-    return {
-        itemId: body.ItemId,
-        queueCount: body.QueueCount ?? 1,
-        playbackSessionId: body.PlaybackSessionId ?? playbackSessionId
-    };
+    return toPlaybackSnapshot(body, url, playbackSessionId);
 }
 
 /**
