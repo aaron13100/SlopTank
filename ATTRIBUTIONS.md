@@ -128,10 +128,10 @@ including its callback structure and distinctive error text. The repository is
 the project did not rely on that repository licence extending to discussion
 text: copyright substantiality of a short, idiomatic API wrapper was not
 decided, and the similar implementation was removed fail closed.
-`src/utils/fetchLocal.ts` was then rewritten from the browser
-[Fetch](https://developer.mozilla.org/docs/Web/API/Fetch_API),
-[URL](https://developer.mozilla.org/docs/Web/API/URL/URL), and
-[XMLHttpRequest](https://developer.mozilla.org/docs/Web/API/XMLHttpRequest)
+`src/utils/fetchLocal.ts` was then rewritten from the normative browser
+[Fetch](https://fetch.spec.whatwg.org/),
+[URL](https://url.spec.whatwg.org/), and
+[XMLHttpRequest](https://xhr.spec.whatwg.org/)
 API contracts with a separately structured packaged-file request helper; the
 known discussion implementation fingerprints and comment text do not remain.
 The unreferenced copied

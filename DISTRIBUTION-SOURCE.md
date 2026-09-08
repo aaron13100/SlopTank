@@ -63,7 +63,9 @@ text to the cited short discussion snippet. Whether that idiomatic wrapper
 contained protectable expression, and whether the repository's MIT licence
 covered discussion text, were not relied upon: the similar code was removed
 fail closed and replaced with an independently structured browser-API
-implementation. An unused copied
+implementation based on the normative
+[Fetch](https://fetch.spec.whatwg.org/), [URL](https://url.spec.whatwg.org/),
+and [XMLHttpRequest](https://xhr.spec.whatwg.org/) standards. An unused copied
 filename sanitizer was removed. No claim is made that a text scan can prove
 the absence of undisclosed copying; the gate is a fail-closed control for
 declared derivation markers and the known implementation fingerprints reviewed

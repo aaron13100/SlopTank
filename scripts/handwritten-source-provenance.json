@@ -69,9 +69,9 @@
         "disposition": "The known similar implementation and its distinctive callback assignments and error text were removed fail closed; no conclusion about the discussion comment's licence was needed."
       },
       "behavior_sources": [
-        "https://developer.mozilla.org/docs/Web/API/Fetch_API",
-        "https://developer.mozilla.org/docs/Web/API/XMLHttpRequest",
-        "https://developer.mozilla.org/docs/Web/API/URL/URL"
+        "https://fetch.spec.whatwg.org/",
+        "https://xhr.spec.whatwg.org/",
+        "https://url.spec.whatwg.org/"
       ],
       "statement": "Authored for SlopTank from browser API contracts: fetch handles web URLs and a separately structured XMLHttpRequest helper is limited to packaged file URLs; no distinctive github/fetch discussion implementation or comment text remains."
     }
