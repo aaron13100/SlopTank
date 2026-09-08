@@ -662,7 +662,8 @@ function truncatePlayOptions(playOptions) {
         audioStreamIndex: playOptions.audioStreamIndex,
         subtitleStreamIndex: playOptions.subtitleStreamIndex,
         startPositionTicks: playOptions.startPositionTicks,
-        alreadyOnVideoOsd: playOptions.alreadyOnVideoOsd
+        alreadyOnVideoOsd: playOptions.alreadyOnVideoOsd,
+        skipAutomaticBitrateDetection: playOptions.skipAutomaticBitrateDetection
     };
 }
 
@@ -2429,7 +2430,9 @@ export class PlaybackManager {
 
             return runInterceptors(item, playOptions)
                 .catch(onInterceptorRejection)
-                .then(() => detectBitrate(apiClient, item, mediaType))
+                .then(() => playOptions.skipAutomaticBitrateDetection
+                    ? getSavedMaxStreamingBitrate(apiClient, mediaType)
+                    : detectBitrate(apiClient, item, mediaType))
                 .then((bitrate) => {
                     return playAfterBitrateDetect(bitrate, item, playOptions, onPlaybackStartedFn, prevSource)
                         .catch(onPlaybackRejection);

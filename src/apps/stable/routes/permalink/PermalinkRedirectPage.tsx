@@ -187,6 +187,7 @@ function presentationSearch(purpose: PermalinkPurpose, item: PermalinkTarget, se
     const parameters = new URLSearchParams({ id: item.itemId, serverId: item.serverId });
 
     if (purpose === 'watch') {
+        parameters.set('permalinkPlayback', '1');
         const startSeconds = searchParams.get('t');
         if (permalinkStartSecondsToTicks(startSeconds) !== null) {
             parameters.set('t', startSeconds!);

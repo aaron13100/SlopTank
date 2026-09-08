@@ -660,6 +660,7 @@ export default function (view) {
 
         const id = getParameterByName('id');
         const serverId = getParameterByName('serverId');
+        const isPermalinkPlayback = getParameterByName('permalinkPlayback') === '1';
 
         if (!id || !serverId) {
             return;
@@ -686,7 +687,8 @@ export default function (view) {
                 items: [item],
                 startPositionTicks: requestedStartTicks ?? (item.UserData?.PlaybackPositionTicks || 0),
                 fullscreen: true,
-                alreadyOnVideoOsd: true
+                alreadyOnVideoOsd: true,
+                skipAutomaticBitrateDetection: isPermalinkPlayback
             });
         }).then(() => {
             // The first play() can be interrupted while the resume seek is
