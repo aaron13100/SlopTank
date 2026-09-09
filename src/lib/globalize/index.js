@@ -197,7 +197,7 @@ function loadTranslation(translations, lang) {
 
         const url = filtered[0].path;
 
-        loadDynamicModule(() => import(/* webpackChunkName: "[request]" */ `../../strings/${url}`),
+        loadDynamicModule(() => import(/* webpackChunkName: "[request]", webpackInclude: /\.json$/ */ `../../strings/${url}`),
             '../../strings/${url}').then((fileContent) => {
             resolve(fileContent);
         }).catch(() => {
@@ -302,4 +302,3 @@ export default {
     getIsRTL,
     getIsElementRTL
 };
-
