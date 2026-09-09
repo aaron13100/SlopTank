@@ -1,3 +1,4 @@
+# SlopTank modification notice: added or changed by SlopTank on 2026-09-09.
 import sys
 import os
 import json
@@ -8,7 +9,10 @@ import json
 
 cwd = os.getcwd()
 langdir = cwd + '/../src/strings'
-langlst = os.listdir(langdir)
+langlst = [
+    name for name in os.listdir(langdir)
+    if name.endswith('.json') and os.path.isfile(os.path.join(langdir, name))
+]
 
 langlst.remove('en-us.json')
 print(langlst)
