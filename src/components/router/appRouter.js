@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-23, 2026-07-24, 2026-07-31, 2026-08-03, 2026-08-11, 2026-08-12, 2026-08-29, 2026-09-04, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-23, 2026-07-24, 2026-07-31, 2026-08-03, 2026-08-11, 2026-08-12, 2026-08-29, 2026-09-04, 2026-09-09.
 import { CollectionType } from '@jellyfin/sdk/lib/generated-client/models/collection-type';
 
 import { setBackdropTransparency } from '../backdrop/backdrop';
