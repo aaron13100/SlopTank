@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-23, 2026-08-01, 2026-09-09.
 import { defineConfig } from '@playwright/test';
 
 /**

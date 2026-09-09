@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-09-09.
 /**
  * Exercises the npm test entry point with the unsupported toolchain currently used by the
  * repository queue runner. The command must fail at npm's engine gate before Vitest starts.

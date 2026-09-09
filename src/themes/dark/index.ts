@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-09-09.
 import type { ColorSystemOptions } from '@mui/material/styles';
 import merge from 'lodash-es/merge';
 

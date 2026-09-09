@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09.
 import layoutManager from 'components/layoutManager';
 import toast from '../../../components/toast/toast';
 import globalize from '../../../lib/globalize';

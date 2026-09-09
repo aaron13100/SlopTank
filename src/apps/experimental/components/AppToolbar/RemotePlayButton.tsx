@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-20, 2026-09-09.
 import React, { useCallback, useEffect, useState } from 'react';
 import CastConnected from '@mui/icons-material/CastConnected';
 import Box from '@mui/material/Box';

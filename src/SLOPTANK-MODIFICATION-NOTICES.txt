@@ -1,0 +1,7 @@
+# SlopTank modification notice: added or changed by SlopTank on 2026-09-09.
+# Scope: exact same-directory paths only.
+# Columns: path<TAB>change-dates<TAB>git-mode<TAB>sha256
+config.json	2026-07-22,2026-07-31	100644	a081960f694a3766b6cf50671d85b7feda53b2d87d4c9d9cc5058b19183914ae
+manifest.json	2026-07-18,2026-07-19,2026-07-21,2026-07-22,2026-08-03	100644	d9910d38cd7a2a6689a01202db4e299afe571ae5147a205006c2f931c6b4bd68
+modularity.ignore.json	2026-07-23	100644	447842f5d34ff510cddcc5e168706aea8fb9a7ef89c11f20aa03441779a1cf50
+modularity.test.js.pending-owner-setup	2026-07-23	100644	385ea0affedac8c75b668ec3b70a8ce8dc144a85b7d2d31e65537fcbcc1dae74

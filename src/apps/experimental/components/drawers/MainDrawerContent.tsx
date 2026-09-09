@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-03, 2026-09-09.
 import Favorite from '@mui/icons-material/Favorite';
 import Home from '@mui/icons-material/Home';
 import Divider from '@mui/material/Divider';

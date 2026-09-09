@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-07-24, 2026-09-09.
 /**
  * Black-box tests for the CI server-provisioning command used by GitHub Actions.
  * The command runs in a child process and crosses an HTTP boundary just as it does

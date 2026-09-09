@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-03, 2026-09-09.
 import Check from '@mui/icons-material/Check';
 import Close from '@mui/icons-material/Close';
 import SettingsRemote from '@mui/icons-material/SettingsRemote';

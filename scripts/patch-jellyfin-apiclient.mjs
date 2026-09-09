@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-01, 2026-09-09.
 /**
  * Apply SlopTank's modern-authorization compatibility patch to the archived
  * jellyfin-apiclient package after dependency installation.

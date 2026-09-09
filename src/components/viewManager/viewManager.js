@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-11, 2026-09-09.
 import * as viewContainer from '../viewContainer';
 import focusManager from '../focusManager';
 import layoutManager from '../layoutManager';

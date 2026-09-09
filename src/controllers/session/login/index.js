@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-31, 2026-08-03, 2026-08-29, 2026-09-08, 2026-09-09.
 import DOMPurify from 'dompurify';
 import markdownIt from 'markdown-it';
 

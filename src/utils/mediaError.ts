@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-01, 2026-09-09.
 import { MediaError } from 'types/mediaError';
 
 const MEDIA_ERROR_VALUES: Set<string> = new Set(Object.values(MediaError));

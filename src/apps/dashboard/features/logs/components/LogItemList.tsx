@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-03, 2026-09-09.
 import React, { FunctionComponent } from 'react';
 import type { LogFile } from '@jellyfin/sdk/lib/generated-client/models/log-file';
 import List from '@mui/material/List';

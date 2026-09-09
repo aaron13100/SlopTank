@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-19, 2026-07-22, 2026-09-09.
 import icon from 'assets/img/branding/sloptank-mark.svg';
 import Button from '@mui/material/Button/Button';
 import React, { FC } from 'react';

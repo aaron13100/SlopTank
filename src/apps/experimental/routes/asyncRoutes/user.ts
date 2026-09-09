@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-24, 2026-09-09.
 import { AsyncRoute } from 'components/router/AsyncRoute';
 import { AppType } from 'constants/appType';
 import { PERMALINK_ROUTES } from 'apps/stable/routes/permalink/permalinkRoutes';

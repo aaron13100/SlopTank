@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-11, 2026-09-09.
 import React, { type FC, type PropsWithChildren, useEffect } from 'react';
 import * as viewContainer from './viewContainer';
 

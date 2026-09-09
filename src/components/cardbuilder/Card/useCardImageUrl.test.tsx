@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-24, 2026-09-09.
 import { Jellyfin, type Api } from '@jellyfin/sdk';
 import { renderHook } from '@testing-library/react';
 import React, { type PropsWithChildren } from 'react';

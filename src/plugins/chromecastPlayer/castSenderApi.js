@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-20, 2026-09-09.
 /** How long to wait for the Cast sender SDK to report availability. */
 const CAST_SDK_TIMEOUT_MS = 15000;
 

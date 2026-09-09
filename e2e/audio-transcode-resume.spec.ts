@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-23, 2026-07-24, 2026-08-01, 2026-08-09, 2026-09-02, 2026-09-06, 2026-09-09.
 /**
  * Regression coverage for the audio-transcode resume stall
  * (queue task t_260718_132551_465).

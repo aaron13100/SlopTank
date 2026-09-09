@@ -1,3 +1,4 @@
+# SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-09-09.
 # A dedicated push caller instead of a job in push.yml: push.yml ignores
 # markdown-only pushes, but README.md is one of the debrand guard's primary
 # targets (upstream's h1, logo banner, and donate link live there), so this

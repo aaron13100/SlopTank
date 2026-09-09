@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09.
 import React, { FC, useCallback } from 'react';
 import PlaylistAdd from '@mui/icons-material/PlaylistAdd';
 import Button from '@mui/material/Button';

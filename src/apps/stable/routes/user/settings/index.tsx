@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-03, 2026-09-09.
 import type { UserDto } from '@jellyfin/sdk/lib/generated-client/models/user-dto';
 import React, { useEffect, useMemo, useState, type FC } from 'react';
 import { useSearchParams } from 'react-router-dom';

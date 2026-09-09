@@ -1,3 +1,4 @@
+<!-- SlopTank modification notice: added or changed by SlopTank on 2026-07-19, 2026-07-21, 2026-09-09. -->
 <h1 align="center">SlopTank</h1>
 <h3 align="center">A customized web client based on <a href="https://jellyfin.org">Jellyfin Web</a></h3>
 

@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-01, 2026-09-07, 2026-09-09.
 /**
  * Exercises ThirdPartyNoticesPlugin through the real entry point a user
  * relies on: a webpack compilation. The integration test below runs an

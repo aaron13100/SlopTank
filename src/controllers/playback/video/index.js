@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-28, 2026-08-01, 2026-08-03, 2026-08-09, 2026-08-11, 2026-08-28, 2026-09-08, 2026-09-09.
 import escapeHtml from 'escape-html';
 import { ItemFields } from '@jellyfin/sdk/lib/generated-client/models/item-fields';
 import { getTvShowsApi } from '@jellyfin/sdk/lib/utils/api/tv-shows-api';

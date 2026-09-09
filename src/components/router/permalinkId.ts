@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-24, 2026-07-31, 2026-08-03, 2026-09-02, 2026-09-09.
 import { TICKS_PER_SECOND } from 'constants/time';
 import { trimTrailingSlashes } from 'utils/url';
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base-item-dto';

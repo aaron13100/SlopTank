@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-07, 2026-09-09.
 import React, { useCallback, useMemo, useState } from 'react';
 import type { SessionInfo } from '@jellyfin/sdk/lib/generated-client/models/session-info';
 import Typography from '@mui/material/Typography';

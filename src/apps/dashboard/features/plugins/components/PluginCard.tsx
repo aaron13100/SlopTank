@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-03, 2026-09-09.
 import ExtensionIcon from '@mui/icons-material/Extension';
 import React, { useMemo } from 'react';
 import { useLocation } from 'react-router-dom';

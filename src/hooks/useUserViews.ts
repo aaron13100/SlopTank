@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-02, 2026-09-09.
 import type { Api } from '@jellyfin/sdk/lib/api';
 import type { UserViewsApiGetUserViewsRequest } from '@jellyfin/sdk/lib/generated-client/api/user-views-api';
 import { getUserViewsApi } from '@jellyfin/sdk/lib/utils/api/user-views-api';

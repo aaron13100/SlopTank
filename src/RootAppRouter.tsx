@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-08-03, 2026-08-12, 2026-08-27, 2026-09-08, 2026-09-09.
 import { ThemeProvider } from '@mui/material/styles';
 import React from 'react';
 import {

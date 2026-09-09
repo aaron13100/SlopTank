@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-03-12, 2026-07-19, 2026-09-09.
 /**
  * Module for controlling scroll behavior.
  * @module components/scrollManager

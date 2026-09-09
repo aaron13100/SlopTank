@@ -1,3 +1,4 @@
+<!-- SlopTank modification notice: added or changed by SlopTank on 2026-07-21, 2026-09-09. -->
 <!--
 Ensure your title is short, descriptive, and in the imperative mood (Fix X, Change Y, instead of Fixed X, Changed Y).
 For a good inspiration of what to write in commit messages and PRs please review https://chris.beams.io/posts/git-commit/.

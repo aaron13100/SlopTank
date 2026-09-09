@@ -1,3 +1,4 @@
+<!-- SlopTank modification notice: added or changed by SlopTank on 2026-07-21, 2026-09-09. -->
 # Support
 
 SlopTank is a small independent fork of Jellyfin Web. Support is best-effort and there is no

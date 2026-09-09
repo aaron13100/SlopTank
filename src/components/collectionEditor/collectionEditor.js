@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09.
 import escapeHtml from 'escape-html';
 import dom from '../../utils/dom';
 import dialogHelper from '../dialogHelper/dialogHelper';

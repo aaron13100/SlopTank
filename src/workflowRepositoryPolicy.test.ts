@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-23, 2026-07-24, 2026-09-09.
 /**
  * Regression coverage for the GitHub Actions manifests that users exercise by opening pull
  * requests or pushing branches to SlopTank. These assertions keep upstream-only Jellyfin gates

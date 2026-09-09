@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-03, 2026-09-09.
 const aliases = new Map<string, string>();
 
 function key(serverId: string | null | undefined, itemId: string): string {

@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-31, 2026-08-03, 2026-09-09.
 /**
  * Removes every trailing slash from an origin or base url so a caller can
  * append its own path with exactly one separator.

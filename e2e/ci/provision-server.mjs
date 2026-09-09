@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-07-24, 2026-09-09.
 /**
  * Provisions a fresh SlopTank/Jellyfin server for the public Playwright CI suite.
  * It uses only public HTTP APIs, waits for the generated media fixture to be

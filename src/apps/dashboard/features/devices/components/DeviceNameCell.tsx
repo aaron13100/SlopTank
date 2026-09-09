@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-07, 2026-09-09.
 import React, { FC } from 'react';
 
 import { DeviceInfoCell } from 'apps/dashboard/features/devices/types/deviceInfoCell';

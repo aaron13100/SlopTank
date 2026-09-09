@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-24, 2026-09-09.
 // scripts/coverage-baseline.mjs - read and (re)generate coverage-baseline.json
 //
 // Deliberately has no `#!/usr/bin/env node` shebang, unlike its sibling

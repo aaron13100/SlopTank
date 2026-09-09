@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-09-09.
 // scripts/modularity-baseline.mjs - (Re)generate src/modularity.ignore.json
 //
 // src/modularity.test.js enforces file/function/class line limits as a

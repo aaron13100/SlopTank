@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-09-09.
 // .dependency-cruiser.js - layer boundary + circular dependency gates.
 //
 // This is a baseline ratchet, the same shape as tests/modularity.test.js:

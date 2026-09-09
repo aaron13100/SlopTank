@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-09-09.
 /**
  * In-player subtitle timing (offset) overlay. Instance-scoped: the player and
  * DOM references live on the instance, so destroying an older overlay can

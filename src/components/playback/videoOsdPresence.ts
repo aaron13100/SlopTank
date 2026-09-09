@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-12, 2026-09-09.
 /**
  * Tracks whether the video OSD is on screen, so the app chrome can follow the
  * view rather than the URL.

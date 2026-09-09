@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09.
 import loading from '../../components/loading/loading';
 import * as userSettings from '../../scripts/settings/userSettings';
 import libraryBrowser from '../../scripts/libraryBrowser';

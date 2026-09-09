@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-01, 2026-09-09.
 import { afterEach, describe, expect, it } from 'vitest';
 
 import VolumeControl from './VolumeControl';

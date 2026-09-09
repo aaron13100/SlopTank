@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-03, 2026-09-08, 2026-09-09.
 // Import legacy browser polyfills
 import 'lib/legacy';
 

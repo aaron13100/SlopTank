@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-06, 2026-09-09.
 import { beforeEach, describe, expect, it } from 'vitest';
 import eventsUtils from './events';
 

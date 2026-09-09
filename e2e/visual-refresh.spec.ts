@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-08-12, 2026-08-29, 2026-09-09.
 import { expect, login, submitManualLogin, test } from './fixtures';
 
 const ELECTRIC_LAGOON_BACKGROUND = 'rgb(7, 16, 24)';

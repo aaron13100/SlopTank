@@ -1,3 +1,4 @@
+<!-- SlopTank modification notice: added or changed by SlopTank on 2026-09-07, 2026-09-08, 2026-09-09. -->
 # SlopTank web distribution source and licence election
 
 Every released web directory must contain `SOURCE-MANIFEST.json`. That

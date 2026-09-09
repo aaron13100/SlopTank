@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-23, 2026-09-08, 2026-09-09.
 import browser from '../../scripts/browser';
 import loading from '../../components/loading/loading';
 import { playbackManager } from '../../components/playback/playbackmanager';

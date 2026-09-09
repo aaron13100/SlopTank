@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-24, 2026-09-09.
 /**
  * Shared route declarations for permalink entry points that must be present
  * in every application layout.

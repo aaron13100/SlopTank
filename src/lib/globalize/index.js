@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09.
 import isEmpty from 'lodash-es/isEmpty';
 
 import { currentSettings as userSettings } from 'scripts/settings/userSettings';

@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-29, 2026-09-02, 2026-09-09.
 /**
  * E2E coverage for the webpack dev server's Jellyfin media proxy.
  *

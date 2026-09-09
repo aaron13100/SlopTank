@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-22, 2026-07-23, 2026-08-03, 2026-08-29, 2026-09-02, 2026-09-09.
 import { clickOsdControl, expect, login, revealOsdControl, test } from './fixtures';
 
 test.setTimeout(300_000);

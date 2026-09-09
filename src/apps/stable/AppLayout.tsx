@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-03, 2026-09-09.
 import React, { ReactNode } from 'react';
 import { Outlet } from 'react-router-dom';
 

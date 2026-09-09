@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-24, 2026-07-31, 2026-08-03, 2026-08-11, 2026-09-08, 2026-09-09.
 /**
  * Presentation for resolved and unresolved permalink route states.
  * allow-no-test-found: rendered through its own route by PermalinkRedirectPage.test.tsx and e2e/permalink.spec.ts

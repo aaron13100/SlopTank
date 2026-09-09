@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-03, 2026-08-11, 2026-09-09.
 import axios, { type AxiosAdapter, type AxiosRequestConfig, type AxiosResponse } from 'axios';
 import { createBrowserHistory, type History } from 'history';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';

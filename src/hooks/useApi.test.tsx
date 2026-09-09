@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-28, 2026-09-09.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 

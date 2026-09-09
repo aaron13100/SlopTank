@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-01, 2026-09-07, 2026-09-08, 2026-09-09.
 'use strict';
 
 // GPLv2 Sections 1 and 3 require the license text and per-component notices
