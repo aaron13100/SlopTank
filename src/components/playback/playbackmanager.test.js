@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-08-03, 2026-09-09.
 import { createMemoryHistory } from 'history';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
