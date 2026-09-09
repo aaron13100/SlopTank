@@ -73,7 +73,7 @@ const Home = () => {
         }
 
         return loadDynamicModule(() => import(/* webpackChunkName: "[request]", webpackExclude: /(?:^|[\\/])(?:__tests__|__mocks__|__fixtures__|fixtures?|tests?|mocks?)(?:[\\/]|$)|(?:\.(?:test|spec|stories|story|bench|benchmark|fixture|mock)(?:-d)?\.[cm]?[jt]sx?|\.snap)$/i */ `../../../controllers/${depends}`),
-                   '../../../controllers/${depends}').then(({ default: ControllerFactory }) => {
+            '../../../controllers/${depends}').then(({ default: ControllerFactory }) => {
             let controller = tabControllers[index];
 
             if (!controller) {
