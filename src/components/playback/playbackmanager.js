@@ -2431,9 +2431,9 @@ export class PlaybackManager {
 
             return runInterceptors(item, playOptions)
                 .catch(onInterceptorRejection)
-                .then(() => playOptions.skipAutomaticBitrateDetection
-                    ? getSavedMaxStreamingBitrate(apiClient, mediaType)
-                    : detectBitrate(apiClient, item, mediaType))
+                .then(() => playOptions.skipAutomaticBitrateDetection ?
+                    getSavedMaxStreamingBitrate(apiClient, mediaType) :
+                    detectBitrate(apiClient, item, mediaType))
                 .then((bitrate) => {
                     return playAfterBitrateDetect(bitrate, item, playOptions, onPlaybackStartedFn, prevSource)
                         .catch(onPlaybackRejection);

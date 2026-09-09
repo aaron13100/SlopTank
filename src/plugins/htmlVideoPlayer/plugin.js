@@ -713,7 +713,7 @@ export class HtmlVideoPlayer {
      */
     setSrcWithFlvJs(elem, options, url) {
         return loadDynamicModule(() => import('flv.js'),
-                   'flv.js').then(({ default: flvjs }) => {
+            'flv.js').then(({ default: flvjs }) => {
             const flvPlayer = flvjs.createPlayer({
                 type: 'flv',
                 url: url
@@ -2899,7 +2899,7 @@ export class HtmlVideoPlayer {
 
         if (!dlg) {
             return loadDynamicModule(() => import('./style.scss'),
-                       './style.scss').then(() => {
+                './style.scss').then(() => {
                 if (options.fullscreen && !options.alreadyOnVideoOsd) loading.show();
 
                 const playerDlg = document.createElement('div');
