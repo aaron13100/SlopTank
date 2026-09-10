@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-02, 2026-09-08, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-02, 2026-09-08, 2026-09-09, 2026-09-10.
 import { VIDEO_ROUTE, WATCH_PERMALINK_ROUTE, expect, login, test } from './fixtures';
 
 test.setTimeout(300_000);
@@ -146,12 +146,23 @@ async function withServerPlayback<T>(
             return;
         }
 
+        // A direct-played video reports an EMPTY PlaySessionId, and that is the
+        // normal case here rather than an edge one. The server does mint a
+        // session id and returns it from PlaybackInfo, but the client only ever
+        // reads one back out of the media URL's query string
+        // (playbackmanager.js: `playSessionId: getParam('playSessionId', mediaUrl)`,
+        // untouched upstream code), and the static /Videos/{id}/stream.mp4 URL
+        // built for direct play carries no such parameter. Every item in this
+        // library is pre-encoded to direct-play MP4 on purpose, so requiring a
+        // non-empty session id here rejected every report the client sent and
+        // made this spec unable to pass at all. The identity that matters for
+        // cloning a stop is the ItemId; an empty session id is what the real
+        // client's own Stopped report carries too.
         const report = request.postDataJSON() as Partial<PlaybackReport> | null;
         if (
             !report
             || report.ItemId !== itemId
             || typeof report.PlaySessionId !== 'string'
-            || !report.PlaySessionId
         ) {
             return;
         }
