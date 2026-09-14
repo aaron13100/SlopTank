@@ -12,6 +12,7 @@ import confirm from '../confirm/confirm';
 import itemHelper from '../itemHelper';
 import datetime from '../../scripts/datetime';
 import { loadDynamicModule } from 'utils/dynamicImport';
+import { describeDeleteError } from '../../scripts/deleteHelper';
 
 let selectedItems = [];
 let selectedElements = [];
@@ -159,8 +160,10 @@ function deleteItems(apiClient, itemIds) {
         confirm(msg, title).then(() => {
             const promises = itemIds.map(itemId => apiClient.deleteItem(itemId));
 
-            Promise.all(promises).then(resolve, () => {
-                alertText(globalize.translate('ErrorDeletingItem')).then(reject, reject);
+            Promise.all(promises).then(resolve, (err) => {
+                describeDeleteError(err).then(function (text) {
+                    alertText(text).then(reject, reject);
+                });
             });
         }, reject);
     });

@@ -48,6 +48,65 @@ function getDeletionConfirmContent(item) {
     };
 }
 
+/**
+ * Extracts the server's real refusal reason from a delete rejection.
+ *
+ * The server answers a refused delete with a typed ProblemDetails body whose
+ * title is the refusal code (for example "content-mismatch" when the
+ * permalink capsule no longer matches the file). Asserting a permissions
+ * cause the server never stated sent the owner checking folder write access
+ * for a fence that has nothing to do with it. Pure: takes the rejection,
+ * returns a suffix; the caller composes it after the translated framing.
+ *
+ * @param {Error|Response|null} err - The rejection from the api client.
+ * @returns {Promise<string>} The parenthesized reason, or '' when nothing
+ * usable is present.
+ */
+export function deleteErrorSuffix(err) {
+    return Promise.resolve()
+        .then(function () {
+            if (err && typeof err.text === 'function') {
+                return err.text().then(function (bodyText) {
+                    try {
+                        const parsed = JSON.parse(bodyText);
+                        const code = parsed && parsed.title;
+                        const detail = parsed && parsed.detail;
+                        if (code || detail) {
+                            return ` (${[code, detail].filter(Boolean).join(': ')})`;
+                        }
+                    } catch (e) {
+                        if (bodyText) {
+                            return ` (${String(bodyText).slice(0, 300)})`;
+                        }
+                    }
+
+                    return err && err.status ? ` (HTTP ${err.status})` : '';
+                });
+            }
+
+            if (err && err.status) {
+                return ` (HTTP ${err.status})`;
+            }
+
+            return err && err.message ? ` (${err.message})` : '';
+        })
+        .catch(function () {
+            return '';
+        });
+}
+
+/**
+ * Composes the full user-facing delete failure text.
+ *
+ * @param {Error|Response|null} err - The rejection from the api client.
+ * @returns {Promise<string>} The composed alert text.
+ */
+export function describeDeleteError(err) {
+    return deleteErrorSuffix(err).then(function (suffix) {
+        return globalize.translate('ErrorDeletingItem') + suffix;
+    });
+}
+
 export function deleteItem(options) {
     const item = options.item;
     const parentId = item.SeasonId || item.SeriesId || item.ParentId;
@@ -68,7 +127,9 @@ export function deleteItem(options) {
                 return Promise.reject(err);
             };
 
-            return alertText(globalize.translate('ErrorDeletingItem')).then(result, result);
+            return describeDeleteError(err).then(function (text) {
+                return alertText(text).then(result, result);
+            });
         });
     });
 }
@@ -89,7 +150,9 @@ export function deleteLyrics (item) {
                 return Promise.reject(err);
             };
 
-            return alertText(globalize.translate('ErrorDeletingLyrics')).then(result, result);
+            return describeDeleteError(err).then(function (text) {
+                return alertText(text).then(result, result);
+            });
         });
     });
 }
