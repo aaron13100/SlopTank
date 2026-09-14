@@ -65,9 +65,21 @@ class AppSettings {
 
         if (isInNetwork && mediaType === 'Audio') {
             return true;
-        } else {
-            return toBoolean(this.get(key), true);
         }
+
+        // SlopTank: in-network video never runs the bitrate probe. Every
+        // browser client is on this server's own network, the library is
+        // pre-encoded for universal direct play, and the probe costs three
+        // escalating multi-MB server round trips before the first frame --
+        // which under load can even measure LOW and request a transcode this
+        // server cannot perform. The saved-or-huge cap from
+        // maxStreamingBitrate is used instead. Remote playback keeps the
+        // upstream automatic-detection behavior.
+        if (isInNetwork && mediaType === 'Video') {
+            return false;
+        }
+
+        return toBoolean(this.get(key), true);
     }
 
     maxStreamingBitrate(isInNetwork, mediaType, val) {
@@ -83,9 +95,20 @@ class AppSettings {
         if (isInNetwork && mediaType === 'Audio') {
             // return a huge number so that it always direct plays
             return 150000000;
-        } else {
-            return parseInt(this.get(key) || '0', 10) || 1500000;
         }
+
+        const saved = this.get(key);
+        if (isInNetwork && mediaType === 'Video' && saved === null) {
+            // SlopTank: no cap was ever chosen, and this client is on the
+            // server's own network. The library is pre-encoded for universal
+            // direct play and the server cannot transcode in real time, so
+            // the unset in-network default must be a huge direct-play cap
+            // (the Audio path above has always worked this way). An explicit
+            // user choice is still honored through the generic path below,
+            // and remote playback keeps the generic 1.5 Mbps default.
+            return 150000000;
+        }
+        return parseInt(saved || '0', 10) || 1500000;
     }
 
     maxStaticMusicBitrate(val) {
