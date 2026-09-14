@@ -523,10 +523,17 @@ export async function submitManualLogin(page: import('@playwright/test').Page, u
     try {
         // Wait for the public-user request to finish before changing forms. Clicking
         // Manual Login earlier races loadUserList(), which switches back to the
-        // visual form and leaves Playwright targeting a hidden submit button.
+        // visual form and leaves Playwright targeting a hidden submit button. Gate on
+        // that fetch's own DOM effect (some tile appears, or the manual form is
+        // auto-shown because there are zero public users) rather than on the target
+        // username's tile specifically: an account with Policy.IsHidden true never
+        // gets a tile, so waiting on it alone hangs for the full timeout.
         const userButton = page.getByRole('button', { name: username, exact: true });
         const selectServerHeading = page.getByRole('heading', { name: 'Select Server' });
-        await expect(userButton.or(selectServerHeading)).toBeVisible({ timeout: 30_000 });
+        const manualLoginButton = page.getByRole('button', { name: 'Manual Login', exact: true });
+        const anyUserTile = page.locator('#divUsers button').first();
+        const manualFormAutoShown = page.locator('.manualLoginForm:visible');
+        await expect(anyUserTile.or(manualFormAutoShown).or(selectServerHeading)).toBeVisible({ timeout: 30_000 });
 
         // A clean production build has no server baked into config.json. Connect
         // through the same UI a first-time user sees, using the origin under test.
@@ -534,10 +541,18 @@ export async function submitManualLogin(page: import('@playwright/test').Page, u
             await page.getByText('Add Server', { exact: true }).click();
             await page.getByLabel('Host').fill(new URL(page.url()).origin);
             await page.getByText('Connect', { exact: true }).click();
-            await expect(userButton).toBeVisible({ timeout: 30_000 });
+            await expect(anyUserTile.or(manualFormAutoShown)).toBeVisible({ timeout: 30_000 });
         }
 
-        await userButton.click();
+        if (!(await manualFormAutoShown.isVisible())) {
+            if (await userButton.isVisible()) {
+                await userButton.click();
+            } else {
+                // Hidden from the public tile list: reach the same form through the
+                // always-present Manual Login button instead.
+                await manualLoginButton.click();
+            }
+        }
 
         const manualForm = page.locator('.manualLoginForm:visible');
         await expect(manualForm).toBeVisible();
