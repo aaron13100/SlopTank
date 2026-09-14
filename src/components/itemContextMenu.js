@@ -546,12 +546,16 @@ function executeCommand(item, id, options) {
         // eslint-disable-next-line sonarjs/max-switch-cases
         switch (id) {
             case 'removefromcontinue':
-                getPlaystateApi(api)
-                    .markUnplayedItem({
-                        userId: options.user.Id,
-                        itemId: itemId
-                    })
-                    .then(getResolveFunction(resolve, id, true), reject);
+                // Clear ONLY the resume position (the rail's own data).
+                // markUnplayedItem was used here before and destroyed
+                // watched state, play count and last-played date with it,
+                // which the removal action never promised.
+                apiClient.ajax({
+                    url: apiClient.getUrl(`UserResumeItems/${itemId}`, {
+                        userId: options.user.Id
+                    }),
+                    type: 'DELETE'
+                }).then(getResolveFunction(resolve, id, true), reject);
                 break;
             case 'addtocollection':
                 loadDynamicModule(() => import('./collectionEditor/collectionEditor'),
