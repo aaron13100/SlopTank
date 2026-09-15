@@ -13,6 +13,21 @@ const PASSWORD = process.env.E2E_PASSWORD as string;
 test.setTimeout(240_000);
 
 async function timedLogin(page: import('@playwright/test').Page) {
+    const marks: string[] = [];
+    const base = Date.now();
+    const at = () => `${Date.now() - base}ms`;
+    const bind = (p: import('@playwright/test').Page) => {
+        p.context().on('request', (r) => {
+            if (/authenticatebyname/i.test(r.url())) marks.push(`${at()} AUTH-REQ`);
+            if (!/\.(js|css|woff2?|png|ico|svg)/.test(r.url()) && !r.url().includes('/Images/')) {
+                marks.push(`${at()} req ${r.method()} ${r.url().split('8096')[1]?.slice(0, 55) ?? r.url().slice(-55)}`);
+            }
+        });
+        p.context().on('response', (r) => {
+            if (/authenticatebyname/i.test(r.url())) marks.push(`${at()} AUTH-RES`);
+        });
+    };
+    bind(page);
     await page.goto('/web/#/login');
     const manualForm = page.locator('.manualLoginForm:visible');
     const anyUserTile = page.locator('#divUsers button').first();
@@ -25,9 +40,12 @@ async function timedLogin(page: import('@playwright/test').Page) {
     await expect(manualForm).toBeVisible();
     await manualForm.locator('#txtManualName').fill(USERNAME);
     await manualForm.locator('#txtManualPassword').fill(PASSWORD);
+    marks.push(`${at()} SUBMIT`);
     const t0 = Date.now();
     await manualForm.locator('.button-submit').click();
     await page.waitForURL(/(#\/home|\/web\/home)/, { timeout: 60_000 });
+    marks.push(`${at()} URL-FLIP`);
+    console.log(`SUBMIT-TRACE ${marks.join(' | ')}`);
     return Date.now() - t0;
 }
 
