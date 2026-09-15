@@ -18,13 +18,18 @@ test(`live playback: ${ITEM_NAME} starts promptly from search`, async ({ page })
     const homeMs = Date.now() - startedAt;
 
     // Open the movie's detail page directly by id (the API-verified item).
+    // The details page renders both a Play button and, once the item has a
+    // resume position, a hidden Resume variant of the same class; target the
+    // visible one or the locator parks on the hidden variant forever
+    // (observed failing the nightly smoke on 2026-09-15 after the item
+    // gained a resume position).
     await page.goto(`/details?id=${process.env.LIVE_ITEM_ID}`);
-    await expect(page.locator('.btnPlay').first())
+    await expect(page.locator('.btnPlay:visible').first())
         .toBeVisible({ timeout: 60_000 });
     const detailMs = Date.now() - startedAt;
 
     // Play it and require actual video data, not a spinner.
-    await page.locator('.btnPlay').first().click();
+    await page.locator('.btnPlay:visible').first().click();
     const video = page.locator('video').first();
     await expect(video).toBeVisible({ timeout: 120_000 });
     await expect
