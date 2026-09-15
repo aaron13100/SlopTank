@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-08-03, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-08-03, 2026-09-09, 2026-09-15.
 import { createMemoryHistory } from 'history';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,6 +8,7 @@ import globalize from '../../lib/globalize';
 import Events from '../../utils/events.ts';
 import { PluginType } from '../../types/plugin.ts';
 import { pluginManager } from '../pluginManager';
+import { resolvePlaybackMediaStreams } from './mediaStreams';
 import { appRouter } from '../router/appRouter';
 import YoutubePlayer from '../../plugins/youtubePlayer/plugin';
 import { playbackManager } from './playbackmanager';
@@ -418,5 +419,75 @@ describe('playbackManager trailer playback', () => {
         closeButton.click();
 
         await waitFor(() => trailerDialog() === null);
+    });
+});
+
+describe('playbackManager media-stream resolution', () => {
+    function offlineApiClient() {
+        const fetched = [];
+        return {
+            apiClient: {
+                getCurrentUserId: () => 'user-1',
+                getItem: (_userId, id) => {
+                    fetched.push(id);
+                    return Promise.resolve({ Id: id, MediaStreams: [{ Index: 0, Type: 'Video', Id: 'fetched' }] });
+                }
+            },
+            fetched
+        };
+    }
+
+    it('reuses the item streams when no source is selected, without refetching', async () => {
+        const { apiClient, fetched } = offlineApiClient();
+        const item = { Id: 'movie-1', MediaStreams: [{ Index: 0, Type: 'Video', Id: 'item' }] };
+
+        const streams = await resolvePlaybackMediaStreams(apiClient, item, null);
+
+        // The Play flow must not pay a whole extra item round trip between
+        // the click and PlaybackInfo when the streams are already in hand.
+        expect(streams).toBe(item.MediaStreams);
+        expect(fetched).toEqual([]);
+    });
+
+    it('refetches when a media source is explicitly selected', async () => {
+        const { apiClient, fetched } = offlineApiClient();
+        const item = {
+            Id: 'movie-1',
+            MediaStreams: [{ Index: 0, Type: 'Video', Id: 'item' }],
+            MediaSources: [{ Id: 'movie-1' }, { Id: 'source-2' }]
+        };
+
+        const streams = await resolvePlaybackMediaStreams(apiClient, item, 'source-2');
+
+        // A different source's streams cannot be assumed from the item's own
+        // merged list, so the explicit selection still refetches by source.
+        expect(streams[0].Id).toBe('fetched');
+        expect(fetched).toEqual(['source-2']);
+    });
+
+    it('reuses item streams when the selection is the item only source (details default)', async () => {
+        const { apiClient, fetched } = offlineApiClient();
+        // The details page source selector defaults to the single source,
+        // whose id equals the item id; that is not a real selection.
+        const item = {
+            Id: 'movie-1',
+            MediaStreams: [{ Index: 0, Type: 'Video', Id: 'item' }],
+            MediaSources: [{ Id: 'movie-1' }]
+        };
+
+        const streams = await resolvePlaybackMediaStreams(apiClient, item, 'movie-1');
+
+        expect(streams).toBe(item.MediaStreams);
+        expect(fetched).toEqual([]);
+    });
+
+    it('refetches when the item carries no streams', async () => {
+        const { apiClient, fetched } = offlineApiClient();
+        const item = { Id: 'movie-1' };
+
+        const streams = await resolvePlaybackMediaStreams(apiClient, item, null);
+
+        expect(streams[0].Id).toBe('fetched');
+        expect(fetched).toEqual(['movie-1']);
     });
 });

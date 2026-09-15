@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-03-12, 2026-07-19, 2026-07-23, 2026-07-24, 2026-07-25, 2026-09-08, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-03-12, 2026-07-19, 2026-07-23, 2026-07-24, 2026-07-25, 2026-09-08, 2026-09-09, 2026-09-15.
 import { BaseItemKind } from '@jellyfin/sdk/lib/generated-client/models/base-item-kind';
 import { ItemFilter } from '@jellyfin/sdk/lib/generated-client/models/item-filter';
 import { ItemSortBy } from '@jellyfin/sdk/lib/generated-client/models/item-sort-by';
@@ -23,7 +23,7 @@ import { PluginType } from '../../types/plugin.ts';
 import { includesAny } from '../../utils/container.ts';
 import { getItems } from '../../utils/jellyfin-apiclient/getItems.ts';
 import { getItemBackdropImageUrl } from '../../utils/jellyfin-apiclient/backdropImage';
-
+import { resolvePlaybackMediaStreams } from './mediaStreams';
 import { PlayerEvent } from 'apps/stable/features/playback/constants/playerEvent';
 import { bindMediaSegmentManager } from 'apps/stable/features/playback/utils/mediaSegmentManager';
 import { bindMediaSessionSubscriber } from 'apps/stable/features/playback/utils/mediaSessionSubscriber';
@@ -720,7 +720,6 @@ function sortPlayerTargets(a, b) {
 export class PlaybackManager {
     constructor() {
         const self = this;
-
         const players = [];
         let currentTargetInfo;
         let currentPairingId = null;
@@ -2750,13 +2749,10 @@ export class PlaybackManager {
             }
 
             let mediaSourceId = playOptions.mediaSourceId;
-
             const apiClient = ServerConnections.getApiClient(item.ServerId);
             const isLiveTv = [BaseItemKind.TvChannel, BaseItemKind.LiveTvChannel].includes(item.Type);
-            const getMediaStreams = isLiveTv ? Promise.resolve([]) : apiClient.getItem(apiClient.getCurrentUserId(), mediaSourceId || item.Id)
-                .then(fullItem => {
-                    return fullItem.MediaStreams;
-                });
+            const getMediaStreams = isLiveTv ? Promise.resolve([])
+                : resolvePlaybackMediaStreams(apiClient, item, mediaSourceId);
 
             return Promise.all([promise, player.getDeviceProfile(item), apiClient.getCurrentUser(), getMediaStreams]).then(function (responses) {
                 const deviceProfile = responses[1];
