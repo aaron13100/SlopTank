@@ -1,4 +1,4 @@
-// SlopTank modification notice: added by SlopTank on 2026-09-15.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-15.
 //
 // Sign-in must not wait on the server's display preferences.
 //
