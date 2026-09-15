@@ -15,6 +15,13 @@
 // /Playback/BitrateTest crosses the wire during the play flow.
 import { test, expect, login } from './fixtures';
 
+// The spec's own locator budgets are 60s; under measured box load a cold
+// browser needs most of that for page boot, so the default 30s test timeout
+// would cut the flow short mid-expect (observed 2026-09-15 at load 24: the
+// details page rendered with its Play button after the timeout had already
+// failed the test).
+test.setTimeout(240_000);
+
 test('LAN playback starts without a bitrate-test round trip', async ({ page }) => {
     const bitrateTestUrls: string[] = [];
     page.on('request', (request) => {
@@ -25,7 +32,18 @@ test('LAN playback starts without a bitrate-test round trip', async ({ page }) =
 
     await login(page, process.env.E2E_USERNAME!, process.env.E2E_PASSWORD!);
 
-    await page.goto(`/details?id=${process.env.LIVE_ITEM_ID}`);
+    // The item id must be a required env var with a hard fail, not an
+    // optional one: an unset LIVE_ITEM_ID navigated to /details?id=undefined,
+    // which renders the not-found page and fails on the Play-button locator
+    // -- a misleading failure that looks like a player bug (seen 2026-09-15;
+    // the var had only ever been set by ad-hoc shell exports).
+    const itemId = process.env.E2E_RENTAL_FAMILY_ITEM_ID;
+    if (!itemId) {
+        throw new Error( // allow-raw-error: e2e setup fast-fail, not app code
+            'Missing required env var E2E_RENTAL_FAMILY_ITEM_ID for the LAN bitrate test');
+    }
+
+    await page.goto(`/details?id=${itemId}`);
     // The details page renders both a Play button and, once the item has a
     // resume position, a hidden Resume variant of the same class; target the
     // visible one so the click is always the button a user would press.
