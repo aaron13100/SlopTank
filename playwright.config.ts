@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-23, 2026-08-01, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-23, 2026-08-01, 2026-09-09, 2026-09-15.
 import { defineConfig } from '@playwright/test';
 
 /**
@@ -35,6 +35,16 @@ export default defineConfig({
     projects: [
         {
             name: 'chromium',
+            use: { channel: 'chrome' },
+            // LGPL replacement probes are release-evidence runs against a
+            // probe server with a modified candidate copy; they are selected
+            // explicitly via --project=lgpl-probes and excluded from every
+            // ordinary regression run here.
+            testIgnore: /lgpl-replacement-probes/
+        },
+        {
+            name: 'lgpl-probes',
+            testMatch: /lgpl-replacement-probes/,
             use: { channel: 'chrome' }
         }
     ]
