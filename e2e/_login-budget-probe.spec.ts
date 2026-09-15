@@ -4,9 +4,12 @@
 // warm repeat visit. Cold-Chrome launch cost is logged separately and is NOT
 // part of the budget (real viewers run a warm browser; the cold number
 // measures this box's Avast-taxed process spawn, tracked as its own line).
+// Budget is load-conditional per the goal: 1s on a quiet box, 3s under load.
+import os from 'node:os';
 import { test, expect } from '@playwright/test';
 
-const SUBMIT_TO_HOME_BUDGET_MS = 1_000;
+const QUIET_BUDGET_MS = 1_000;
+const LOADED_BUDGET_MS = 3_000;
 const USERNAME = process.env.E2E_USERNAME as string;
 const PASSWORD = process.env.E2E_PASSWORD as string;
 
@@ -50,6 +53,8 @@ async function timedLogin(page: import('@playwright/test').Page) {
 }
 
 test('login submit-to-home timing, cold and warm', async ({ page, browser }) => {
+    const load1 = os.loadavg()[0];
+    const budget = load1 < 3 ? QUIET_BUDGET_MS : LOADED_BUDGET_MS;
     const timingLines: string[] = [];
     const t0base = Date.now();
     page.on('response', (r) => {
@@ -66,9 +71,8 @@ test('login submit-to-home timing, cold and warm', async ({ page, browser }) => 
         warms.push(await timedLogin(p));
         await ctx.close();
     }
-    console.log(`LOGIN-BUDGET cold=${cold}ms warm=${warms.join(',')}ms budget=${SUBMIT_TO_HOME_BUDGET_MS}ms`);
-    // Logging probe for now: the hard budget gate flips on once the login
-    // path optimization lands (goal 2026-09-15); numbers above show the
-    // server floor is ~10ms and the remaining cost is client bootstrap under
-    // box contention.
+    console.log(`LOGIN-BUDGET cold=${cold}ms warm=${warms.join(',')}ms budget=${budget}ms load1=${load1.toFixed(2)}`);
+    for (const value of [cold, ...warms]) {
+        expect(value, `login submit-to-home within ${budget}ms at load ${load1.toFixed(2)}`).toBeLessThan(budget);
+    }
 });

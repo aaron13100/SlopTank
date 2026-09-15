@@ -1,8 +1,10 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-25, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-25, 2026-09-09, 2026-09-15.
 import Events from '../../utils/events.ts';
 import { toBoolean } from '../../utils/string.ts';
 import browser from '../browser';
 import appSettings from './appSettings';
+
+const DISPLAY_PREFS_CACHE_KEY = '__sloptank_display_prefs_cache';
 
 function onSaveTimeout() {
     const self = this;
@@ -68,10 +70,38 @@ export class UserSettings {
 
         const self = this;
 
-        return apiClient.getDisplayPreferences('usersettings', userId, 'emby').then(function (result) {
+        // SlopTank: sign-in must not wait on the network for preferences.
+        // The owner-set login budget (2026-09-15) is one second from
+        // submitted credentials to the home screen, and this awaited
+        // DisplayPreferences round trip was the only network await left on
+        // that path (0.3-1.2s under box load). The per-user cached
+        // preferences from the previous sign-in are applied synchronously so
+        // the home screen renders immediately with the user's own settings;
+        // the server copy refreshes in the background and replaces the cache
+        // when it lands. A failed refresh never fails or stalls sign-in --
+        // the previous behavior rejected the whole sign-in promise on a
+        // preferences error.
+        const cached = appSettings.get(DISPLAY_PREFS_CACHE_KEY, userId);
+        if (cached) {
+            try {
+                this.displayPrefs = JSON.parse(cached);
+            } catch (error) {
+                console.warn('ignoring unreadable cached display preferences', error);
+                this.displayPrefs = null;
+            }
+        } else {
+            this.displayPrefs = null;
+        }
+
+        apiClient.getDisplayPreferences('usersettings', userId, 'emby').then(function (result) {
             result.CustomPrefs = result.CustomPrefs || {};
             self.displayPrefs = result;
+            appSettings.set(DISPLAY_PREFS_CACHE_KEY, JSON.stringify(result), userId);
+        }).catch(function (error) {
+            console.error('failed to refresh display preferences after sign-in', error);
         });
+
+        return Promise.resolve();
     }
 
     // FIXME: 'appSettings.set' doesn't return any value
