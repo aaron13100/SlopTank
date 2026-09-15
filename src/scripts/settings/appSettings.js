@@ -99,14 +99,18 @@ class AppSettings {
         }
 
         const saved = this.get(key);
-        if (isInNetwork && mediaType === 'Video' && saved === null) {
+        if (mediaType === 'Video' && saved === null && isInNetwork !== false) {
             // SlopTank: no cap was ever chosen, and this client is on the
-            // server's own network. The library is pre-encoded for universal
-            // direct play and the server cannot transcode in real time, so
-            // the unset in-network default must be a huge direct-play cap
-            // (the Audio path above has always worked this way). An explicit
-            // user choice is still honored through the generic path below,
-            // and remote playback keeps the generic 1.5 Mbps default.
+            // server's own network -- or the network origin is not known
+            // yet, as in a session-restored tab whose endpoint info was
+            // never fetched (the shared watch-link path). The library is
+            // pre-encoded for universal direct play and the server cannot
+            // transcode in real time, so an unset or unknown-origin default
+            // must be a huge direct-play cap (the Audio path above has
+            // always worked this way). An explicit user choice is still
+            // honored through the generic path below; only an endpoint the
+            // server actually reported as remote keeps the generic
+            // 1.5 Mbps default.
             return 150000000;
         }
         return parseInt(saved || '0', 10) || 1500000;

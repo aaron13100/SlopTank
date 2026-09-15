@@ -10,6 +10,11 @@
 // therefore be a huge number (the same one the Audio path has always used),
 // while an explicit user choice is still honored, and the remote path keeps
 // the generic default.
+//
+// The same holds when the network origin is UNKNOWN (endpoint info not yet
+// fetched, as in a session-restored tab opening a shared watch link): an
+// unknown origin must not silently pick the remote cap. Only a fetched,
+// explicitly-remote endpoint keeps the generic remote default.
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import appSettings from './appSettings';
@@ -21,6 +26,13 @@ describe('maxStreamingBitrate defaults by network origin', () => {
 
     it('unset in-network Video defaults to a huge direct-play cap', () => {
         expect(appSettings.maxStreamingBitrate(true, 'Video')).toBe(150000000);
+    });
+
+    it('an unknown network origin defaults Video to the direct-play cap', () => {
+        // Endpoint info absent (getSavedEndpointInfo() || {}): IsInNetwork is
+        // undefined, not false. Undefined must behave like in-network, never
+        // like the generic remote default.
+        expect(appSettings.maxStreamingBitrate(undefined, 'Video')).toBe(150000000);
     });
 
     it('an explicitly saved in-network Video cap is honored', () => {
