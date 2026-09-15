@@ -1,4 +1,4 @@
-// SlopTank modification notice: added by SlopTank on 2026-09-15.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-15.
 /**
  * Exercises ProductionModuleBoundaryPlugin through the real surface a
  * production build relies on: a webpack compilation. Each case builds a
