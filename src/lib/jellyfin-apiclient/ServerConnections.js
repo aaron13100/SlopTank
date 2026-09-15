@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09, 2026-09-15.
 // NOTE: This is used for jsdoc return type
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { Api } from '@jellyfin/sdk';
@@ -54,6 +54,20 @@ class ServerConnections extends ConnectionManager {
         Events.on(this, 'apiclientcreated', (_e, apiClient) => {
             apiClient.getMaxBandwidth = getMaxBandwidth;
             apiClient.normalizeImageOptions = normalizeImageOptions;
+            // SlopTank: stop the apiclient's own 6-second post-auth bitrate
+            // self-probe (it fires for internally created ApiClients too,
+            // which is why this lives on the event rather than on the local
+            // singleton). Every browser client of this server is on its LAN
+            // and the library is pre-encoded for universal direct play, so
+            // the idle probe buys nothing, costs three escalating multi-MB
+            // /Playback/BitrateTest round trips shortly after login, and
+            // under load can measure LOW and cache a bitrate that later
+            // requests a transcode this server cannot perform. Playback-path
+            // detection is separately gated by
+            // appSettings.enableAutomaticBitrateDetection (in-network Video
+            // never detects; remote playback is unchanged and simply probes
+            // fresh instead of using this cache).
+            apiClient.enableAutomaticBitrateDetection = false;
         });
     }
 
