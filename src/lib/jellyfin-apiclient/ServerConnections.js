@@ -57,17 +57,24 @@ class ServerConnections extends ConnectionManager {
             // SlopTank: stop the apiclient's own 6-second post-auth bitrate
             // self-probe (it fires for internally created ApiClients too,
             // which is why this lives on the event rather than on the local
-            // singleton). Every browser client of this server is on its LAN
-            // and the library is pre-encoded for universal direct play, so
-            // the idle probe buys nothing, costs three escalating multi-MB
-            // /Playback/BitrateTest round trips shortly after login, and
-            // under load can measure LOW and cache a bitrate that later
-            // requests a transcode this server cannot perform. Playback-path
-            // detection is separately gated by
-            // appSettings.enableAutomaticBitrateDetection (in-network Video
-            // never detects; remote playback is unchanged and simply probes
-            // fresh instead of using this cache).
-            apiClient.enableAutomaticBitrateDetection = false;
+            // singleton). The property is pinned read-only because the
+            // apiclient's connect/authentication flow reassigns it from its
+            // options object (undefined) on every sign-in, which re-arms the
+            // timer; writes are ignored and reads stay false. Every browser
+            // client of this server is on its LAN and the library is
+            // pre-encoded for universal direct play, so the idle probe buys
+            // nothing, costs three escalating multi-MB /Playback/BitrateTest
+            // round trips shortly after login, and under load can measure LOW
+            // and cache a bitrate that later requests a transcode this
+            // server cannot perform. Playback-path detection is separately
+            // gated by appSettings.enableAutomaticBitrateDetection
+            // (in-network Video never detects; remote playback is unchanged
+            // and simply probes fresh instead of using this cache).
+            Object.defineProperty(apiClient, 'enableAutomaticBitrateDetection', {
+                configurable: true,
+                get: () => false,
+                set: () => undefined
+            });
         });
     }
 
