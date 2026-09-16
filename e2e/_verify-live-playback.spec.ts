@@ -4,7 +4,20 @@ import { login } from './fixtures';
 
 const USERNAME = process.env.E2E_USERNAME as string;
 const PASSWORD = process.env.E2E_PASSWORD as string;
-const ITEM_NAME = process.env.LIVE_ITEM as string;
+
+// LIVE_ITEM / LIVE_ITEM_ID are normally injected per-run by
+// tools/live_site_smoke.sh (once per probed title). Running this spec
+// through the plain full-suite command (no smoke-script wrapper, as the
+// goal's "full e2e suite green twice" criterion does) left them unset, so
+// the test navigated to /details?id=undefined and failed looking like a
+// player bug (2026-09-16). Default to the standing "always playable"
+// fixture so the spec is a real regression test in both contexts.
+const ITEM_NAME = process.env.LIVE_ITEM || 'Rental Family';
+const ITEM_ID = process.env.LIVE_ITEM_ID || process.env.E2E_RENTAL_FAMILY_ITEM_ID;
+if (!ITEM_ID) {
+    throw new Error( // allow-raw-error: e2e setup fast-fail, not app code
+        'Missing item id: set LIVE_ITEM_ID or E2E_RENTAL_FAMILY_ITEM_ID for the live playback check');
+}
 
 test.setTimeout(300_000);
 
@@ -23,7 +36,7 @@ test(`live playback: ${ITEM_NAME} starts promptly from search`, async ({ page })
     // visible one or the locator parks on the hidden variant forever
     // (observed failing the nightly smoke on 2026-09-15 after the item
     // gained a resume position).
-    await page.goto(`/details?id=${process.env.LIVE_ITEM_ID}`);
+    await page.goto(`/details?id=${ITEM_ID}`);
     await expect(page.locator('.btnPlay:visible').first())
         .toBeVisible({ timeout: 60_000 });
     const detailMs = Date.now() - startedAt;
