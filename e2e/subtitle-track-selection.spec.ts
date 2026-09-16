@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-08-09, 2026-08-11, 2026-08-29, 2026-09-02, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-09, 2026-08-11, 2026-08-29, 2026-09-02, 2026-09-09, 2026-09-16.
 import { expect } from '@playwright/test';
 
 import { test, login, requireAssSubtitleItemId, clickOsdControl } from './fixtures';
@@ -70,6 +70,12 @@ test('choosing a subtitle track does not reload the page or kill playback', asyn
         documentLoads++;
     });
 
+    await login(page, config.username, config.password);
+    const video = await startPlayback(page, config, itemId);
+
+    // Attach AFTER sign-in and playback start: the assertion below is about
+    // the subtitle switch, and login-time console noise (background
+    // preference refreshes aborted by navigation) must not fail it.
     const consoleErrors: string[] = [];
     page.on('console', (message) => {
         if (message.type() === 'error') {
@@ -79,9 +85,6 @@ test('choosing a subtitle track does not reload the page or kill playback', asyn
     page.on('pageerror', (error) => {
         consoleErrors.push(`pageerror: ${error.message}`);
     });
-
-    await login(page, config.username, config.password);
-    const video = await startPlayback(page, config, itemId);
 
     const loadsBeforeSelection = documentLoads;
     const urlBeforeSelection = page.url();

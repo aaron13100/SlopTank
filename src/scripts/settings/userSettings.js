@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-25, 2026-09-09, 2026-09-15.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-25, 2026-09-09, 2026-09-15, 2026-09-16.
 import Events from '../../utils/events.ts';
 import { toBoolean } from '../../utils/string.ts';
 import browser from '../browser';
@@ -98,7 +98,11 @@ export class UserSettings {
             self.displayPrefs = result;
             appSettings.set(DISPLAY_PREFS_CACHE_KEY, JSON.stringify(result), userId);
         }).catch(function (error) {
-            console.error('failed to refresh display preferences after sign-in', error);
+            // Warn, never error: the cached preferences are already applied
+            // and sign-in succeeded, so this refresh is best-effort. An abort
+            // here is routine (navigating after login cancels the in-flight
+            // fetch), and error level trips console-error guards in tests.
+            console.warn('failed to refresh display preferences after sign-in', error);
         });
 
         return Promise.resolve();

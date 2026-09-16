@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-15.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-15, 2026-09-16.
 //
 // Sign-in must not wait on the server's display preferences.
 //
@@ -11,7 +11,7 @@
 // waiting for the network, the cache is used until the refresh lands, the
 // refresh result replaces the cache, and a failed refresh never fails or
 // stalls sign-in.
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UserSettings } from './userSettings';
 
@@ -38,7 +38,7 @@ describe('setUserInfo cache-first sign-in', () => {
                 calls.push(args);
                 return preferencePromise;
             },
-            updateDisplayPreferences() {}
+            updateDisplayPreferences() { /* test double: save path not under test */ }
         };
     }
 
@@ -91,6 +91,28 @@ describe('setUserInfo cache-first sign-in', () => {
 
         await expect(settings.setUserInfo('user-1', failing)).resolves.toBeUndefined();
         await new Promise((r) => setTimeout(r, 0));
+    });
+
+    it('warns without erroring when the background refresh fails', async () => {
+        // The refresh is best-effort (cached prefs already applied, sign-in
+        // succeeded), and navigation routinely aborts it. Error level would
+        // trip console-error guards in e2e specs for a benign event.
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const settings = new UserSettings();
+            const failure = new Error('Failed to fetch');
+            await settings.setUserInfo('user-1', apiClientReturning(Promise.reject(failure)));
+            await new Promise((r) => setTimeout(r, 0));
+
+            expect(warn).toHaveBeenCalledWith(
+                'failed to refresh display preferences after sign-in', failure
+            );
+            expect(error).not.toHaveBeenCalled();
+        } finally {
+            warn.mockRestore();
+            error.mockRestore();
+        }
     });
 
     it('clears preferences on sign-out', async () => {
