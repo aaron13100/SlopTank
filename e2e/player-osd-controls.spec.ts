@@ -377,22 +377,29 @@ test('volume slider and mute button change the real video state', async ({ page,
     expect(volumeBox, 'vertical volume slider should have a layout box').not.toBeNull();
     expect(volumeBox?.height).toBeGreaterThan((volumeBox?.width || 0) * 3);
 
+    // emby-slider batches its DOM value update through requestAnimationFrame
+    // (emby-slider.js); on this contended box a busy main thread can delay
+    // that rAF well past Playwright's bare 5s poll default (observed
+    // 2026-09-16 on the touch-input sibling below, during a full-suite run:
+    // "Expected: >= 99, Received: 98" after a 5000ms poll timeout). Give
+    // every slider-value convergence poll in this file the same explicit
+    // slack already used elsewhere here.
     await dragRangeTo(page, volumeSlider, 0);
-    await expect.poll(() => volumeSlider.inputValue()).toBe('0');
+    await expect.poll(() => volumeSlider.inputValue(), { timeout: 30_000 }).toBe('0');
     await expect(video).toHaveJSProperty('volume', 0);
 
     await dragRangeTo(page, volumeSlider, 1);
-    await expect.poll(() => volumeSlider.inputValue()).toBe('100');
+    await expect.poll(() => volumeSlider.inputValue(), { timeout: 30_000 }).toBe('100');
     await expect(video).toHaveJSProperty('volume', 1);
 
     const muteIcon = muteButton.locator('.material-icons');
 
     await volumeSlider.focus();
     await volumeSlider.press('ArrowDown');
-    await expect.poll(() => volumeSlider.inputValue()).toBe('99');
+    await expect.poll(() => volumeSlider.inputValue(), { timeout: 30_000 }).toBe('99');
     await expect(video).toHaveJSProperty('volume', 0.970299);
     await volumeSlider.press('ArrowUp');
-    await expect.poll(() => volumeSlider.inputValue()).toBe('100');
+    await expect.poll(() => volumeSlider.inputValue(), { timeout: 30_000 }).toBe('100');
     await expect(video).toHaveJSProperty('volume', 1);
 
     await expect(video).toHaveJSProperty('muted', false);
@@ -441,8 +448,8 @@ test('volume slider accepts real touch input across the track', async ({ browser
         }
 
         await page.touchscreen.tap(trackBox.x + trackBox.width / 2, trackBox.y + trackBox.height - 1);
-        await expect.poll(async () => Number(await volumeSlider.inputValue())).toBeLessThanOrEqual(1);
-        await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.volume)).toBeLessThanOrEqual(0.0000011);
+        await expect.poll(async () => Number(await volumeSlider.inputValue()), { timeout: 30_000 }).toBeLessThanOrEqual(1);
+        await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.volume), { timeout: 30_000 }).toBeLessThanOrEqual(0.0000011);
 
         await openOsd(page);
         await muteButton.tap();
@@ -452,8 +459,8 @@ test('volume slider accepts real touch input across the track', async ({ browser
             throw new Error('Reopened touch volume track has no layout box.'); // allow-raw-error: test fixture invariant
         }
         await page.touchscreen.tap(reopenedTrackBox.x + reopenedTrackBox.width / 2, reopenedTrackBox.y + 1);
-        await expect.poll(async () => Number(await volumeSlider.inputValue())).toBeGreaterThanOrEqual(99);
-        await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.volume)).toBeGreaterThanOrEqual(0.970299);
+        await expect.poll(async () => Number(await volumeSlider.inputValue()), { timeout: 30_000 }).toBeGreaterThanOrEqual(99);
+        await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.volume), { timeout: 30_000 }).toBeGreaterThanOrEqual(0.970299);
     } finally {
         await context.close();
     }
