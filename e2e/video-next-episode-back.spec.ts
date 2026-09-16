@@ -82,10 +82,23 @@ test('Episodes opens a reachable series list and switches the playing episode', 
     const nextRow = page.locator('.episodePlaybackMenu-item:not([aria-current="true"])').first();
     const nextEpisodeId = await nextRow.getAttribute('data-item-id');
     expect(nextEpisodeId).toBeTruthy();
+
+    // The player canonicalizes an in-player episode switch straight to the
+    // target episode's own real permalink (docs/internal/permalink-url-design.md)
+    // when it has one, skipping the raw ?id=<guid> URL entirely (observed
+    // 2026-09-16: Brooklyn Nine-Nine S01E02 "The Tagger" navigated straight to
+    // /w/tt3179592, its own IMDb id, never through id=cc20ba47...). Fetch the
+    // real target identity instead of assuming the raw-id URL shape.
+    const nextEpisode = await fetchEpisode(page, nextEpisodeId as string);
+    const imdbId = (nextEpisode.ProviderIds as Record<string, string> | undefined)?.Imdb;
+    const expectedUrlPattern = imdbId
+        ? new RegExp(`id=${nextEpisodeId}|/w/${imdbId}(?:[?#]|$)`)
+        : new RegExp(`id=${nextEpisodeId}`);
+
     await nextRow.click();
 
     await expect(page.locator('.episodePlaybackMenu')).toBeHidden();
-    await expect.poll(() => page.url(), { timeout: 30_000 }).toContain(`id=${nextEpisodeId}`);
+    await expect.poll(() => page.url(), { timeout: 30_000 }).toMatch(expectedUrlPattern);
     await expectPlaybackToAdvance(video, 30_000);
 });
 
