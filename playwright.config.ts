@@ -40,7 +40,16 @@ export default defineConfig({
             // probe server with a modified candidate copy; they are selected
             // explicitly via --project=lgpl-probes and excluded from every
             // ordinary regression run here.
-            testIgnore: /lgpl-replacement-probes/
+            //
+            // _verify-t<taskid>-*.spec.ts files are one-off diagnostics a
+            // queue task writes to check its own not-yet-shipped fix
+            // (env-injected fixture, no standing default is meaningful);
+            // they belong to that task's own manual verification, not the
+            // standing suite. Run them directly with their task's env vars
+            // set. Once a task's fix ships, promote the behavior it proves
+            // into a real named regression spec instead of leaving the
+            // one-off in the standing run.
+            testIgnore: [ /lgpl-replacement-probes/, /_verify-t\d+-/ ]
         },
         {
             name: 'lgpl-probes',
