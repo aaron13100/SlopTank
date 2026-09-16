@@ -8,6 +8,7 @@ import {
     requireControlsItemId,
     requireDirectPlayChapterItemId,
     requireTranscodeChapterItemId,
+    revealOsdControl,
     test,
     VIDEO_ROUTE,
     WATCH_PERMALINK_ROUTE,
@@ -63,7 +64,8 @@ async function startPlayback(
 
 async function openOsd(
     page: Page,
-    controlSelector = '.videoOsdBottom-maincontrols'
+    controlSelector = '.videoOsdBottom-maincontrols',
+    timeout = 10_000
 ) {
     await expect.poll(
         async () => {
@@ -75,7 +77,7 @@ async function openOsd(
         },
         {
             message: `expected OSD control to be on screen and reachable: ${controlSelector}`,
-            timeout: 10_000
+            timeout
         }
     ).toMatchObject({
         found: true,
@@ -85,7 +87,12 @@ async function openOsd(
 }
 
 async function expectPlayMethod(page: Page, expected: 'Direct playing' | 'Transcoding') {
-    await openOsd(page, '.videoOsdBottom-maincontrols .btnVideoOsdSettings');
+    // onScreenState's reachability math (what openOsd checks) reads this
+    // control as off-viewport right after a forced transcode even though a
+    // screenshot at the same instant shows it in its normal place (observed
+    // 2026-09-16; see forceLowestQualityTranscode's comment). Use the
+    // simpler, proven-robust visibility wait here instead.
+    await revealOsdControl(page, '.videoOsdBottom-maincontrols .btnVideoOsdSettings', 30_000);
     await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnVideoOsdSettings');
     await page.locator('.actionSheetMenuItem[data-id="stats"]').click();
 
@@ -95,6 +102,53 @@ async function expectPlayMethod(page: Page, expected: 'Direct playing' | 'Transc
     });
     await expect(playMethodRow.locator('.playerStats-stat-value')).toHaveText(expected, { timeout: 20_000 });
     await page.locator('.playerStats-closeButton').click();
+}
+
+/**
+ * Force a real transcode via the lowest quality-menu bitrate cap, instead of
+ * relying on the fixture item's own codec to require one.
+ *
+ * A pinned "needs transcoding" item rots: the library's own re-encode
+ * backfill and rising browser codec support both trend every item toward
+ * direct-play over time (observed 2026-09-16: E2E_TRANSCODE_CHAPTER_ITEM_ID
+ * now reports SupportsDirectPlay=true and the test played it direct instead
+ * of transcoded). Forcing the cap, the same mechanism player-settings.spec.ts
+ * already uses for its own forced-transcode coverage, tests the real
+ * transcoding code path regardless of what the item would do unforced.
+ */
+async function forceLowestQualityTranscode(page: Page, video: Locator) {
+    // A quality change reloads the video element via a real changeStream
+    // round trip; the element already satisfies "!paused && readyState>=2"
+    // from the PREVIOUS (direct-play) stream while the new one is still
+    // "Preparing", so that alone is not proof the forced-transcode stream
+    // has landed (observed 2026-09-16: play-method check read stale "Direct
+    // playing" while the aria snapshot still showed "Preparing video...").
+    // Wait for the real signal: the video's stream URL actually changing.
+    const srcBefore = await video.evaluate((el: HTMLVideoElement) => el.currentSrc);
+    await openOsd(page, '.videoOsdBottom-maincontrols .btnVideoOsdSettings');
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnVideoOsdSettings');
+    await page.locator('.actionSheetMenuItem[data-id="quality"]').click();
+    // 420000 is the lowest bitrate tier. It keeps the forced transcode cheap.
+    await page.locator('.actionSheetMenuItem[data-id="420000"]').click();
+    await expect
+        .poll(() => video.evaluate((el: HTMLVideoElement) => el.currentSrc), { timeout: 60_000 })
+        .not.toBe(srcBefore);
+    await expect
+        .poll(async () => video.evaluate((el: HTMLVideoElement) => !el.paused && el.readyState >= 2), { timeout: 60_000 })
+        .toBe(true);
+    // The OSD chrome itself can take longer to settle than the video's own
+    // readyState after a real transcode startup (server-side ffmpeg spin-up,
+    // slower than a direct-play swap), so the caller's own openOsd call,
+    // right after this returns, can race a still-settling player (observed
+    // 2026-09-16: settings button reported unreachable by openOsd's own
+    // bounding-rect check for 30s straight, yet the screenshot at that exact
+    // moment shows a normal, fully rendered OSD with the button in its usual
+    // place -- onScreenState's viewport math, not the app, is what is wrong
+    // here). Settle on the fixtures.ts shared helper instead: it checks
+    // plain visibility rather than a custom bounding-rect reachability
+    // computation, matching how player-settings.spec.ts's own equivalent
+    // forced-transcode flow (which does not hit this failure) waits.
+    await revealOsdControl(page, '.videoOsdBottom-maincontrols .btnVideoOsdSettings', 30_000);
 }
 
 async function fetchItem(page: Page, itemId: string): Promise<ItemDetails> {
@@ -146,9 +200,19 @@ async function dragRangeTo(page: Page, slider: Locator, targetFraction: number) 
     await page.mouse.up();
 }
 
-async function expectPositionPercent(slider: Locator, target: number, tolerance: number) {
+async function expectPositionPercent(page: Page, slider: Locator, target: number, tolerance: number) {
+    // The OSD hides itself after ~3s of inactivity, and slider is matched
+    // with a :visible filter (needed for the legacy-view strict-mode issue
+    // documented on nextButton/prevButton above): a poll that never wakes
+    // the OSD stops matching any element a few seconds in and freezes on
+    // whatever value it last read, well before the real seek lands (observed
+    // 2026-09-16, progressive-transcoding case, reported as a stuck near-zero
+    // position). Wake on every poll, same pattern as revealOsdControl.
     await expect.poll(
-        async () => Math.abs(Number(await slider.inputValue()) - target),
+        async () => {
+            await wakeOsd(page);
+            return Math.abs(Number(await slider.inputValue()) - target);
+        },
         {
             message: `expected absolute player position ${target}% within ${tolerance} percentage points`,
             timeout: 60_000
@@ -164,34 +228,45 @@ async function expectConsecutiveChapterNavigation(page: Page, item: ItemDetails)
 
     const nextButtonSelector = '.videoOsdBottom-maincontrols .btnNextChapter';
     const previousButtonSelector = '.videoOsdBottom-maincontrols .btnPreviousChapter';
-    await openOsd(page, nextButtonSelector);
-    const nextButton = page.locator(nextButtonSelector);
-    const prevButton = page.locator(previousButtonSelector);
-    const positionSlider = page.locator('.videoOsdBottom-maincontrols .osdPositionSlider');
+    await revealOsdControl(page, nextButtonSelector, 30_000);
+    // Legacy views stay mounted but hidden for fast back navigation (see
+    // revealOsdControl's own comment in fixtures.ts), so an unfiltered
+    // locator here can resolve to two DOM matches (observed 2026-09-16,
+    // progressive-transcoding case only, presumably a remount the forced
+    // quality change triggers): target the visible one, same as every other
+    // OSD control in this suite.
+    const nextButton = page.locator(`${nextButtonSelector}:visible`);
+    const prevButton = page.locator(`${previousButtonSelector}:visible`);
+    const positionSlider = page.locator('.videoOsdBottom-maincontrols .osdPositionSlider:visible');
     await expect(nextButton).toBeVisible();
     await expect(prevButton).toBeVisible();
+    // Same :visible-filtered-poll-outlives-the-3s-auto-hide shape as
+    // expectPositionPercent below: wake on every poll, not just before it.
     await expect
-        .poll(() => page.locator('.sliderMarkerContainer .sliderMarker').count(), { timeout: 10_000 })
+        .poll(async () => {
+            await wakeOsd(page);
+            return page.locator('.videoOsdBottom-maincontrols:visible .sliderMarkerContainer .sliderMarker').count();
+        }, { timeout: 10_000 })
         .toBe(chapters.length);
 
     const toPercent = (ticks: number) => ticks / runtimeTicks * 100;
     const tolerance = 100_000_000 / runtimeTicks * 100 + 0.5;
 
-    await openOsd(page, nextButtonSelector);
+    await revealOsdControl(page, nextButtonSelector, 30_000);
     await clickOsdControl(page, nextButtonSelector);
-    await expectPositionPercent(positionSlider, toPercent(chapters[1].StartPositionTicks), tolerance);
+    await expectPositionPercent(page, positionSlider, toPercent(chapters[1].StartPositionTicks), tolerance);
 
-    await openOsd(page, nextButtonSelector);
+    await revealOsdControl(page, nextButtonSelector, 30_000);
     await clickOsdControl(page, nextButtonSelector);
-    await expectPositionPercent(positionSlider, toPercent(chapters[2].StartPositionTicks), tolerance);
+    await expectPositionPercent(page, positionSlider, toPercent(chapters[2].StartPositionTicks), tolerance);
 
     const adjustedTicks = chapters[2].StartPositionTicks - 100_000_000;
     const expectedChapter = [ ...chapters ].reverse()
         .find(chapter => chapter.StartPositionTicks <= adjustedTicks) || chapters[0];
 
-    await openOsd(page, previousButtonSelector);
+    await revealOsdControl(page, previousButtonSelector, 30_000);
     await clickOsdControl(page, previousButtonSelector);
-    await expectPositionPercent(positionSlider, toPercent(expectedChapter.StartPositionTicks), tolerance);
+    await expectPositionPercent(page, positionSlider, toPercent(expectedChapter.StartPositionTicks), tolerance);
 }
 
 for (const playbackCase of [
@@ -211,7 +286,10 @@ for (const playbackCase of [
         await login(page, config.username, config.password);
         const item = await fetchItem(page, itemId);
 
-        await startPlayback(page, { ...config, itemId, playFromBeginning: true });
+        const video = await startPlayback(page, { ...config, itemId, playFromBeginning: true });
+        if (playbackCase.method === 'Transcoding') {
+            await forceLowestQualityTranscode(page, video);
+        }
         await expectPlayMethod(page, playbackCase.method);
         await expectConsecutiveChapterNavigation(page, item);
     });
