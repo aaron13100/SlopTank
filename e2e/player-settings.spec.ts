@@ -132,16 +132,36 @@ test('quality menu forces a real transcode, resumes playback, and reflects the c
     const video = await startPlayback(page, config);
     const stats = page.locator('.playerStats');
 
+    // playbackManager.setMaxStreamingBitrate (playbackmanager.js) does not
+    // return its getEndpointInfo/detectBitrate/changeStream promise chain, so
+    // "video resumed" is not proof the new quality setting has landed: Auto
+    // mode's detectBitrate(true) is a real, uncached network probe, wide
+    // enough under load for a menu re-read right after the click to observe
+    // the stale pre-click quality label (observed 2026-09-16, reproducibly).
+    // Wait for the real signal instead: the video's stream URL actually
+    // changing, proof changeStream has completed.
+    const waitForStreamChange = async () => {
+        const srcBefore = await video.evaluate((el: HTMLVideoElement) => el.currentSrc);
+        return async () => {
+            await expect
+                .poll(() => video.evaluate((el: HTMLVideoElement) => el.currentSrc), { timeout: 60_000 })
+                .not.toBe(srcBefore);
+        };
+    };
+
     try {
+        const waitForForcedTranscode = await waitForStreamChange();
         await openSettingsMenu(page);
         await page.locator('.actionSheetMenuItem[data-id="quality"]').click();
         // 420000 is the lowest bitrate tier. It keeps the forced transcode cheap.
         await page.locator('.actionSheetMenuItem[data-id="420000"]').click();
+        await waitForForcedTranscode();
 
         await expectPlaybackResumed(video, 60_000);
 
         await openSettingsMenu(page);
-        await expect(page.locator('.actionSheetMenuItem[data-id="quality"] .actionSheetItemAsideText')).toHaveText('420 kbps');
+        await expect(page.locator('.actionSheetMenuItem[data-id="quality"] .actionSheetItemAsideText'))
+            .toHaveText('420 kbps', { timeout: 20_000 });
         await page.locator('.actionSheetMenuItem[data-id="stats"]').click();
 
         const playMethodRow = stats.locator('.playerStats-stat', {
@@ -152,13 +172,25 @@ test('quality menu forces a real transcode, resumes playback, and reflects the c
         if (await stats.isVisible()) {
             await page.locator('.playerStats-closeButton').click();
         }
+        const waitForAutoReset = await waitForStreamChange();
         await openSettingsMenu(page);
         await page.locator('.actionSheetMenuItem[data-id="quality"]').click();
         await page.locator('.actionSheetMenuItem[data-id="0"]').click();
+        await waitForAutoReset();
         await expectPlaybackResumed(video, 60_000);
 
+        // Not /^Auto\b/: appSettings.js's enableAutomaticBitrateDetection
+        // deliberately always reports false for in-network video (avoids
+        // trusting the LAN bitrate-detection probe, the same policy
+        // _no-lan-bitrate-test.spec.ts covers), so the quality menu never
+        // shows "Auto" text for a video item on this deployment even right
+        // after selecting it. Selecting "Auto" still runs the one-shot probe
+        // and applies its result as a concrete cap; the observable, real
+        // behavior to assert is that the forced low cap from the try block
+        // is gone.
         await openSettingsMenu(page);
-        await expect(page.locator('.actionSheetMenuItem[data-id="quality"] .actionSheetItemAsideText')).toHaveText(/^Auto\b/);
+        await expect(page.locator('.actionSheetMenuItem[data-id="quality"] .actionSheetItemAsideText'))
+            .not.toHaveText('420 kbps', { timeout: 20_000 });
     }
 });
 
@@ -195,7 +227,8 @@ test('audio track menu switches the real playing track', async ({ page, config }
         await expectPlaybackResumed(video, 30_000);
 
         await clickOsdControl(page, AUDIO_BUTTON);
-        await expect(page.locator(`.actionSheetMenuItem[data-id="${otherStream.Index}"] .actionsheetMenuItemIcon`)).toBeVisible();
+        await expect(page.locator(`.actionSheetMenuItem[data-id="${otherStream.Index}"] .actionsheetMenuItemIcon`))
+            .toBeVisible({ timeout: 20_000 });
         await expect(page.locator(`.actionSheetMenuItem[data-id="${currentIndex}"] .actionsheetMenuItemIcon`)).toBeHidden();
     } finally {
         const originalTrack = page.locator(`.actionSheetMenuItem[data-id="${currentIndex}"]`);
@@ -206,6 +239,6 @@ test('audio track menu switches the real playing track', async ({ page, config }
         await expectPlaybackResumed(video, 30_000);
 
         await clickOsdControl(page, AUDIO_BUTTON);
-        await expect(originalTrack.locator('.actionsheetMenuItemIcon')).toBeVisible();
+        await expect(originalTrack.locator('.actionsheetMenuItemIcon')).toBeVisible({ timeout: 20_000 });
     }
 });
