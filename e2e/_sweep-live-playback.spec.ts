@@ -32,7 +32,11 @@ test(`live playback sweep over ${IDS.length} items`, async ({ page }) => {
         const startedAt = Date.now();
         try {
             await page.goto(`/details?id=${id}`, { waitUntil: 'domcontentloaded' });
-            const playButton = page.locator('.btnPlay').first();
+            // The details page renders both a Play button and, once the item
+            // has a resume position, a hidden Resume variant of the same
+            // class; target the visible one or the locator parks on the
+            // hidden variant forever.
+            const playButton = page.locator('.btnPlay:visible').first();
             await expect(playButton).toBeVisible({ timeout: 30_000 });
             await playButton.click();
 
