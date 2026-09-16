@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-08-29, 2026-09-02, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-29, 2026-09-02, 2026-09-09, 2026-09-16.
 import {
     clickOsdControl,
     expect,
@@ -207,6 +207,61 @@ async function renderedAssCanvasBounds(canvas: import('@playwright/test').Locato
     });
 }
 
+/**
+ * Read libass canvas bounds only once the render has settled.
+ *
+ * The position/size sliders return as soon as their input events dispatch
+ * while libass re-renders asynchronously, so the first non-null bounds read
+ * can still reflect the previous setting (observed 2026-09-16: 11px off a
+ * 7.2px tolerance under suite load, green in isolation). Two consecutive
+ * agreeing reads prove the re-render for the new setting has landed. A
+ * renderer that never settles returns null and keeps failing the test.
+ */
+async function stabilizedAssCanvasBounds(
+    canvas: import('@playwright/test').Locator,
+    page: import('@playwright/test').Page
+): Promise<Awaited<ReturnType<typeof renderedAssCanvasBounds>>> {
+    let previous = await renderedAssCanvasBounds(canvas);
+    for (let attempt = 0; attempt < 20; attempt++) {
+        await page.waitForTimeout(150);
+        const current = await renderedAssCanvasBounds(canvas);
+        if (previous && current
+            && Math.abs(previous.bottom - current.bottom) < 0.5
+            && Math.abs(previous.top - current.top) < 0.5) {
+            return current;
+        }
+        previous = current;
+    }
+    return null;
+}
+
+/**
+ * Read a DOM preview box only once its position has settled.
+ *
+ * Same race as stabilizedAssCanvasBounds on the DOM side: the preview's
+ * transform is recomputed on player ticks after the seek lands, so the first
+ * visible box can predate the final position. Settles on the bottom edge
+ * because both tight comparisons in this file are bottom-edge equalities.
+ */
+async function stabilizedBoundingBox(
+    locator: import('@playwright/test').Locator,
+    page: import('@playwright/test').Page
+): Promise<Awaited<ReturnType<import('@playwright/test').Locator['boundingBox']>>> {
+    let previous = await locator.boundingBox();
+    for (let attempt = 0; attempt < 20; attempt++) {
+        await page.waitForTimeout(150);
+        const current = await locator.boundingBox();
+        if (previous && current
+            && Math.abs(
+                (previous.y + previous.height) - (current.y + current.height)
+            ) < 0.5) {
+            return current;
+        }
+        previous = current;
+    }
+    return null;
+}
+
 async function seekAndPauseAssCue(
     video: import('@playwright/test').Locator,
     page: import('@playwright/test').Page,
@@ -354,9 +409,9 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
     );
     await expect.poll(() => renderedAssCanvasBounds(defaultCanvas))
         .not.toBeNull();
-    const defaultCueBounds = await renderedAssCanvasBounds(defaultCanvas);
+    const defaultCueBounds = await stabilizedAssCanvasBounds(defaultCanvas, page);
     if (!defaultCueBounds) {
-        throw new Error('ASS dialogue has no rendered bounds'); // allow-raw-error: e2e assertion setup
+        throw new Error('ASS dialogue bounds never settled'); // allow-raw-error: e2e assertion setup
     }
     await video.evaluate(async (el: HTMLVideoElement) => {
         const seeked = new Promise<void>(resolve => {
@@ -368,9 +423,9 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
     });
     const defaultPreviewLine = page.locator('.videoSubtitlesPreviewLine');
     await expect(defaultPreviewLine).toBeVisible();
-    const defaultPreviewBox = await defaultPreviewLine.boundingBox();
+    const defaultPreviewBox = await stabilizedBoundingBox(defaultPreviewLine, page);
     if (!defaultPreviewBox) {
-        throw new Error('ASS cue-gap preview has no box'); // allow-raw-error: e2e assertion setup
+        throw new Error('ASS cue-gap preview position never settled'); // allow-raw-error: e2e assertion setup
     }
     expect(Math.abs(
         defaultPreviewBox.y + defaultPreviewBox.height - defaultCueBounds.bottom
@@ -388,9 +443,9 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
         const positionedBounds = await renderedAssCanvasBounds(alignmentCanvas);
         return positionedBounds?.bottom;
     }).toBeLessThan(defaultCueBounds.bottom);
-    const realCueBounds = await renderedAssCanvasBounds(alignmentCanvas);
+    const realCueBounds = await stabilizedAssCanvasBounds(alignmentCanvas, page);
     if (!realCueBounds) {
-        throw new Error('ASS dialogue has no rendered bounds'); // allow-raw-error: e2e assertion setup
+        throw new Error('ASS dialogue bounds never settled'); // allow-raw-error: e2e assertion setup
     }
     // libass recalculates canvas top/left on resize. The vertical-position
     // transform must survive that pass instead of being canceled by an
@@ -424,9 +479,9 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
     });
     const previewLine = page.locator('.videoSubtitlesPreviewLine');
     await expect(previewLine).toBeVisible();
-    const assGapPreviewBox = await previewLine.boundingBox();
+    const assGapPreviewBox = await stabilizedBoundingBox(previewLine, page);
     if (!assGapPreviewBox) {
-        throw new Error('ASS cue-gap preview has no box'); // allow-raw-error: e2e assertion setup
+        throw new Error('ASS cue-gap preview position never settled'); // allow-raw-error: e2e assertion setup
     }
     expect(Math.abs(
         assGapPreviewBox.y + assGapPreviewBox.height - realCueBounds.bottom
