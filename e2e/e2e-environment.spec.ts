@@ -19,7 +19,7 @@ test('the suite reaches the app and Jellyfin API through its configured origin',
     });
     expect(publicInfo).toMatchObject({
         status: 200,
-        body: { ProductName: 'Jellyfin Server' }
+        body: { ProductName: 'SlopTank Server' }
     });
     await expect(page).toHaveTitle(publicInfo.body.ServerName ?? 'SlopTank');
 });
