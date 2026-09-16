@@ -299,6 +299,28 @@ test('fatal hls.js network errors surface a playback error instead of freezing t
         }
     });
 
+    // playbackmanager.js's onPlaybackError only stops retrying once the live
+    // stream URL carries both AllowVideoStreamCopy=false and
+    // AllowAudioStreamCopy=false (see enablePlaybackRetryWithTranscoding).
+    // This box also throws real, incidental fatal hls.js errors during normal
+    // playback under load (mediaError/otherError entries seen in every run's
+    // console, independent of the synthetic ones below), and each one can
+    // independently advance the fallback generation. Track the real flags
+    // from request URLs instead of assuming exactly N synthetic rounds are
+    // needed: a round "stolen" by an incidental real error must not make the
+    // loop give up before the app's own state is actually terminal.
+    let sawVideoCopyDisabled = false;
+    let sawAudioCopyDisabled = false;
+    page.on('request', (request) => {
+        const url = request.url().toLowerCase();
+        if (url.includes('allowvideostreamcopy=false')) {
+            sawVideoCopyDisabled = true;
+        }
+        if (url.includes('allowaudiostreamcopy=false')) {
+            sawAudioCopyDisabled = true;
+        }
+    });
+
     await login(page, config.username, config.password);
 
     // First playback loads the same hls.js constructor used by the production
@@ -323,10 +345,14 @@ test('fatal hls.js network errors surface a playback error instead of freezing t
 
     const errorHeading = page.getByRole('heading', { name: 'Playback Error' });
     // playbackManager has two bounded fallbacks for a local item: disable
-    // video stream copy, then disable audio stream copy. Drive each real HLS
-    // generation to its terminal error; the third has both copy paths
-    // disabled and must surface the user-visible error instead of retrying.
-    const maxTerminalFailures = 3;
+    // video stream copy, then disable audio stream copy. Drive real HLS
+    // generations to their terminal error until the app's own state shows
+    // both copy paths disabled, then it must surface the user-visible error
+    // instead of retrying. The round budget has headroom beyond the minimum
+    // 3 rounds because an incidental real hls.js error (see the tracking
+    // comment above) can consume a round without the app's flags advancing
+    // any further than a synthetic round already would have.
+    const maxTerminalFailures = 6;
     for (let terminalFailure = 0; terminalFailure < maxTerminalFailures; terminalFailure++) {
         const currentGeneration = await page.evaluate(
             () => (window as unknown as PlaybackTestWindow).__fatalErrorTestGeneration ?? 0
@@ -344,7 +370,7 @@ test('fatal hls.js network errors surface a playback error instead of freezing t
             }
         ).toBe(true);
         await emitFatalHlsTimeoutSequence(page);
-        if (await errorHeading.isVisible() || terminalFailure === maxTerminalFailures - 1) {
+        if (await errorHeading.isVisible()) {
             break;
         }
         await expect.poll(
@@ -371,6 +397,7 @@ test('fatal hls.js network errors surface a playback error instead of freezing t
     } catch (error) {
         console.log('=== FATAL HLS FORENSICS ===');
         console.log('url:', page.url());
+        console.log('sawVideoCopyDisabled:', sawVideoCopyDisabled, 'sawAudioCopyDisabled:', sawAudioCopyDisabled);
         console.log('body text:', (await page.locator('body').innerText().catch((e) => String(e))).slice(0, 500));
         console.log('--- console ---');
         console.log(consoleLog.slice(-30).join('\n'));
