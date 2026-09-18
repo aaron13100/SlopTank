@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-24, 2026-07-26, 2026-08-01, 2026-08-09, 2026-08-12, 2026-09-02, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-24, 2026-07-26, 2026-08-01, 2026-08-09, 2026-08-12, 2026-09-02, 2026-09-09, 2026-09-16, 2026-09-18.
 import type { Locator, Page } from '@playwright/test';
 import {
     clickOsdControl,
