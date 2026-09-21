@@ -355,6 +355,7 @@
     "ErrorAddingMediaPathToVirtualFolder": "There was an error adding the media path. Please ensure the path is valid and SlopTank has access to that location.",
     "ErrorAddingTunerDevice": "There was an error adding the tuner device. Please ensure it is accessible and try again.",
     "ErrorAddingXmlTvFile": "There was an error accessing the XMLTV file. Please ensure the file exists and try again.",
+    "ErrorClearingWatchProgress": "The server reported an error while removing this item from Continue Watching. The reason from the server follows in parentheses.",
     "ErrorDefault": "There was an error processing the request. Please try again later.",
     "ErrorDeletingItem": "The server reported an error while deleting the item. The reason from the server follows in parentheses.",
     "ErrorDeletingLyrics": "The server reported an error while deleting the lyrics. The reason from the server follows in parentheses.",

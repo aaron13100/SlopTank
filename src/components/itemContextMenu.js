@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-02-14, 2026-02-20, 2026-03-12, 2026-07-18, 2026-07-24, 2026-07-31, 2026-08-01, 2026-09-08, 2026-09-09, 2026-09-14, 2026-09-15.
+// SlopTank modification notice: added or changed by SlopTank on 2026-02-14, 2026-02-20, 2026-03-12, 2026-07-18, 2026-07-24, 2026-07-31, 2026-08-01, 2026-09-08, 2026-09-09, 2026-09-14, 2026-09-15, 2026-09-21.
 import { BaseItemKind } from '@jellyfin/sdk/lib/generated-client/models/base-item-kind';
 import { getLibraryApi } from '@jellyfin/sdk/lib/utils/api/library-api';
 import { getPlaystateApi } from '@jellyfin/sdk/lib/utils/api/playstate-api';
@@ -17,6 +17,7 @@ import { appRouter } from './router/appRouter';
 import itemHelper, { canEditPlaylist } from './itemHelper';
 import loading from './loading/loading';
 import { playbackManager } from './playback/playbackmanager';
+import { deleteErrorSuffix } from '../scripts/deleteHelper';
 import { buildShareUrl } from './router/permalinkShare';
 import toast from './toast/toast';
 import { getShareOrigin } from '../scripts/settings/webSettings';
@@ -555,7 +556,14 @@ function executeCommand(item, id, options) {
                         userId: options.user.Id
                     }),
                     type: 'DELETE'
-                }).then(getResolveFunction(resolve, id, true), reject);
+                }).then(getResolveFunction(resolve, id, true), error => {
+                    // Reject without resolving `updated`, so the caller (shortcuts.js)
+                    // never calls notifyRefreshNeeded and the card stays on the rail.
+                    deleteErrorSuffix(error).then(suffix => {
+                        toast(globalize.translate('ErrorClearingWatchProgress') + suffix);
+                    });
+                    reject(error);
+                });
                 break;
             case 'addtocollection':
                 loadDynamicModule(() => import('./collectionEditor/collectionEditor'),

@@ -642,6 +642,58 @@
           ]
         }
       ]
+    },
+    {
+      "id": "continue_watching.removal",
+      "title": "Remove an item from Continue Watching without marking it watched",
+      "description": "A per-user 'Clear watch progress' action on a Continue Watching card clears only that user's resume position (DELETE UserResumeItems/{itemId}), dropping the card from the rail without a page reload and without touching watched state, play count, or any other user's data.",
+      "owner": "web-client",
+      "kind": "user-action",
+      "files": [
+        "src/components/itemContextMenu.js",
+        "src/scripts/deleteHelper.js"
+      ],
+      "added": "2026-09-21",
+      "paths": [
+        {
+          "id": "continue_watching.removal.clears_resume_only",
+          "type": "happy",
+          "requiredAssertions": [
+            "card_leaves_rail_without_reload",
+            "watched_state_and_play_count_unchanged",
+            "reappears_after_real_playback"
+          ]
+        },
+        {
+          "id": "continue_watching.removal.keyboard_reachable",
+          "type": "happy",
+          "requiredAssertions": [
+            "options_button_keyboard_focusable",
+            "menu_item_reachable_by_tab",
+            "activatable_by_enter"
+          ]
+        },
+        {
+          "id": "continue_watching.removal.failure_shows_real_error_and_keeps_card",
+          "type": "unhappy",
+          "failureClass": "domain",
+          "requiredAssertions": [
+            "toast_shows_server_reason",
+            "card_retained",
+            "resume_position_unchanged"
+          ]
+        },
+        {
+          "id": "continue_watching.removal.failure_without_json_body_still_shows_http_status",
+          "type": "unhappy",
+          "failureClass": "network",
+          "requiredAssertions": [
+            "toast_shows_http_status_fallback",
+            "card_retained",
+            "resume_position_unchanged"
+          ]
+        }
+      ]
     }
   ]
 }
