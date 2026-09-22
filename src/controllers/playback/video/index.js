@@ -34,8 +34,8 @@ import { appRouter } from '../../../components/router/appRouter';
 import { ServerConnections } from 'lib/jellyfin-apiclient';
 import LibraryMenu from '../../../scripts/libraryMenu';
 import { setBackdropTransparency, TRANSPARENCY_LEVEL } from '../../../components/backdrop/backdrop';
-import { pluginManager } from '../../../components/pluginManager';
-import { PluginType } from '../../../types/plugin.ts';
+import SyncPlayIconControl from './SyncPlayIconControl';
+import PersistentTitleControl from './PersistentTitleControl';
 import { getParameterByName } from '../../../utils/url.ts';
 import { toApi } from '../../../utils/jellyfin-apiclient/compat';
 import { canonicalizeLegacyGuidRoute } from '../../../components/router/permalinkCanonicalizer';
@@ -2003,109 +2003,6 @@ export default function (view) {
     // HACK: Remove `emby-button` from the rating button to make it look like the other buttons
     view.querySelector('.btnUserRating').classList.remove('emby-button');
 
-    // Register to SyncPlay playback events and show big animated icon
-    const showIcon = (action) => {
-        let primaryIconName = '';
-        let secondaryIconName = '';
-        let animationClass = 'oneShotPulse';
-        let iconVisibilityTime = 1500;
-        const syncPlayIcon = view.querySelector('#syncPlayIcon');
-
-        switch (action) {
-            case 'schedule-play':
-                primaryIconName = 'sync spin';
-                secondaryIconName = 'play_arrow centered';
-                animationClass = 'infinitePulse';
-                iconVisibilityTime = -1;
-                hideOsd();
-                break;
-            case 'unpause':
-                primaryIconName = 'play_circle_outline';
-                break;
-            case 'pause':
-                primaryIconName = 'pause_circle_outline';
-                showOsd();
-                break;
-            case 'seek':
-                primaryIconName = 'update';
-                animationClass = 'infinitePulse';
-                iconVisibilityTime = -1;
-                break;
-            case 'buffering':
-                primaryIconName = 'schedule';
-                animationClass = 'infinitePulse';
-                iconVisibilityTime = -1;
-                break;
-            case 'wait-pause':
-                primaryIconName = 'schedule';
-                secondaryIconName = 'pause shifted';
-                animationClass = 'infinitePulse';
-                iconVisibilityTime = -1;
-                break;
-            case 'wait-unpause':
-                primaryIconName = 'schedule';
-                secondaryIconName = 'play_arrow shifted';
-                animationClass = 'infinitePulse';
-                iconVisibilityTime = -1;
-                break;
-            default: {
-                syncPlayIcon.style.visibility = 'hidden';
-                return;
-            }
-        }
-
-        syncPlayIcon.setAttribute('class', 'syncPlayIconCircle ' + animationClass);
-
-        const primaryIcon = syncPlayIcon.querySelector('.primary-icon');
-        primaryIcon.setAttribute('class', 'primary-icon material-icons ' + primaryIconName);
-
-        const secondaryIcon = syncPlayIcon.querySelector('.secondary-icon');
-        secondaryIcon.setAttribute('class', 'secondary-icon material-icons ' + secondaryIconName);
-
-        const clone = syncPlayIcon.cloneNode(true);
-        clone.style.visibility = 'visible';
-        syncPlayIcon.parentNode.replaceChild(clone, syncPlayIcon);
-
-        if (iconVisibilityTime < 0) {
-            return;
-        }
-
-        setTimeout(() => {
-            clone.style.visibility = 'hidden';
-        }, iconVisibilityTime);
-    };
-
-    const SyncPlay = pluginManager.firstOfType(PluginType.SyncPlay)?.instance;
-    if (SyncPlay) {
-        Events.on(SyncPlay.Manager, 'enabled', (_event, enabled) => {
-            if (!enabled) {
-                const syncPlayIcon = view.querySelector('#syncPlayIcon');
-                syncPlayIcon.style.visibility = 'hidden';
-            }
-        });
-
-        Events.on(SyncPlay.Manager, 'notify-osd', (_event, action) => {
-            showIcon(action);
-        });
-
-        Events.on(SyncPlay.Manager, 'group-state-update', (_event, state, reason) => {
-            if (state === 'Playing' && reason === 'Unpause') {
-                showIcon('schedule-play');
-            } else if (state === 'Playing' && reason === 'Ready') {
-                showIcon('schedule-play');
-            } else if (state === 'Paused' && reason === 'Pause') {
-                showIcon('pause');
-            } else if (state === 'Paused' && reason === 'Ready') {
-                showIcon('clear');
-            } else if (state === 'Waiting' && reason === 'Seek') {
-                showIcon('seek');
-            } else if (state === 'Waiting' && reason === 'Buffer') {
-                showIcon('buffering');
-            } else if (state === 'Waiting' && reason === 'Pause') {
-                showIcon('wait-pause');
-            } else if (state === 'Waiting' && reason === 'Unpause') {
-                showIcon('wait-unpause');
-            }
-        });
-    }
+    new SyncPlayIconControl({ view, showOsd, hideOsd }).bind();
+    new PersistentTitleControl({ view }).bind();
 }
