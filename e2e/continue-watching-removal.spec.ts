@@ -31,16 +31,25 @@ interface ContinueWatchingTestWindow extends Window {
     ApiClient: {
         ajax(options: { type: string; url: string; data?: string; contentType?: string }): Promise<unknown>;
         getUrl(path: string, params?: Record<string, unknown>): string;
-        getItem(userId: string, itemId: string): Promise<{ UserData?: UserDataSnapshot }>;
+        getItem(userId: string, itemId: string): Promise<{ UserData?: UserDataSnapshot; RunTimeTicks?: number }>;
         getCurrentUserId(): string;
     };
     __e2eNoReloadMarker?: boolean;
 }
 
-// 5 minutes in: real progress, nowhere near the server's own auto-mark-played
-// threshold, and short of the item's own runtime for every fixture item this
-// suite uses.
-const RESUME_POSITION_TICKS = 3_000_000_000;
+// A fixed tick count does not work here: the server's own resume-tracking
+// (UserDataManager.UpdatePlayState) ignores any position under MinResumePct
+// of the item's actual runtime (server default 5%) as "still at the
+// beginning" and resets it straight back to 0. E2E_ITEM_ID has been
+// repointed before (Minority Report -> Rental Family, 2026-09-15) to items of
+// very different length, so seed a percentage of the item's own RunTimeTicks
+// instead of an absolute duration. 20% clears MinResumePct (5%) and stays
+// well under MaxResumePct (90%, past which the server marks it played and
+// clears the position instead of resuming) regardless of which fixture item
+// is configured.
+const RESUME_POSITION_FRACTION = 0.2;
+
+let resumePositionTicks = 0;
 
 function continueWatchingCard(page: Page, itemId: string) {
     return page.locator(`h2:has-text("Continue Watching") ~ * [data-id="${itemId}"]`).first();
@@ -56,6 +65,16 @@ async function getUserData(page: Page, itemId: string): Promise<UserDataSnapshot
             PlayCount: item.UserData?.PlayCount ?? 0
         };
     }, itemId);
+}
+
+async function computeResumePositionTicks(page: Page, itemId: string): Promise<number> {
+    const runtimeTicks = await page.evaluate(async (id) => {
+        const api = (window as unknown as ContinueWatchingTestWindow).ApiClient;
+        const item = await api.getItem(api.getCurrentUserId(), id);
+        return item.RunTimeTicks ?? 0;
+    }, itemId);
+    expect(runtimeTicks, `${itemId} must report a positive RunTimeTicks to seed a valid resume position`).toBeGreaterThan(0);
+    return Math.round(runtimeTicks * RESUME_POSITION_FRACTION);
 }
 
 async function setResumePosition(page: Page, itemId: string, ticks: number): Promise<void> {
@@ -80,13 +99,22 @@ async function clearResumePositionDirect(page: Page, itemId: string): Promise<vo
     }, itemId);
 }
 
+// The card's "more" trigger has two markups depending on layoutManager.mobile
+// (cardBuilder.js): a `.btnCardOptions` footer button on mobile, and a
+// `.cardOverlayButton[data-action="menu"]` hover overlay button on desktop.
+// Playwright's default chromium project runs at a desktop viewport (no
+// touch/mobile emulation), so it always gets the overlay markup; `.btnCardOptions`
+// is never present in that DOM (observed 2026-09-21: onScreenState reported
+// found:false, not just off-screen, confirming the element never existed).
+const CARD_MENU_BUTTON_SELECTOR = '.cardOverlayButton[data-action="menu"]';
+
 async function openCardMenu(page: Page, itemId: string): Promise<void> {
     const card = continueWatchingCard(page, itemId);
     await expect(card).toBeVisible({ timeout: 15_000 });
     await card.scrollIntoViewIfNeeded();
-    const state = await onScreenState(page, `[data-id="${itemId}"] .btnCardOptions`);
+    const state = await onScreenState(page, `[data-id="${itemId}"] ${CARD_MENU_BUTTON_SELECTOR}`);
     expect(state.reachable, `card options button should be reachable: ${JSON.stringify(state)}`).toBe(true);
-    await card.locator('.btnCardOptions').click();
+    await card.locator(CARD_MENU_BUTTON_SELECTOR).click();
     await expect(page.locator('.actionSheetMenuItem[data-id="removefromcontinue"]')).toBeVisible({ timeout: 10_000 });
 }
 
@@ -94,7 +122,8 @@ test.beforeEach(async ({ page, config }) => {
     // Start every case from a known state: a real resume position exists, and
     // nothing else about the item's history is disturbed.
     await login(page, config.username, config.password);
-    await setResumePosition(page, config.itemId, RESUME_POSITION_TICKS);
+    resumePositionTicks = await computeResumePositionTicks(page, config.itemId);
+    await setResumePosition(page, config.itemId, resumePositionTicks);
 });
 
 test.afterEach(async ({ page, config }) => {
@@ -110,7 +139,13 @@ test('removing an item from Continue Watching drops the card without a reload an
     const before = await getUserData(page, itemId);
     expect(before.PlaybackPositionTicks).toBeGreaterThan(0);
 
-    await page.goto('/web/#/home');
+    // login() already lands on home (HOME_ROUTE), and page.goto() to the
+    // identical hash URL is a browser-level no-op that never refetches the
+    // Continue Watching section (observed 2026-09-21: the API's own
+    // /Items/Resume confirmed the seeded position was saved and ranked
+    // first, but the rendered rail kept showing pre-seed data). Force an
+    // actual reload so the rail's data fetch re-runs against current state.
+    await page.reload();
     await expect(continueWatchingCard(page, itemId)).toBeVisible({ timeout: 15_000 });
 
     // A real page reload would reset any window-level state; surviving this
@@ -137,8 +172,14 @@ test('removing an item from Continue Watching drops the card without a reload an
 
     // A later real playback checkpoint (the same call a player makes on
     // stop) must be able to put the item right back in Continue Watching.
-    await setResumePosition(page, itemId, RESUME_POSITION_TICKS);
-    await page.goto('/web/#/home');
+    await setResumePosition(page, itemId, resumePositionTicks);
+    // login() already lands on home (HOME_ROUTE), and page.goto() to the
+    // identical hash URL is a browser-level no-op that never refetches the
+    // Continue Watching section (observed 2026-09-21: the API's own
+    // /Items/Resume confirmed the seeded position was saved and ranked
+    // first, but the rendered rail kept showing pre-seed data). Force an
+    // actual reload so the rail's data fetch re-runs against current state.
+    await page.reload();
     await expect(continueWatchingCard(page, itemId)).toBeVisible({ timeout: 15_000 });
 });
 
@@ -146,7 +187,13 @@ test('removing an item from Continue Watching drops the card without a reload an
 test('the removal action is reachable and operable from the keyboard alone', async ({ page, config }) => {
     const itemId = config.itemId;
 
-    await page.goto('/web/#/home');
+    // login() already lands on home (HOME_ROUTE), and page.goto() to the
+    // identical hash URL is a browser-level no-op that never refetches the
+    // Continue Watching section (observed 2026-09-21: the API's own
+    // /Items/Resume confirmed the seeded position was saved and ranked
+    // first, but the rendered rail kept showing pre-seed data). Force an
+    // actual reload so the rail's data fetch re-runs against current state.
+    await page.reload();
     const card = continueWatchingCard(page, itemId);
     await expect(card).toBeVisible({ timeout: 15_000 });
     await card.scrollIntoViewIfNeeded();
@@ -154,9 +201,10 @@ test('the removal action is reachable and operable from the keyboard alone', asy
     // Reach the card's own options button through a real focus, then operate
     // the whole rest of the flow (open the sheet, pick the item, activate it)
     // with keys only.
-    await card.locator('.btnCardOptions').focus();
+    await card.locator(CARD_MENU_BUTTON_SELECTOR).focus();
     await expect.poll(() => page.evaluate(
-        () => document.activeElement?.classList.contains('btnCardOptions')
+        (selector) => document.activeElement?.matches(selector) ?? false,
+        CARD_MENU_BUTTON_SELECTOR
     ), { message: 'the card options button should be keyboard-focusable' }).toBe(true);
 
     await page.keyboard.press('Enter');
@@ -197,7 +245,13 @@ test('a failed removal keeps the card and surfaces the real server error', async
         });
     });
 
-    await page.goto('/web/#/home');
+    // login() already lands on home (HOME_ROUTE), and page.goto() to the
+    // identical hash URL is a browser-level no-op that never refetches the
+    // Continue Watching section (observed 2026-09-21: the API's own
+    // /Items/Resume confirmed the seeded position was saved and ranked
+    // first, but the rendered rail kept showing pre-seed data). Force an
+    // actual reload so the rail's data fetch re-runs against current state.
+    await page.reload();
     await expect(continueWatchingCard(page, itemId)).toBeVisible({ timeout: 15_000 });
 
     await openCardMenu(page, itemId);
@@ -210,7 +264,7 @@ test('a failed removal keeps the card and surfaces the real server error', async
     await expect(continueWatchingCard(page, itemId)).toBeVisible();
 
     const afterFailure = await getUserData(page, itemId);
-    expect(afterFailure.PlaybackPositionTicks).toBe(RESUME_POSITION_TICKS);
+    expect(afterFailure.PlaybackPositionTicks).toBe(resumePositionTicks);
 
     // Let the afterEach cleanup's own DELETE through for real; otherwise this
     // route would also fail it, leaving the shared fixture item's resume
@@ -239,7 +293,13 @@ test('a failure with an unparseable error body still surfaces the HTTP status, n
         });
     });
 
-    await page.goto('/web/#/home');
+    // login() already lands on home (HOME_ROUTE), and page.goto() to the
+    // identical hash URL is a browser-level no-op that never refetches the
+    // Continue Watching section (observed 2026-09-21: the API's own
+    // /Items/Resume confirmed the seeded position was saved and ranked
+    // first, but the rendered rail kept showing pre-seed data). Force an
+    // actual reload so the rail's data fetch re-runs against current state.
+    await page.reload();
     await expect(continueWatchingCard(page, itemId)).toBeVisible({ timeout: 15_000 });
 
     await openCardMenu(page, itemId);
@@ -252,7 +312,7 @@ test('a failure with an unparseable error body still surfaces the HTTP status, n
     await expect(continueWatchingCard(page, itemId)).toBeVisible();
 
     const afterFailure = await getUserData(page, itemId);
-    expect(afterFailure.PlaybackPositionTicks).toBe(RESUME_POSITION_TICKS);
+    expect(afterFailure.PlaybackPositionTicks).toBe(resumePositionTicks);
 
     await page.unroute('**/UserResumeItems/**');
 });
