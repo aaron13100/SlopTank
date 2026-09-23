@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09, 2026-09-23.
 import escapeHtml from 'escape-html';
 import dom from '../../utils/dom';
 import layoutManager from '../layoutManager';
@@ -20,12 +20,12 @@ import '../formdialog.scss';
 import '../../styles/clearbutton.scss';
 import '../../styles/flexstyles.scss';
 import './style.scss';
-import toast from '../toast/toast';
 import { appRouter } from '../router/appRouter';
 import template from './metadataEditor.template.html';
 import { BaseItemKind } from '@jellyfin/sdk/lib/generated-client/models/base-item-kind';
 import { SeriesStatus } from '@jellyfin/sdk/lib/generated-client/models/series-status';
 import { loadDynamicModule } from 'utils/dynamicImport';
+import { getListValues, readItemFromForm, submitUpdatedItem } from './metadataFormSubmission';
 
 let currentContext;
 let metadataEditorInfo;
@@ -41,176 +41,23 @@ function closeDialog() {
     }
 }
 
-function submitUpdatedItem(form, item) {
-    function afterContentTypeUpdated() {
-        toast(globalize.translate('MessageItemSaved'));
-
-        loading.hide();
-        closeDialog();
-    }
-
-    const apiClient = getApiClient();
-
-    apiClient.updateItem(item).then(function () {
-        const newContentType = form.querySelector('#selectContentType').value || '';
-
-        if ((metadataEditorInfo.ContentType || '') !== newContentType) {
-            apiClient.ajax({
-
-                url: apiClient.getUrl('Items/' + item.Id + '/ContentType', {
-                    ContentType: newContentType
-                }),
-
-                type: 'POST'
-
-            }).then(function () {
-                afterContentTypeUpdated();
-            });
-        } else {
-            afterContentTypeUpdated();
-        }
-    });
-}
-
-function getSelectedAirDays(form) {
-    const checkedItems = form.querySelectorAll('.chkAirDay:checked') || [];
-    return Array.prototype.map.call(checkedItems, function (c) {
-        return c.getAttribute('data-day');
-    });
-}
-
-function getAlbumArtists(form) {
-    return form.querySelector('#txtAlbumArtist').value.trim().split(';').filter(function (s) {
-        return s.length > 0;
-    }).map(function (a) {
-        return {
-            Name: a
-        };
-    });
-}
-
-function getArtists(form) {
-    return form.querySelector('#txtArtist').value.trim().split(';').filter(function (s) {
-        return s.length > 0;
-    }).map(function (a) {
-        return {
-            Name: a
-        };
-    });
-}
-
-function getDateValue(form, element, property) {
-    let val = form.querySelector(element).value;
-
-    if (!val) {
-        return null;
-    }
-
-    if (currentItem[property]) {
-        const date = datetime.parseISO8601Date(currentItem[property], true);
-
-        const parts = date.toISOString().split('T');
-
-        // If the date is the same, preserve the time
-        if (parts[0].startsWith(val)) {
-            const iso = parts[1];
-
-            val += 'T' + iso;
-        }
-    }
-
-    return val;
-}
-
 function onSubmit(e) {
     loading.show();
 
     const form = this;
 
-    const item = {
-        Id: currentItem.Id,
-        Name: form.querySelector('#txtName').value,
-        OriginalTitle: form.querySelector('#txtOriginalName').value,
-        ForcedSortName: form.querySelector('#txtSortName').value,
-        CommunityRating: form.querySelector('#txtCommunityRating').value,
-        CriticRating: form.querySelector('#txtCriticRating').value,
-        IndexNumber: form.querySelector('#txtIndexNumber').value || null,
-        AirsBeforeSeasonNumber: form.querySelector('#txtAirsBeforeSeason').value,
-        AirsAfterSeasonNumber: form.querySelector('#txtAirsAfterSeason').value,
-        AirsBeforeEpisodeNumber: form.querySelector('#txtAirsBeforeEpisode').value,
-        ParentIndexNumber: form.querySelector('#txtParentIndexNumber').value || null,
-        DisplayOrder: form.querySelector('#selectDisplayOrder').value,
-        Album: form.querySelector('#txtAlbum').value,
-        AlbumArtists: getAlbumArtists(form),
-        ArtistItems: getArtists(form),
-        Overview: form.querySelector('#txtOverview').value,
-        Status: form.querySelector('#selectStatus').value,
-        AirDays: getSelectedAirDays(form),
-        AirTime: form.querySelector('#txtAirTime').value,
-        Genres: getListValues(form.querySelector('#listGenres')),
-        Tags: getListValues(form.querySelector('#listTags')),
-        Studios: getListValues(form.querySelector('#listStudios')).map(function (element) {
-            return { Name: element };
-        }),
+    const item = readItemFromForm(form, currentItem);
 
-        PremiereDate: getDateValue(form, '#txtPremiereDate', 'PremiereDate'),
-        DateCreated: getDateValue(form, '#txtDateAdded', 'DateCreated'),
-        EndDate: getDateValue(form, '#txtEndDate', 'EndDate'),
-        ProductionYear: form.querySelector('#txtProductionYear').value,
-        Height: form.querySelector('#selectHeight').value,
-        AspectRatio: form.querySelector('#txtOriginalAspectRatio').value,
-        Video3DFormat: form.querySelector('#select3dFormat').value,
-
-        OfficialRating: form.querySelector('#selectOfficialRating').value,
-        CustomRating: form.querySelector('#selectCustomRating').value,
-        People: currentItem.People,
-        LockData: form.querySelector('#chkLockData').checked,
-        LockedFields: Array.prototype.filter.call(form.querySelectorAll('.selectLockedField'), function (c) {
-            return !c.checked;
-        }).map(function (c) {
-            return c.getAttribute('data-value');
-        })
-    };
-
-    item.ProviderIds = { ...currentItem.ProviderIds };
-
-    const idElements = form.querySelectorAll('.txtExternalId');
-    Array.prototype.map.call(idElements, function (idElem) {
-        const providerKey = idElem.getAttribute('data-providerkey');
-        item.ProviderIds[providerKey] = idElem.value;
+    submitUpdatedItem(getApiClient(), form, item, {
+        metadataEditorInfo: metadataEditorInfo,
+        onSaved: closeDialog
     });
-
-    item.PreferredMetadataLanguage = form.querySelector('#selectLanguage').value;
-    item.PreferredMetadataCountryCode = form.querySelector('#selectCountry').value;
-
-    if (currentItem.Type === 'Person') {
-        const placeOfBirth = form.querySelector('#txtPlaceOfBirth').value;
-
-        item.ProductionLocations = placeOfBirth ? [placeOfBirth] : [];
-    }
-
-    if (currentItem.Type === 'Series') {
-        // 600000000
-        const seriesRuntime = form.querySelector('#txtSeriesRuntime').value;
-        item.RunTimeTicks = seriesRuntime ? (seriesRuntime * 600000000) : null;
-    }
-
-    const tagline = form.querySelector('#txtTagline').value;
-    item.Taglines = tagline ? [tagline] : [];
-
-    submitUpdatedItem(form, item);
 
     e.preventDefault();
     e.stopPropagation();
 
     // Disable default form submission
     return false;
-}
-
-function getListValues(list) {
-    return Array.prototype.map.call(list.querySelectorAll('.textValue'), function (el) {
-        return el.textContent;
-    });
 }
 
 function addElementToList(source, sortCallback) {
