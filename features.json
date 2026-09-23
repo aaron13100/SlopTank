@@ -1,6 +1,59 @@
 {
   "features": [
     {
+      "id": "video.persistent_title",
+      "title": "Persistent now-playing title label",
+      "description": "The now-playing title stays readable after the OSD fades, follows episode transitions, and never lingers after playback ends.",
+      "owner": "web-client",
+      "kind": "user-action",
+      "files": [
+        "src/controllers/playback/video/PersistentTitleControl.js",
+        "e2e/video-persistent-title.spec.ts"
+      ],
+      "added": "2026-09-12",
+      "paths": [
+        {
+          "id": "video.persistent_title.visible_while_the_osd_is_hidden",
+          "type": "happy",
+          "requiredAssertions": [
+            "title_visible_after_osd_fades",
+            "title_hides_when_osd_returns"
+          ]
+        },
+        {
+          "id": "video.persistent_title.episode_string_and_episode_transition",
+          "type": "happy",
+          "requiredAssertions": [
+            "label_names_series_season_episode",
+            "label_follows_next_episode"
+          ]
+        },
+        {
+          "id": "video.persistent_title.gone_when_playback_ends",
+          "type": "happy",
+          "requiredAssertions": [
+            "label_absent_after_natural_end"
+          ]
+        },
+        {
+          "id": "video.persistent_title.transition_clears_previous_title",
+          "type": "unhappy",
+          "failureClass": "domain",
+          "requiredAssertions": [
+            "previous_title_replaced_by_next"
+          ]
+        },
+        {
+          "id": "video.persistent_title.osd_visible_suppresses_duplicate",
+          "type": "unhappy",
+          "failureClass": "domain",
+          "requiredAssertions": [
+            "only_one_title_on_screen"
+          ]
+        }
+      ]
+    },
+    {
       "id": "video.permalink",
       "title": "Durable video permalink URL",
       "description": "The video playback URL becomes a durable, shareable link that survives a reload and resumes playback instead of bouncing home.",
