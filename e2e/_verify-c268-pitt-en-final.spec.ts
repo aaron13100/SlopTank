@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-23.
 /**
  * One-off user-visible verification for queue task t_260921_214748_767 (c268):
  * mistimed English sidecar on The Pitt S01E08 (item ef2d373c566ee0f5f8d4e8526118af21),
