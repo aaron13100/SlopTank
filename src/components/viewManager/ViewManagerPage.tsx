@@ -11,6 +11,7 @@ import { AppType } from 'constants/appType';
 import { useVideoOsdPresence } from 'hooks/useVideoOsdPresence';
 import { setRouteSearchOverride } from 'utils/url';
 import { loadDynamicModule } from 'utils/dynamicImport';
+import { prefetchVideoController } from './prefetchVideoController';
 
 /** The view type every route that mounts the video player already declares. */
 const VIDEO_OSD_VIEW_TYPE = 'video-osd';
@@ -42,7 +43,7 @@ interface ViewOptions {
     }
 }
 
-const importController = (
+export const importController = (
     appType: AppType,
     controller: string,
     view: string
@@ -122,6 +123,13 @@ const ViewManagerPage: FunctionComponent<ViewManagerPageProps> = ({
     // arrangement that left the navigation toolbar over a playing movie as
     // soon as playback gained a second URL (2026-08-12).
     useVideoOsdPresence(type === VIDEO_OSD_VIEW_TYPE);
+
+    // Warm the video player controller while the details page (the only
+    // route Play is clicked from) is on screen, so the click-to-video-element
+    // phase is not also paying for a cold chunk fetch and module evaluation.
+    useEffect(() => {
+        prefetchVideoController(appType, controller, importController);
+    }, [ appType, controller ]);
 
     // Flattened to a string BEFORE the dependency list, never compared as an
     // object. Callers build these per render (PermalinkRedirectPage returns a
