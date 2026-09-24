@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09, 2026-09-24.
 import { AppFeature } from 'constants/appFeature';
 import Events from '../../utils/events.ts';
 import browser from '../../scripts/browser';
@@ -179,7 +179,7 @@ function showActivePlayerMenuInternal(playerInfo) {
     dialogOptions.modal = false;
     dialogOptions.entryAnimationDuration = 160;
     dialogOptions.exitAnimationDuration = 160;
-    dialogOptions.autoFocus = false;
+    dialogOptions.autoFocus = 'keyboard';
 
     const dlg = dialogHelper.createDialog(dialogOptions);
 

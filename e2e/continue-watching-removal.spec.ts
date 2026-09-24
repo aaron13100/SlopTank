@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-21.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-21, 2026-09-24.
 /**
  * Regression coverage for "Remove from Continue Watching" (queue task
  * t_260913_214241_633, owner request 2026-09-13, upstream feature request
@@ -228,6 +228,44 @@ test('the removal action is reachable and operable from the keyboard alone', asy
 
     const afterRemoval = await getUserData(page, itemId);
     expect(afterRemoval.PlaybackPositionTicks).toBe(0);
+});
+
+// @covers continue_watching.removal.keyboard_focus_returns_on_close
+test('a keyboard-opened card menu takes focus and hands it back to its trigger on Escape', async ({ page, config }) => {
+    await page.reload();
+    const card = continueWatchingCard(page, config.itemId);
+    await expect(card).toBeVisible({ timeout: 15_000 });
+    await card.scrollIntoViewIfNeeded();
+
+    const trigger = card.locator(CARD_MENU_BUTTON_SELECTOR);
+    await trigger.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.actionSheetMenuItem[data-id="removefromcontinue"]')).toBeVisible({ timeout: 10_000 });
+
+    await expect.poll(() => page.evaluate(
+        () => Boolean(document.activeElement?.closest('.actionSheet'))
+    ), { message: 'opening the menu from the keyboard should move focus into it, not drop it on <body>' }).toBe(true);
+
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.actionSheet')).toHaveCount(0, { timeout: 10_000 });
+    await expect.poll(() => trigger.evaluate((el) => el === document.activeElement), {
+        message: 'closing a keyboard-opened menu should return focus to the button that opened it'
+    }).toBe(true);
+});
+
+// @covers continue_watching.removal.pointer_open_does_not_steal_focus
+test('a pointer-opened card menu leaves focus alone (desktop mouse behavior unchanged)', async ({ page, config }) => {
+    await page.reload();
+    await openCardMenu(page, config.itemId);
+    // Chromium focuses a clicked button, and the dialog's open-finish step
+    // (dialogHelper animateDialogOpen) is where focus is either moved into the
+    // sheet or blurred away from the page. Wait for that step to have run --
+    // focus has left the trigger -- then check where it went.
+    await expect.poll(() => page.evaluate((triggerSelector) => {
+        const active = document.activeElement;
+        if (active?.closest('.actionSheet')) return 'sheet';
+        return active?.matches(triggerSelector) ? 'trigger' : 'elsewhere';
+    }, CARD_MENU_BUTTON_SELECTOR), { message: 'a mouse click must not pull focus into the action sheet' }).toBe('elsewhere');
 });
 
 // @covers continue_watching.removal.failure_shows_real_error_and_keeps_card

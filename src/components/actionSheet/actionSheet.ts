@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-09-08, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-09-08, 2026-09-09, 2026-09-24.
 import escapeHtml from 'escape-html';
 import dialogHelper from '../dialogHelper/dialogHelper';
 import layoutManager from '../layoutManager';
@@ -70,7 +70,8 @@ interface Offset {
 }
 
 interface DialogOptions {
-    autoFocus?: boolean;
+    /** true: focus on open; false: never; 'keyboard': only when a keyboard-focused control opened it. */
+    autoFocus?: boolean | 'keyboard';
     enableHistory?: boolean;
     entryAnimationDuration?: number;
     entryAnimation?: string;
@@ -178,7 +179,9 @@ export function show(options: Options) {
         dialogOptions.exitAnimation = options.exitAnimation;
         dialogOptions.entryAnimationDuration = options.entryAnimationDuration || 140;
         dialogOptions.exitAnimationDuration = options.exitAnimationDuration || 100;
-        dialogOptions.autoFocus = false;
+        // Mouse/touch opens leave focus alone; a keyboard open moves focus into
+        // the menu so every item is reachable by Tab.
+        dialogOptions.autoFocus = 'keyboard';
     }
 
     const dlg = dialogHelper.createDialog(dialogOptions);

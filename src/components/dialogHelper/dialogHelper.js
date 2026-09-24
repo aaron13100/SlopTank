@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-09-08, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-09-08, 2026-09-09, 2026-09-24.
 import focusManager from '../focusManager';
 import browser from '../../scripts/browser';
 import layoutManager from '../layoutManager';
@@ -14,6 +14,33 @@ import '../../styles/scrollstyles.scss';
 import { loadDynamicModule } from 'utils/dynamicImport';
 
 let globalOnOpenCallback;
+
+// `:focus-visible` is the browser's own record of keyboard-driven focus (it
+// matches after Tab/Enter/arrow navigation, not after a mouse click). Older TV
+// webviews reject the selector outright, so probe the exact call once instead
+// of letting `matches()` throw on every dialog open there.
+const supportsFocusVisible = (() => {
+    try {
+        document.createElement('button').matches(':focus-visible');
+        return true;
+    } catch (err) {
+        console.info('[dialogHelper] :focus-visible unsupported; keyboard-opened dialogs keep the default focus behavior', err);
+        return false;
+    }
+})();
+
+/**
+ * Whether focus currently sits on an element the user reached with the keyboard.
+ * @param {Element|null} elem The element to test, usually `document.activeElement`.
+ * @returns {boolean} true when `elem` is a real (non-body) element matching `:focus-visible`;
+ * always false on browsers without `:focus-visible` support.
+ */
+function isKeyboardFocused(elem) {
+    return Boolean(supportsFocusVisible
+        && elem
+        && elem !== document.body
+        && elem.matches(':focus-visible'));
+}
 
 function enableAnimation() {
     // too slow
@@ -50,6 +77,15 @@ function DialogHashHandler(dlg, hash, resolve) {
     const self = this;
     self.originalUrl = window.location.href;
     const activeElement = document.activeElement;
+    // A dialog opened from a keyboard-focused control (Enter on a card's menu
+    // button, etc.) must not strand the keyboard user. On close it hands focus
+    // back to the opener, as TV layout always does. On open, a popup menu that
+    // opted in with `autoFocus: 'keyboard'` also takes focus, so its items are
+    // reachable by Tab; pointer-opened menus keep the desktop behavior of not
+    // grabbing focus, and full-screen viewers that drive keys globally
+    // (slideshow, book/comic/pdf players) are not opted in.
+    const keyboardInvoked = isKeyboardFocused(activeElement);
+    const takeFocusOnOpen = keyboardInvoked && dlg.getAttribute('data-autofocus') === 'keyboard';
     let removeScrollLockOnClose = false;
     let unlisten;
 
@@ -134,7 +170,7 @@ function DialogHashHandler(dlg, hash, resolve) {
             }
         }
 
-        if (layoutManager.tv) {
+        if (layoutManager.tv || (keyboardInvoked && activeElement.isConnected && hasNoFocusOwner(dlg))) {
             focusManager.focus(activeElement);
         }
 
@@ -177,7 +213,7 @@ function DialogHashHandler(dlg, hash, resolve) {
         removeScrollLockOnClose = true;
     }
 
-    animateDialogOpen(dlg);
+    animateDialogOpen(dlg, { takeFocus: takeFocusOnOpen });
 
     if (isHistoryEnabled(dlg)) {
         const routerHistory = appRouter.history;
@@ -236,6 +272,17 @@ function addBackdropOverlay(dlg) {
     });
 }
 
+/**
+ * Whether nothing outside the closing dialog currently owns focus, so handing
+ * focus back to the dialog's opener cannot steal it from a dialog opened since.
+ * @param {HTMLElement} dlg The dialog being closed.
+ * @returns {boolean} true when focus is on nothing, on <body>, or still inside `dlg`.
+ */
+function hasNoFocusOwner(dlg) {
+    const active = document.activeElement;
+    return !active || active === document.body || dlg.contains(active);
+}
+
 function isHistoryEnabled(dlg) {
     return dlg.getAttribute('data-history') === 'true';
 }
@@ -291,11 +338,18 @@ const getAnimationEndHandler = (dlg, callback) => function handler() {
     callback();
 };
 
-function animateDialogOpen(dlg) {
+/**
+ * Runs the dialog's entry animation, then settles focus.
+ * @param {HTMLElement} dlg The dialog element.
+ * @param {{ takeFocus?: boolean }} [options] `takeFocus` moves focus into the dialog even though it
+ * was not created with `autoFocus: true` (an `autoFocus: 'keyboard'` dialog opened from a
+ * keyboard-focused control).
+ */
+function animateDialogOpen(dlg, { takeFocus = false } = {}) {
     const onAnimationFinish = () => {
         focusManager.pushScope(dlg);
 
-        if (dlg.getAttribute('data-autofocus') === 'true') {
+        if (takeFocus || dlg.getAttribute('data-autofocus') === 'true') {
             focusManager.autoFocus(dlg);
         }
 
@@ -435,7 +489,11 @@ export function createDialog(options = {}) {
         dlg.setAttribute('modal', 'modal');
     }
 
-    if (options.autoFocus !== false) {
+    // autoFocus: true (default) always focuses the dialog on open, false never
+    // does, and 'keyboard' does only when a keyboard-focused control opened it.
+    if (options.autoFocus === 'keyboard') {
+        dlg.setAttribute('data-autofocus', 'keyboard');
+    } else if (options.autoFocus !== false) {
         dlg.setAttribute('data-autofocus', 'true');
     }
 

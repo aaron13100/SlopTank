@@ -704,7 +704,9 @@
       "kind": "user-action",
       "files": [
         "src/components/itemContextMenu.js",
-        "src/scripts/deleteHelper.js"
+        "src/scripts/deleteHelper.js",
+        "src/components/actionSheet/actionSheet.ts",
+        "src/components/dialogHelper/dialogHelper.js"
       ],
       "added": "2026-09-21",
       "paths": [
@@ -724,6 +726,21 @@
             "options_button_keyboard_focusable",
             "menu_item_reachable_by_tab",
             "activatable_by_enter"
+          ]
+        },
+        {
+          "id": "continue_watching.removal.keyboard_focus_returns_on_close",
+          "type": "happy",
+          "requiredAssertions": [
+            "keyboard_open_moves_focus_into_menu",
+            "escape_returns_focus_to_trigger"
+          ]
+        },
+        {
+          "id": "continue_watching.removal.pointer_open_does_not_steal_focus",
+          "type": "happy",
+          "requiredAssertions": [
+            "pointer_open_leaves_focus_outside_menu"
           ]
         },
         {
