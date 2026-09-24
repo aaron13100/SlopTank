@@ -146,13 +146,24 @@ export function seekOnPlaybackStart(instance, element, ticks, onMediaReady) {
             if (onMediaReady) onMediaReady();
         } else {
             // update video player position when media is ready to be sought
+            let sought = false;
             const events = ['durationchange', 'loadeddata', 'play', 'loadedmetadata'];
             const onMediaChange = function(e) {
-                if (element.currentTime === 0 && element.duration >= seconds) {
-                    // seek only when video position is exactly zero,
-                    // as this is true only if video hasn't started yet or
-                    // user rewound to the very beginning
-                    // (but rewinding cannot happen as the first event with media of non-empty duration)
+                // Seek exactly once, the first time duration becomes known.
+                // This used to also require element.currentTime to still be
+                // exactly 0 at that instant, on the theory that a non-zero
+                // position could only mean a deliberate user seek. In
+                // practice autoplay can advance currentTime by a fraction of
+                // a second before any of these events gets a turn on a
+                // contended host (this project's normal operating
+                // condition, never a "quiet box" exception) -- and once that
+                // happens the exact-zero check never matches again, so the
+                // requested resume position is dropped for good rather than
+                // just delayed. The `sought` flag is what actually prevents
+                // re-seeking over a later, genuine user action; it does not
+                // depend on catching this one instant.
+                if (!sought && element.duration >= seconds) {
+                    sought = true;
                     console.debug(`seeking to ${seconds} on ${e.type} event`);
                     setCurrentTimeIfNeeded(element, seconds);
                     events.forEach(name => {

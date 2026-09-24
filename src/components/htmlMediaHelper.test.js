@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import Hls from 'hls.js/dist/hls.js';
 import Events from '../utils/events.ts';
 import { MediaError } from 'types/mediaError';
-import { bindEventsToHlsPlayer } from './htmlMediaHelper';
+import { bindEventsToHlsPlayer, seekOnPlaybackStart } from './htmlMediaHelper';
 
 /**
  * Regression coverage for the frozen-video-page bug (t_260722_234509_771):
@@ -116,5 +116,71 @@ describe('htmlMediaHelper: bindEventsToHlsPlayer fatal network error recovery', 
         hls.trigger(Hls.Events.ERROR, fatalTimeoutErrorData());
 
         expect(rejectCalls).toBe(0);
+    });
+});
+
+/**
+ * Regression coverage for queue task c273 (t_260922_231151_281): a resume
+ * seek (reload, permalink `t=` link, Continue Watching) can be silently
+ * dropped, leaving playback at position 0 with no error.
+ *
+ * Root cause: when duration is not yet known, seekOnPlaybackStart deferred
+ * the seek to the first of several media events, but only applied it if
+ * `element.currentTime` was still EXACTLY 0 at that instant. On a
+ * contended host (this project's normal operating condition, never a
+ * "quiet box" exception), autoplay can advance currentTime by even a
+ * fraction of a second before the event handler gets a turn, and once that
+ * happens the exact-zero check never matches again: the seek is dropped
+ * for good, not delayed.
+ */
+describe('htmlMediaHelper: seekOnPlaybackStart', () => {
+    function fakeVideoElement({ duration }) {
+        const target = new EventTarget();
+        target.duration = duration;
+        target.currentTime = 0;
+        return target;
+    }
+
+    // @covers video.reload.seek_drop.currentTime_advanced_before_duration_known
+    it('still applies the deferred seek even if currentTime already advanced past 0 before duration became known', () => {
+        const element = fakeVideoElement({ duration: NaN });
+        let mediaReadyCalls = 0;
+
+        seekOnPlaybackStart({}, element, 200_000_000 /* 20s */, () => {
+            mediaReadyCalls += 1;
+        });
+
+        // Autoplay ticked the position forward a little before duration
+        // metadata arrived -- normal under real load, not a user seek.
+        element.currentTime = 0.6;
+        element.duration = 3600; // duration now known, well past the requested 20s
+
+        element.dispatchEvent(new Event('durationchange'));
+
+        expect(element.currentTime).toBe(20);
+        expect(mediaReadyCalls).toBe(1);
+    });
+
+    it('still seeks exactly once when multiple deferred events fire in a row', () => {
+        const element = fakeVideoElement({ duration: NaN });
+
+        seekOnPlaybackStart({}, element, 100_000_000 /* 10s */, () => undefined);
+
+        element.duration = 1800;
+        element.dispatchEvent(new Event('loadedmetadata'));
+        expect(element.currentTime).toBe(10);
+
+        // A later, unrelated event on the same element must not re-seek.
+        element.currentTime = 15;
+        element.dispatchEvent(new Event('loadeddata'));
+        expect(element.currentTime).toBe(15);
+    });
+
+    it('seeks immediately when duration is already known', () => {
+        const element = fakeVideoElement({ duration: 1800 });
+
+        seekOnPlaybackStart({}, element, 50_000_000 /* 5s */, () => undefined);
+
+        expect(element.currentTime).toBe(5);
     });
 });
