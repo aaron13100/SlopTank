@@ -439,5 +439,24 @@ export default tseslint.config(
             'sonarjs/no-nested-functions': 'off',
             'sonarjs/void-use': 'off'
         }
+    },
+
+    // c288 (t_260924_172639_129): a dropped playback.set*StreamIndex promise
+    // in these two OSD menus let their outer .finally()/try-finally resolve
+    // (and reset the OSD idle timer) before the stream change had actually
+    // taken effect -- the same shape c209 fixed in playbackManager itself.
+    // no-floating-promises is off for legacy JS repo-wide (see the block
+    // above) because most of it has not been swept for violations yet; these
+    // two files have, and are clean under the stricter rule, so scoping it
+    // back on here makes this exact bug class structurally impossible in
+    // them going forward without re-litigating the whole legacy-JS ratchet.
+    {
+        files: [
+            'src/controllers/playback/video/audioTrackMenu.js',
+            'src/controllers/playback/video/SubtitleTrackMenu.js'
+        ],
+        rules: {
+            '@typescript-eslint/no-floating-promises': 'error'
+        }
     }
 );
