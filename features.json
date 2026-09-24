@@ -796,6 +796,48 @@
             "returns_null",
             "does_not_throw"
           ]
+        },
+        {
+          "id": "video.reload.seek_drop.rejected_seek_not_retried",
+          "type": "unhappy",
+          "failureClass": "race_condition",
+          "requiredAssertions": [
+            "retries_after_rejection",
+            "media_ready_fires"
+          ]
+        },
+        {
+          "id": "video.reload.seek_drop.duration_known_only_after_listener_attach",
+          "type": "unhappy",
+          "failureClass": "race_condition",
+          "requiredAssertions": [
+            "seek_still_applied",
+            "media_ready_fires"
+          ]
+        },
+        {
+          "id": "video.reload.double_dispatch.single_playback_attempt",
+          "type": "unhappy",
+          "failureClass": "race_condition",
+          "requiredAssertions": [
+            "single_play_call",
+            "correct_position_used"
+          ]
+        },
+        {
+          "id": "video.reload.double_dispatch.joins_in_flight_attempt",
+          "type": "happy",
+          "requiredAssertions": [
+            "independent_items_not_blocked"
+          ]
+        },
+        {
+          "id": "video.reload.double_dispatch.releases_guard_after_completion",
+          "type": "happy",
+          "requiredAssertions": [
+            "guard_released_after_completion",
+            "second_attempt_allowed"
+          ]
         }
       ]
     }

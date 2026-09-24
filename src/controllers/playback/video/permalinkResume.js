@@ -13,7 +13,7 @@
  * trickplayDiscovery.ts): a real, independently meaningful unit, not a
  * `*.helpers`/`*.utils` split of video/index.js.
  */
-import { playbackManager } from '../../../components/playback/playbackmanager';
+import { playbackManager as defaultPlaybackManager } from '../../../components/playback/playbackmanager';
 import { ServerConnections } from 'lib/jellyfin-apiclient';
 import { appRouter } from '../../../components/router/appRouter';
 import { getParameterByName } from '../../../utils/url.ts';
@@ -21,14 +21,50 @@ import { permalinkStartSecondsToTicks } from '../../../components/router/permali
 import { readReloadResumeSnapshot } from '../../../components/playback/playbackReloadSnapshot';
 
 /**
+ * Module-scoped (not per-createPermalinkResume-instance) in-flight guard,
+ * keyed by `${serverId}:${id}`.
+ *
+ * Continuation of queue task c273 (t_260922_231151_281): video/index.js's
+ * own comment documents that a hard reload can dispatch `viewshow` on two
+ * separate controller instantiations for the same navigation (the router
+ * restoring a cached view, then loading a fresh one). Each instantiation
+ * calls createPermalinkResume() fresh, which gives each its own
+ * `permalinkResumePromise` closure variable, so a per-instance guard alone
+ * lets both instances race past `playbackManager.getCurrentPlayer()`: that
+ * check stays falsy until deep into the first dispatch's own async chain
+ * (item fetch, media source/bitrate detection, then the underlying
+ * player.play() resolving) -- see onPlaybackStarted() in playbackmanager.js,
+ * which is the only place that sets it, and which runs after player.play()
+ * already succeeded. A second dispatch landing in that window saw a null
+ * current player and started ITS OWN independent playbackManager.play()
+ * call for the same item, racing two HtmlVideoPlayer.play() invocations
+ * against the shared singleton's private fields (#mediaElement,
+ * #initialMediaPrepared): whichever finishes createMediaElement() last wins
+ * that state, and the other's <video> element is orphaned with its own
+ * canplay/playing handlers silently no-op'ing on the
+ * `elem !== this.#mediaElement` guard in prepareInitialMedia() -- so its
+ * resume seek is never applied, no error is ever logged, and if that
+ * orphaned element is the one left on screen, playback sits at position 0
+ * with no application-level trace at all. This module is a singleton for
+ * the lifetime of one page load (exactly the scope of "a single real
+ * reload"), so a guard living here, rather than in the per-instance
+ * closure, is what actually spans the race. See
+ * permalinkResume.test.js for the reproduction.
+ */
+let activeResumeKey = null;
+let activeResumePromise = null;
+
+/**
  * Build a resume-from-permalink controller bound to one video page instance.
  *
  * @param {object} deps
  * @param {(isPreparing: boolean) => void} deps.setPermalinkPreparing Toggle the "Preparing video" OSD state.
  * @param {(item: object) => void} deps.canonicalizeVideoRoute Rewrite the address bar to the item's canonical permalink, in place.
+ * @param {object} [deps.playbackManager] Injectable seam for tests (see
+ *   permalinkResume.test.js); production always gets the real singleton.
  * @returns {{ resume: () => (Promise<void> | undefined) }} `resume` re-enters or starts permalink-driven playback; safe to call on every `viewshow`.
  */
-export function createPermalinkResume({ setPermalinkPreparing, canonicalizeVideoRoute }) {
+export function createPermalinkResume({ setPermalinkPreparing, canonicalizeVideoRoute, playbackManager = defaultPlaybackManager }) {
     let permalinkResumePromise;
 
     function resume() {
@@ -42,6 +78,14 @@ export function createPermalinkResume({ setPermalinkPreparing, canonicalizeVideo
 
         if (!id || !serverId) {
             return;
+        }
+
+        // See the module comment above: a second controller instantiation
+        // for the SAME item, still in flight, must join that attempt rather
+        // than start a duplicate playbackManager.play().
+        const resumeKey = `${serverId}:${id}`;
+        if (activeResumeKey === resumeKey) {
+            return activeResumePromise;
         }
 
         // A permalink watch link (/web/w/<id>?t=<seconds>, see
@@ -101,7 +145,14 @@ export function createPermalinkResume({ setPermalinkPreparing, canonicalizeVideo
             appRouter.goHome();
         }).finally(() => {
             permalinkResumePromise = null;
+            if (activeResumeKey === resumeKey) {
+                activeResumeKey = null;
+                activeResumePromise = null;
+            }
         });
+
+        activeResumeKey = resumeKey;
+        activeResumePromise = permalinkResumePromise;
 
         return permalinkResumePromise;
     }

@@ -133,6 +133,9 @@ function setCurrentTimeIfNeeded(element, seconds) {
     }
 }
 
+/** Bounds seekOnPlaybackStart's deferred retry loop (see its own comment). */
+const MAX_DEFERRED_SEEK_ATTEMPTS = 20;
+
 export function seekOnPlaybackStart(instance, element, ticks, onMediaReady) {
     const seconds = (ticks || 0) / 10000000;
 
@@ -146,30 +149,60 @@ export function seekOnPlaybackStart(instance, element, ticks, onMediaReady) {
             if (onMediaReady) onMediaReady();
         } else {
             // update video player position when media is ready to be sought
-            let sought = false;
-            const events = ['durationchange', 'loadeddata', 'play', 'loadedmetadata'];
+            let attempts = 0;
+            let finished = false;
+            // 'timeupdate' and 'seeked' are watched in addition to the
+            // metadata-arrival events below for two reasons found by
+            // fault-injection testing (c273, t_260922_231151_281 followup,
+            // see htmlMediaHelper.test.js):
+            //  1. This function is invoked from the real call sites
+            //     (htmlVideoPlayer/plugin.js's onCanPlay/onPlaying) only
+            //     after 'durationchange', 'loadedmetadata' and 'loadeddata'
+            //     have each already fired once for this load -- none of the
+            //     three fires again. If duration genuinely is not knowable
+            //     until later (e.g. a moov atom needing more of the file),
+            //     nothing in the original list could ever catch it.
+            //  2. A currentTime write can be silently declined by the
+            //     element (a seek target outside the current seekable
+            //     range) instead of throwing or queuing it; retrying on the
+            //     next recurring event, rather than trusting the first
+            //     write and tearing listeners down immediately, is what
+            //     actually lands the seek once more data has buffered.
+            // 'timeupdate' fires repeatedly once playback is under way
+            // regardless of when this function was called, closing both
+            // gaps; MAX_DEFERRED_SEEK_ATTEMPTS bounds the retry so a
+            // genuinely unreachable target (duration wrong, position past
+            // the real end of the file) cannot hang onMediaReady forever --
+            // callers gate hiding the "Preparing" OSD state on it.
+            const events = ['durationchange', 'loadeddata', 'play', 'loadedmetadata', 'timeupdate', 'seeked'];
+            const finish = function() {
+                finished = true;
+                events.forEach(name => {
+                    element.removeEventListener(name, onMediaChange);
+                });
+                if (onMediaReady) onMediaReady();
+            };
             const onMediaChange = function(e) {
-                // Seek exactly once, the first time duration becomes known.
-                // This used to also require element.currentTime to still be
-                // exactly 0 at that instant, on the theory that a non-zero
-                // position could only mean a deliberate user seek. In
-                // practice autoplay can advance currentTime by a fraction of
-                // a second before any of these events gets a turn on a
-                // contended host (this project's normal operating
-                // condition, never a "quiet box" exception) -- and once that
-                // happens the exact-zero check never matches again, so the
-                // requested resume position is dropped for good rather than
-                // just delayed. The `sought` flag is what actually prevents
-                // re-seeking over a later, genuine user action; it does not
-                // depend on catching this one instant.
-                if (!sought && element.duration >= seconds) {
-                    sought = true;
-                    console.debug(`seeking to ${seconds} on ${e.type} event`);
-                    setCurrentTimeIfNeeded(element, seconds);
-                    events.forEach(name => {
-                        element.removeEventListener(name, onMediaChange);
-                    });
-                    if (onMediaReady) onMediaReady();
+                if (finished || element.duration < seconds) {
+                    return;
+                }
+
+                if (Math.abs((element.currentTime || 0) - seconds) < 1) {
+                    // Already landed, whether from this function's own
+                    // earlier attempt or otherwise -- done.
+                    finish();
+                    return;
+                }
+
+                attempts += 1;
+                console.debug(`seeking to ${seconds} on ${e.type} event (attempt ${attempts})`);
+                setCurrentTimeIfNeeded(element, seconds);
+
+                if (Math.abs((element.currentTime || 0) - seconds) < 1) {
+                    finish();
+                } else if (attempts >= MAX_DEFERRED_SEEK_ATTEMPTS) {
+                    console.error(`seekOnPlaybackStart: gave up seeking to ${seconds}s after ${attempts} attempts; landed at ${element.currentTime}`);
+                    finish();
                 }
             };
             events.forEach(name => {

@@ -183,4 +183,81 @@ describe('htmlMediaHelper: seekOnPlaybackStart', () => {
 
         expect(element.currentTime).toBe(5);
     });
+
+    /**
+     * Continuation fault-injection pass (c273, t_260922_231151_281): two
+     * further orderings named in the task brief.
+     */
+
+    // @covers video.reload.seek_drop.rejected_seek_not_retried
+    it('retries the seek if the element declines it, instead of trusting a single write', () => {
+        // A browser can silently ignore (or clamp) a currentTime write
+        // targeting a position outside its current seekable range instead
+        // of throwing or queuing it -- realistic for a resume position far
+        // ahead of what little has buffered under heavy load. The old code
+        // set `sought = true` and tore down its listeners on the very first
+        // attempt, trusting the write took effect with no verification.
+        const element = fakeVideoElement({ duration: NaN });
+        let acceptWrites = false;
+        let storedTime = 0;
+        Object.defineProperty(element, 'currentTime', {
+            get: () => storedTime,
+            set: (value) => {
+                if (acceptWrites) {
+                    storedTime = value;
+                }
+                // else: silently declined, as an unbuffered-range seek can be.
+            }
+        });
+        let mediaReadyCalls = 0;
+
+        seekOnPlaybackStart({}, element, 200_000_000 /* 20s */, () => {
+            mediaReadyCalls += 1;
+        });
+
+        element.duration = 3600;
+        element.dispatchEvent(new Event('durationchange'));
+
+        // The first attempt was declined: still at 0.
+        expect(element.currentTime).toBe(0);
+
+        // More data has now buffered; a later event (timeupdate, once
+        // playback is under way) must get another attempt rather than the
+        // seek having been permanently abandoned after the first try.
+        acceptWrites = true;
+        element.dispatchEvent(new Event('timeupdate'));
+
+        expect(element.currentTime).toBe(20);
+        expect(mediaReadyCalls).toBe(1);
+    });
+
+    // @covers video.reload.seek_drop.duration_known_only_after_listener_attach
+    it('still seeks if duration only becomes known after all four originally-watched events already fired', () => {
+        // prepareInitialMedia() (htmlVideoPlayer/plugin.js) calls this from
+        // the 'canplay' handler, which the HTML5 spec fires strictly after
+        // 'loadedmetadata', 'durationchange' and 'loadeddata' have each
+        // already fired once for this load -- none of the three fires
+        // again. The old watched-event list was exactly those three plus
+        // 'play', so a load where duration genuinely is not yet knowable
+        // until later (e.g. a moov atom requiring more of the file) had no
+        // remaining event left to catch it once it finally arrived.
+        const element = fakeVideoElement({ duration: NaN });
+        element.dispatchEvent(new Event('durationchange'));
+        element.dispatchEvent(new Event('loadedmetadata'));
+        element.dispatchEvent(new Event('loadeddata'));
+        element.dispatchEvent(new Event('play'));
+
+        let mediaReadyCalls = 0;
+        seekOnPlaybackStart({}, element, 200_000_000 /* 20s */, () => {
+            mediaReadyCalls += 1;
+        });
+
+        // Duration becomes known only now, signalled only by a recurring
+        // playback event outside the original four.
+        element.duration = 3600;
+        element.dispatchEvent(new Event('timeupdate'));
+
+        expect(element.currentTime).toBe(20);
+        expect(mediaReadyCalls).toBe(1);
+    });
 });
