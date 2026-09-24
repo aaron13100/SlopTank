@@ -140,6 +140,17 @@ function createHarness({
 
 const sizerContainer = () => document.querySelector('.subtitleSizerContainer');
 
+/** A promise plus its resolve, so a test controls when a boundary answers. */
+function createDeferred() {
+    let resolve;
+    const promise = new Promise((res) => {
+        resolve = res;
+    });
+    return { promise, resolve };
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 describe('SubtitleTrackMenu', () => {
     afterEach(() => {
         cleanup();
@@ -368,6 +379,117 @@ describe('SubtitleTrackMenu', () => {
         expect(harness.playback.subtitleSelections).toEqual([]);
         expect(harness.settings.savedAppearances).toEqual([]);
         expect(harness.getResetIdleCount()).toBe(1);
+    });
+
+    /**
+     * Regression coverage for queue task c288: a sibling of that task's
+     * audioTrackMenu.js fix, same shape as the c209 dropped-promise bugs.
+     * `show()`'s `setSubtitleStreamIndex` call was not awaited, so the
+     * `finally`'s `resetIdle()` fired before the new subtitle stream had
+     * actually taken effect.
+     */
+    it('resets the OSD idle timer only after the picked subtitle stream has actually changed (c288 sibling)', async () => {
+        const player = { id: 'player-1' };
+        const setSubtitleStreamIndexDeferred = createDeferred();
+        const subtitleSelections = [];
+        let resetIdleCount = 0;
+        const actionSheet = { show: () => Promise.resolve('4') };
+        const menu = new SubtitleTrackMenu({
+            button: document.createElement('button'),
+            getPlayer: () => player,
+            loadActionSheet: () => Promise.resolve(actionSheet),
+            loadSizer: () => Promise.resolve(SubtitleSizer),
+            playback: {
+                getSubtitleStreamIndex: () => 3,
+                playerHasSecondarySubtitleSupport: () => false,
+                secondarySubtitleTracks: () => [],
+                setSubtitleStreamIndex: (index, p) => {
+                    subtitleSelections.push([ index, p ]);
+                    return setSubtitleStreamIndexDeferred.promise;
+                },
+                subtitleTracks: () => [
+                    { Codec: 'srt', DeliveryMethod: 'External', DisplayTitle: 'English', Index: 3 },
+                    { Codec: 'srt', DeliveryMethod: 'External', DisplayTitle: 'French', Index: 4 }
+                ]
+            },
+            resetIdle: () => {
+                resetIdleCount++;
+            },
+            settings: { getSubtitleAppearanceSettings: () => ({ textSize: '', verticalPosition: -5 }) },
+            showToast: () => undefined,
+            toggleSubtitleSync: () => undefined,
+            translate: key => key
+        });
+
+        const showPromise = menu.show();
+
+        await waitFor(() => expect(subtitleSelections).toHaveLength(1));
+        expect(subtitleSelections[0]).toEqual([ 4, player ]);
+
+        // The stream change has not settled yet: the finally's idle reset
+        // must not have fired.
+        await sleep(30);
+        expect(resetIdleCount).toBe(0);
+
+        setSubtitleStreamIndexDeferred.resolve();
+        await showPromise;
+        expect(resetIdleCount).toBe(1);
+    });
+
+    /** Same regression as above, for the secondary-subtitle picker. */
+    it('resets the OSD idle timer only after the picked secondary subtitle stream has actually changed (c288 sibling)', async () => {
+        const player = { id: 'player-1' };
+        const setSecondaryDeferred = createDeferred();
+        const secondarySelections = [];
+        let resetIdleCount = 0;
+        const selections = [ 'secondarysubtitle', '4' ];
+        const actionSheet = { show: () => Promise.resolve(selections.shift()) };
+        const menu = new SubtitleTrackMenu({
+            button: document.createElement('button'),
+            getPlayer: () => player,
+            loadActionSheet: () => Promise.resolve(actionSheet),
+            loadSizer: () => Promise.resolve(SubtitleSizer),
+            playback: {
+                getSecondarySubtitleStreamIndex: () => -1,
+                getSubtitleStream: (_, index) => [
+                    { Codec: 'srt', DeliveryMethod: 'External', DisplayTitle: 'English', Index: 3 },
+                    { Codec: 'srt', DeliveryMethod: 'External', DisplayTitle: 'French', Index: 4 }
+                ].find(stream => stream.Index === index),
+                getSubtitleStreamIndex: () => 3,
+                playerHasSecondarySubtitleSupport: () => true,
+                secondarySubtitleTracks: () => [
+                    { Codec: 'srt', DeliveryMethod: 'External', DisplayTitle: 'French', Index: 4 }
+                ],
+                setSecondarySubtitleStreamIndex: (index, p) => {
+                    secondarySelections.push([ index, p ]);
+                    return setSecondaryDeferred.promise;
+                },
+                subtitleTracks: () => [
+                    { Codec: 'srt', DeliveryMethod: 'External', DisplayTitle: 'English', Index: 3 },
+                    { Codec: 'srt', DeliveryMethod: 'External', DisplayTitle: 'French', Index: 4 }
+                ],
+                trackHasSecondarySubtitleSupport: () => true
+            },
+            resetIdle: () => {
+                resetIdleCount++;
+            },
+            settings: { getSubtitleAppearanceSettings: () => ({ textSize: '', verticalPosition: -5 }) },
+            showToast: () => undefined,
+            toggleSubtitleSync: () => undefined,
+            translate: key => key
+        });
+
+        const showPromise = menu.show();
+
+        await waitFor(() => expect(secondarySelections).toHaveLength(1));
+        expect(secondarySelections[0]).toEqual([ 4, player ]);
+
+        await sleep(30);
+        expect(resetIdleCount).toBe(0);
+
+        setSecondaryDeferred.resolve();
+        await showPromise;
+        expect(resetIdleCount).toBe(1);
     });
 
     it('treats a typed cancellation as a normal interaction, not an error', async () => {

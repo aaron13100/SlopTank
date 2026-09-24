@@ -169,7 +169,7 @@ export default class SubtitleTrackMenu {
             } else if (selectedId != null) {
                 const selectedIndex = parseInt(selectedId, 10);
                 if (Number.isFinite(selectedIndex) && selectedIndex !== currentIndex) {
-                    this.playback.setSubtitleStreamIndex(selectedIndex, player);
+                    await this.playback.setSubtitleStreamIndex(selectedIndex, player);
                 }
                 this.toggleSubtitleSync();
             }
@@ -216,7 +216,7 @@ export default class SubtitleTrackMenu {
         if (selectedId != null) {
             const selectedIndex = parseInt(selectedId, 10);
             if (Number.isFinite(selectedIndex) && selectedIndex !== currentIndex) {
-                this.playback.setSecondarySubtitleStreamIndex(selectedIndex, player);
+                await this.playback.setSecondarySubtitleStreamIndex(selectedIndex, player);
             }
         }
     }

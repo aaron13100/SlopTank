@@ -52,7 +52,7 @@ export function createAudioTrackMenu(options) {
                 const index = parseInt(id, 10);
 
                 if (index !== currentIndex) {
-                    playback.setAudioStreamIndex(index, player);
+                    return playback.setAudioStreamIndex(index, player);
                 }
             }).finally(() => {
                 resetIdle();
