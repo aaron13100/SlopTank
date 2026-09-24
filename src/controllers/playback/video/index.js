@@ -1,5 +1,4 @@
 // SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-28, 2026-08-01, 2026-08-03, 2026-08-09, 2026-08-11, 2026-08-28, 2026-09-08, 2026-09-09, 2026-09-23.
-import escapeHtml from 'escape-html';
 import { ItemFields } from '@jellyfin/sdk/lib/generated-client/models/item-fields';
 import { getTvShowsApi } from '@jellyfin/sdk/lib/utils/api/tv-shows-api';
 
@@ -45,11 +44,10 @@ import VolumeControl from './VolumeControl';
 import TransportControl from './TransportControl';
 import { selectTrickplayResolution, TrickplayDiscovery } from './trickplayDiscovery';
 import { loadDynamicModule } from 'utils/dynamicImport';
-
-function getOpenedDialog() {
-    return document.querySelector('.dialogContainer .dialog.opened');
-}
-
+import { getOpenedDialog } from './videoDialogState';
+import { handleSpaceKeydown, isSubtitleCycleKeydown } from './videoHotkeys';
+import { createSubtitleHotkey } from './subtitleHotkey';
+import { getChapterBubbleHtml, updateTrickplayBubbleHtml } from './chapterBubble';
 export default function (view) {
     function getDisplayItem(item) {
         if (item.Type === 'TvChannel') {
@@ -987,6 +985,9 @@ export default function (view) {
         updateTimeDisplay(playState.PositionTicks, nowPlayingItem.RunTimeTicks, playState.PlaybackStartTimeTicks, playState.PlaybackRate, playState.BufferedRanges || []);
     }
 
+    const showVideoToast = message => loadDynamicModule(() => import('../../../components/toast/toast'),
+        '../../../components/toast/toast').then(({ default: toast }) => toast(message))
+        .catch(error => console.error('[video/index] failed to show toast', error));
     function onSettingsButtonClick() {
         const btn = this;
 
@@ -1045,10 +1046,7 @@ export default function (view) {
             const messageKey = renderPath === 'burned' || (renderPath === null && hasSubtitleOn) ?
                 'SubtitleOffsetUnavailableBurnedIn' :
                 'SubtitleOffsetEnableSubtitleFirst';
-            loadDynamicModule(() => import('../../../components/toast/toast'),
-                '../../../components/toast/toast').then(({ default: toast }) => {
-                toast(globalize.translate(messageKey));
-            });
+            showVideoToast(globalize.translate(messageKey));
         }
     }
 
@@ -1163,16 +1161,13 @@ export default function (view) {
         const btnPlayPause = osdBottomElement.querySelector('.btnPause');
 
         if (e.keyCode === 32) {
-            if (e.target.tagName !== 'BUTTON' || !layoutManager.tv) {
-                playbackManager.playPause(currentPlayer);
-                showOsd(btnPlayPause);
-                e.preventDefault();
-                e.stopPropagation();
+            handleSpaceKeydown(e, {
+                playPause: () => playbackManager.playPause(currentPlayer),
+                showOsd,
+                focusElement: btnPlayPause,
                 // Trick Firefox with a null element to skip next click
-                clickedElement = null;
-            } else {
-                showOsd();
-            }
+                onHandled: () => { clickedElement = null; }
+            });
             return;
         }
 
@@ -1268,6 +1263,13 @@ export default function (view) {
                 if (!e.shiftKey) {
                     e.preventDefault();
                     playbackManager.toggleMute(currentPlayer);
+                }
+                break;
+            case 'c':
+            case 'C':
+                if (isSubtitleCycleKeydown(e)) {
+                    e.preventDefault();
+                    subtitleHotkey.cycle(currentPlayer);
                 }
                 break;
             case 'p':
@@ -1387,136 +1389,6 @@ export default function (view) {
         resetIdle();
     }
 
-    function updateTrickplayBubbleHtml(apiClient, trickplayInfo, item, mediaSourceId, bubble, positionTicks) {
-        let doFullUpdate = false;
-        let chapterThumbContainer = bubble.querySelector('.chapterThumbContainer');
-        let chapterThumb;
-        let chapterThumbText;
-        let chapterThumbName;
-
-        // Create bubble elements if they don't already exist
-        if (chapterThumbContainer) {
-            chapterThumb = chapterThumbContainer.querySelector('.chapterThumbWrapper');
-            chapterThumbText = chapterThumbContainer.querySelector('h2.chapterThumbText');
-            chapterThumbName = chapterThumbContainer.querySelector('div.chapterThumbText');
-        } else {
-            doFullUpdate = true;
-
-            chapterThumbContainer = document.createElement('div');
-            chapterThumbContainer.classList.add('chapterThumbContainer');
-            chapterThumbContainer.style.overflow = 'hidden';
-
-            chapterThumb = document.createElement('div');
-            chapterThumb.classList.add('chapterThumbWrapper');
-            chapterThumb.style.overflow = 'hidden';
-            chapterThumb.style.width = trickplayInfo.Width + 'px';
-            chapterThumb.style.height = trickplayInfo.Height + 'px';
-            chapterThumbContainer.appendChild(chapterThumb);
-
-            const chapterThumbTextContainer = document.createElement('div');
-            chapterThumbTextContainer.classList.add('chapterThumbTextContainer');
-            chapterThumbContainer.appendChild(chapterThumbTextContainer);
-
-            chapterThumbName = document.createElement('div');
-            chapterThumbName.classList.add('chapterThumbText', 'chapterThumbText-dim');
-            chapterThumbTextContainer.appendChild(chapterThumbName);
-
-            chapterThumbText = document.createElement('h2');
-            chapterThumbText.classList.add('chapterThumbText');
-            chapterThumbTextContainer.appendChild(chapterThumbText);
-        }
-
-        let chapter;
-        for (const currentChapter of item.Chapters || []) {
-            if (positionTicks < currentChapter.StartPositionTicks) {
-                break;
-            }
-
-            chapter = currentChapter;
-        }
-
-        // Update trickplay values
-        const currentTimeMs = positionTicks / 10_000;
-        const currentTile = Math.floor(currentTimeMs / trickplayInfo.Interval);
-
-        const tileSize = trickplayInfo.TileWidth * trickplayInfo.TileHeight;
-        const tileOffset = currentTile % tileSize;
-        const index = Math.floor(currentTile / tileSize);
-
-        const tileOffsetX = tileOffset % trickplayInfo.TileWidth;
-        const tileOffsetY = Math.floor(tileOffset / trickplayInfo.TileWidth);
-        const offsetX = -(tileOffsetX * trickplayInfo.Width);
-        const offsetY = -(tileOffsetY * trickplayInfo.Height);
-
-        const imgSrc = apiClient.getUrl('Videos/' + item.Id + '/Trickplay/' + trickplayInfo.Width + '/' + index + '.jpg', {
-            ApiKey: apiClient.accessToken(),
-            MediaSourceId: mediaSourceId
-        });
-
-        chapterThumb.style.backgroundImage = `url('${imgSrc}')`;
-        chapterThumb.style.backgroundPositionX = offsetX + 'px';
-        chapterThumb.style.backgroundPositionY = offsetY + 'px';
-
-        chapterThumbText.textContent = datetime.getDisplayRunningTime(positionTicks);
-        chapterThumbName.textContent = chapter?.Name || '';
-
-        // Set bubble innerHTML if container isn't part of DOM
-        if (doFullUpdate) {
-            bubble.innerHTML = chapterThumbContainer.outerHTML;
-        }
-
-        return true;
-    }
-
-    function getImgUrl(item, chapter, index, maxWidth, apiClient) {
-        if (chapter.ImageTag) {
-            return apiClient.getScaledImageUrl(item.Id, {
-                maxWidth: maxWidth,
-                tag: chapter.ImageTag,
-                type: 'Chapter',
-                index: index
-            });
-        }
-
-        return null;
-    }
-
-    function getChapterBubbleHtml(apiClient, item, chapters, positionTicks) {
-        let chapter;
-        let index = -1;
-
-        for (let i = 0, length = chapters.length; i < length; i++) {
-            const currentChapter = chapters[i];
-
-            if (positionTicks >= currentChapter.StartPositionTicks) {
-                chapter = currentChapter;
-                index = i;
-            }
-        }
-
-        if (!chapter) {
-            return null;
-        }
-
-        const src = getImgUrl(item, chapter, index, 400, apiClient);
-
-        if (src) {
-            let html = '<div class="chapterThumbContainer">';
-            html += '<img class="chapterThumb" src="' + src + '" />';
-            html += '<div class="chapterThumbTextContainer">';
-            html += '<div class="chapterThumbText chapterThumbText-dim">';
-            html += escapeHtml(chapter.Name);
-            html += '</div>';
-            html += '<h2 class="chapterThumbText">';
-            html += datetime.getDisplayRunningTime(positionTicks);
-            html += '</h2>';
-            html += '</div>';
-            return html + '</div>';
-        }
-
-        return null;
-    }
-
     let playPauseClickTimeout;
     function onViewHideStopPlayback() {
         if (playbackManager.isPlayingVideo()) {
@@ -1575,6 +1447,7 @@ export default function (view) {
     const osdBottomElement = view.querySelector('.videoOsdBottom-maincontrols');
     const transportControl = new TransportControl({ playback: playbackManager,
         setElementTitle: dom.setElementTitle, translate: globalize.translate, view });
+    const subtitleHotkey = createSubtitleHotkey();
     const subtitleTrackMenu = new SubtitleTrackMenu({
         button: view.querySelector('.btnSubtitles'),
         getPlayer: () => currentPlayer,
@@ -1585,10 +1458,7 @@ export default function (view) {
         playback: playbackManager,
         resetIdle,
         settings: userSettings,
-        showToast: message => {
-            loadDynamicModule(() => import('../../../components/toast/toast'),
-                '../../../components/toast/toast').then(({ default: toast }) => toast(message));
-        },
+        showToast: showVideoToast,
         translate: globalize.translate,
         toggleSubtitleSync
     });
@@ -1624,9 +1494,7 @@ export default function (view) {
             const detail = status && !rawDetail.includes(String(status)) ? `HTTP ${status}: ${rawDetail}` : rawDetail;
             const message = `${globalize.translate(translationKey)} (${detail})`;
             console.error(`[EpisodePlaybackMenu] ${message}`, error);
-            loadDynamicModule(() => import('../../../components/toast/toast'),
-                '../../../components/toast/toast').then(({ default: toast }) => toast(message))
-                .catch(toastError => console.error('[EpisodePlaybackMenu] failed to show error toast', toastError));
+            showVideoToast(message);
         },
         translate: globalize.translate
     });
