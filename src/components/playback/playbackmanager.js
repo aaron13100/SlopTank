@@ -573,8 +573,8 @@ export class PlaybackManager {
 
         const instance = this;
 
-        apiClient.getInstantMixFromItem(item.Id, options).then(function (result) {
-            instance.play({
+        return apiClient.getInstantMixFromItem(item.Id, options).then(function (result) {
+            return instance.play({
                 items: result.Items
             });
         });
@@ -825,14 +825,19 @@ export class PlaybackManager {
                 this.setBrightness(cmd.Arguments.Brightness, player);
                 break;
             case 'SetAudioStreamIndex':
-                this.setAudioStreamIndex(parseInt(cmd.Arguments.Index, 10), player);
-                break;
+                return this.setAudioStreamIndex(parseInt(cmd.Arguments.Index, 10), player);
             case 'SetSubtitleStreamIndex':
-                this.setSubtitleStreamIndex(parseInt(cmd.Arguments.Index, 10), player);
-                break;
-            case 'SetMaxStreamingBitrate':
-                this.setMaxStreamingBitrate(parseInt(cmd.Arguments.Bitrate, 10), player);
-                break;
+                return this.setSubtitleStreamIndex(parseInt(cmd.Arguments.Index, 10), player);
+            case 'SetMaxStreamingBitrate': {
+                // setMaxStreamingBitrate takes an options object (the same
+                // shape the quality menu sends: 0 means Auto); a bare number
+                // made the remote command a silent no-op.
+                const bitrate = parseInt(cmd.Arguments.Bitrate, 10);
+                return this.setMaxStreamingBitrate({
+                    enableAutomaticBitrateDetection: !bitrate,
+                    maxBitrate: bitrate
+                }, player);
+            }
             case 'ToggleFullscreen':
                 this.toggleFullscreen(player);
                 break;

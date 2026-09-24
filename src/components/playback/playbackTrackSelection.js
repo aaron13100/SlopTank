@@ -208,21 +208,26 @@ export function createPlaybackTrackSelection(context) {
             return player.setAudioStreamIndex(index);
         }
 
+        // Every branch returns its pending work so callers can await the
+        // track actually being in effect.
         if (manager.playMethod(player) === 'Transcode' || !player.canSetAudioStreamIndex()) {
-            context.streams.changeStream(player, context.state.getCurrentTicks(player), { AudioStreamIndex: index });
+            const streamChange = context.streams.changeStream(player, context.state.getCurrentTicks(player), { AudioStreamIndex: index });
             context.state.getPlayerData(player).audioStreamIndex = index;
-        } else {
-            // See if the player supports the track without transcoding
-            player.getDeviceProfile(manager.currentItem(player)).then(function (profile) {
-                if (isAudioStreamSupported(manager.currentMediaSource(player), index, profile)) {
-                    player.setAudioStreamIndex(index);
-                    context.state.getPlayerData(player).audioStreamIndex = index;
-                } else {
-                    context.streams.changeStream(player, context.state.getCurrentTicks(player), { AudioStreamIndex: index });
-                    context.state.getPlayerData(player).audioStreamIndex = index;
-                }
-            });
+            return streamChange;
         }
+
+        // See if the player supports the track without transcoding
+        return player.getDeviceProfile(manager.currentItem(player)).then(function (profile) {
+            if (isAudioStreamSupported(manager.currentMediaSource(player), index, profile)) {
+                player.setAudioStreamIndex(index);
+                context.state.getPlayerData(player).audioStreamIndex = index;
+                return;
+            }
+
+            const streamChange = context.streams.changeStream(player, context.state.getCurrentTicks(player), { AudioStreamIndex: index });
+            context.state.getPlayerData(player).audioStreamIndex = index;
+            return streamChange;
+        });
     };
 
     const getSubtitleStreamIndex = function (player) {
@@ -281,13 +286,16 @@ export function createPlaybackTrackSelection(context) {
         }
 
         let selectedTrackElementIndex = -1;
+        // The stream change (when one is needed) is returned so callers can
+        // await the new subtitle track being in effect.
+        let streamChange;
 
         const currentPlayMethod = manager.playMethod(player);
 
         if (currentStream && !newStream) {
             if (getDeliveryMethod(currentStream) === 'Encode' || (getDeliveryMethod(currentStream) === 'Embed' && currentPlayMethod === 'Transcode')) {
                 // Need to change the transcoded stream to remove subs
-                context.streams.changeStream(player, context.state.getCurrentTicks(player), { SubtitleStreamIndex: -1 });
+                streamChange = context.streams.changeStream(player, context.state.getCurrentTicks(player), { SubtitleStreamIndex: -1 });
             }
         } else if (!currentStream && newStream) {
             if (getDeliveryMethod(newStream) === 'External') {
@@ -296,7 +304,7 @@ export function createPlaybackTrackSelection(context) {
                 selectedTrackElementIndex = index;
             } else {
                 // Need to change the transcoded stream to add subs
-                context.streams.changeStream(player, context.state.getCurrentTicks(player), { SubtitleStreamIndex: index });
+                streamChange = context.streams.changeStream(player, context.state.getCurrentTicks(player), { SubtitleStreamIndex: index });
             }
         } else if (currentStream && newStream) {
             // Switching tracks
@@ -306,11 +314,11 @@ export function createPlaybackTrackSelection(context) {
 
                 // But in order to handle this client side, if the previous track is being added via transcoding, we'll have to remove it
                 if (getDeliveryMethod(currentStream) !== 'External' && getDeliveryMethod(currentStream) !== 'Embed') {
-                    context.streams.changeStream(player, context.state.getCurrentTicks(player), { SubtitleStreamIndex: -1 });
+                    streamChange = context.streams.changeStream(player, context.state.getCurrentTicks(player), { SubtitleStreamIndex: -1 });
                 }
             } else {
                 // Need to change the transcoded stream to add subs
-                context.streams.changeStream(player, context.state.getCurrentTicks(player), { SubtitleStreamIndex: index });
+                streamChange = context.streams.changeStream(player, context.state.getCurrentTicks(player), { SubtitleStreamIndex: index });
             }
         }
 
@@ -318,11 +326,14 @@ export function createPlaybackTrackSelection(context) {
 
         // Also disable secondary subtitles when disabling the primary
         // subtitles, or if it doesn't support a secondary pair
-        if (selectedTrackElementIndex === -1 || !manager.trackHasSecondarySubtitleSupport(newStream)) {
-            manager.setSecondarySubtitleStreamIndex(-1);
+        // Target the player being changed, not whichever player is current.
+        if (selectedTrackElementIndex === -1 || !manager.trackHasSecondarySubtitleSupport(newStream, player)) {
+            manager.setSecondarySubtitleStreamIndex(-1, player);
         }
 
         context.state.getPlayerData(player).subtitleStreamIndex = index;
+
+        return streamChange;
     };
 
     const setSecondarySubtitleStreamIndex = function (index, player) {

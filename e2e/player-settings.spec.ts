@@ -132,14 +132,15 @@ test('quality menu forces a real transcode, resumes playback, and reflects the c
     const video = await startPlayback(page, config);
     const stats = page.locator('.playerStats');
 
-    // playbackManager.setMaxStreamingBitrate (playbackmanager.js) does not
-    // return its getEndpointInfo/detectBitrate/changeStream promise chain, so
-    // "video resumed" is not proof the new quality setting has landed: Auto
+    // playbackManager.setMaxStreamingBitrate now returns its whole
+    // getEndpointInfo/detectBitrate/changeStream chain and the quality menu
+    // returns it (t_260916_110919_134, covered in playbackmanager.test.js and
+    // playersettingsmenu.test.js), but the OSD does not await the menu, so
+    // "the sheet closed" is still not proof the new quality has landed: Auto
     // mode's detectBitrate(true) is a real, uncached network probe, wide
     // enough under load for a menu re-read right after the click to observe
-    // the stale pre-click quality label (observed 2026-09-16, reproducibly).
-    // Wait for the real signal instead: the video's stream URL actually
-    // changing, proof changeStream has completed.
+    // the pre-click quality label. Wait for the real user-visible signal
+    // instead: the video's stream URL actually changing.
     const waitForStreamChange = async () => {
         const srcBefore = await video.evaluate((el: HTMLVideoElement) => el.currentSrc);
         return async () => {

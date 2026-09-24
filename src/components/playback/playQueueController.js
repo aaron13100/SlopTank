@@ -78,7 +78,7 @@ export function createPlayQueueController(context) {
         if (newItem.Item) {
             const newItemPlayOptions = newItem.Item.playOptions || context.session.getDefaultPlayOptions();
 
-            context.session.playInternal(newItem.Item, newItemPlayOptions, function () {
+            return context.session.playInternal(newItem.Item, newItemPlayOptions, function () {
                 context.session.setPlaylistState(newItem.Item.PlaylistItemId, newItem.Index);
             });
         }
@@ -176,7 +176,7 @@ export function createPlayQueueController(context) {
 
             const newItemPlayOptions = newItemInfo.item.playOptions || context.session.getDefaultPlayOptions();
 
-            context.session.playInternal(newItemInfo.item, newItemPlayOptions, function () {
+            return context.session.playInternal(newItemInfo.item, newItemPlayOptions, function () {
                 context.session.setPlaylistState(newItemInfo.item.PlaylistItemId, newItemInfo.index);
             }, context.tracks.getPreviousSource(player));
         }
@@ -197,7 +197,7 @@ export function createPlayQueueController(context) {
                 const newItemPlayOptions = newItem.playOptions || context.session.getDefaultPlayOptions();
                 newItemPlayOptions.startPositionTicks = 0;
 
-                context.session.playInternal(newItem, newItemPlayOptions, function () {
+                return context.session.playInternal(newItem, newItemPlayOptions, function () {
                     context.session.setPlaylistState(newItem.PlaylistItemId, newIndex);
                 }, context.tracks.getPreviousSource(player));
             }
@@ -222,7 +222,7 @@ export function createPlayQueueController(context) {
         if (options.items) {
             return context.items.translateItemsForPlayback(options.items, options).then(function (items) {
                 // TODO: Handle options.startIndex for photos
-                queueAll(items, mode, player);
+                return queueAll(items, mode, player);
             });
         } else {
             if (!options.serverId) {
@@ -234,7 +234,7 @@ export function createPlayQueueController(context) {
             }).then(function (result) {
                 return context.items.translateItemsForPlayback(result.Items, options).then(function (items) {
                     // TODO: Handle options.startIndex for photos
-                    queueAll(items, mode, player);
+                    return queueAll(items, mode, player);
                 });
             });
         }
@@ -247,15 +247,14 @@ export function createPlayQueueController(context) {
 
         if (!player.isLocalPlayer) {
             if (mode === 'next') {
-                player.queueNext({
-                    items: items
-                });
-            } else {
-                player.queue({
+                return player.queueNext({
                     items: items
                 });
             }
-            return;
+
+            return player.queue({
+                items: items
+            });
         }
 
         const queueDirectToPlayer = player && !enableLocalPlaylistManagement(player);
@@ -263,17 +262,15 @@ export function createPlayQueueController(context) {
         if (queueDirectToPlayer) {
             const apiClient = context.serverConnections.getApiClient(items[0].ServerId);
 
-            player.getDeviceProfile(items[0]).then(function (profile) {
-                context.streamInfo.setStreamUrls(items, profile, manager.getMaxStreamingBitrate(player), apiClient, 0).then(function () {
+            return player.getDeviceProfile(items[0]).then(function (profile) {
+                return context.streamInfo.setStreamUrls(items, profile, manager.getMaxStreamingBitrate(player), apiClient, 0).then(function () {
                     if (mode === 'next') {
-                        player.queueNext(items);
-                    } else {
-                        player.queue(items);
+                        return player.queueNext(items);
                     }
+
+                    return player.queue(items);
                 });
             });
-
-            return;
         }
 
         if (mode === 'next') {

@@ -5,6 +5,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { ServerConnections } from 'lib/jellyfin-apiclient';
 
 import globalize from '../../lib/globalize';
+import appSettings from '../../scripts/settings/appSettings';
 import Events from '../../utils/events.ts';
 import { PluginType } from '../../types/plugin.ts';
 import { pluginManager } from '../pluginManager';
@@ -489,5 +490,335 @@ describe('playbackManager media-stream resolution', () => {
 
         expect(streams[0].Id).toBe('fetched');
         expect(fetched).toEqual(['movie-1']);
+    });
+});
+
+/** A promise plus its resolve/reject, so a test controls when a boundary answers. */
+function createDeferred() {
+    let resolve;
+    let reject;
+    const promise = new Promise((res, rej) => {
+        resolve = res;
+        reject = rej;
+    });
+    return { promise, resolve, reject };
+}
+
+/** Records whether a promise has settled, without awaiting it. */
+function trackSettled(promise) {
+    const state = { settled: false, error: null };
+    promise.then(() => {
+        state.settled = true;
+    }, (error) => {
+        state.settled = true;
+        state.error = error;
+    });
+    return state;
+}
+
+/**
+ * Quality changes must be awaitable end to end (t_260916_110919_134).
+ *
+ * setMaxStreamingBitrate used to fire its endpoint lookup, bitrate probe,
+ * settings write and changeStream without returning the chain, so every
+ * caller (the player settings menu among them) resolved before the new
+ * stream existed, and a re-read right after the click saw the old bitrate.
+ * These drive the real playbackManager through the real changeStream path;
+ * the only test-configured boundaries are the Jellyfin server (an offline
+ * apiClient registered through ServerConnections.addApiClient) and the
+ * media player plugin contract (getDeviceProfile / play), each answering
+ * from a deferred the test releases, so the test observes exactly when the
+ * manager's promise settles relative to them.
+ */
+describe('playbackManager.setMaxStreamingBitrate awaitability', () => {
+    const STREAM_SERVER_ID = 'c209-stream-server';
+    /** Every force flag the manager passed to the server's bitrate probe. */
+    const bitrateProbeCalls = [];
+    let bitrateProbe;
+    /** The server's answer to an instant-mix request, released by the test. */
+    let instantMixResponse;
+
+    beforeAll(() => {
+        let serverInfo = { Id: STREAM_SERVER_ID };
+        ServerConnections.addApiClient({
+            serverAddress: () => 'https://c209.test.invalid',
+            serverInfo(info) {
+                if (info) {
+                    serverInfo = info;
+                }
+                return serverInfo;
+            },
+            serverId: () => STREAM_SERVER_ID,
+            getCurrentUserId: () => 'user-1',
+            deviceId: () => 'c209-device',
+            accessToken: () => 'c209-token',
+            getUrl: (name, params) => `https://c209.test.invalid/${name}?${new URLSearchParams(params || {}).toString()}`,
+            getSavedEndpointInfo: () => ({ IsInNetwork: false }),
+            getEndpointInfo: () => Promise.resolve({ IsInNetwork: false }),
+            detectBitrate(force) {
+                bitrateProbeCalls.push(force);
+                return bitrateProbe.promise;
+            },
+            getInstantMixFromItem: () => instantMixResponse.promise,
+            reportPlaybackProgress: () => Promise.resolve()
+        });
+    });
+
+    beforeEach(() => {
+        bitrateProbe = createDeferred();
+        bitrateProbeCalls.length = 0;
+        instantMixResponse = createDeferred();
+    });
+
+    /**
+     * A local video player mid-playback implementing the media player
+     * plugin contract, with its device-profile and play() answers held open
+     * until the test releases them.
+     */
+    function createPlayingVideoPlayer({ playMethod = 'DirectPlay', extraStreams = [] } = {}) {
+        const mediaSource = {
+            Id: 'c209-source',
+            Container: 'mp4',
+            Protocol: 'Http',
+            RequiredHttpHeaders: [],
+            SupportsDirectPlay: true,
+            SupportsDirectStream: true,
+            SupportsTranscoding: true,
+            RunTimeTicks: 600000000,
+            MediaStreams: [{ Index: 0, Type: 'Video', Codec: 'h264', BitRate: 8000000 }, ...extraStreams]
+        };
+        const item = {
+            Id: 'c209-movie',
+            Name: 'Bitrate Movie',
+            ServerId: STREAM_SERVER_ID,
+            MediaType: 'Video',
+            Type: 'Movie',
+            PresetMediaSource: mediaSource
+        };
+        const deviceProfile = createDeferred();
+        const playback = createDeferred();
+        const calls = { deviceProfile: 0, play: [] };
+        const player = {
+            name: 'c209-stream-change-player',
+            id: 'c209-stream-change-player',
+            isLocalPlayer: true,
+            streamInfo: {
+                url: 'https://c209.test.invalid/Videos/c209-movie/stream.mp4',
+                mediaType: 'Video',
+                playMethod,
+                item,
+                mediaSource
+            },
+            currentTime: () => 42,
+            duration: () => 60,
+            paused: () => false,
+            getVolume: () => 100,
+            isMuted: () => false,
+            setSubtitleStreamIndex: () => undefined,
+            supports: () => false,
+            currentSrc() {
+                return this.streamInfo.url;
+            },
+            getDeviceProfile() {
+                calls.deviceProfile++;
+                return deviceProfile.promise;
+            },
+            play(streamInfo) {
+                calls.play.push(streamInfo);
+                return playback.promise;
+            }
+        };
+        return { player, calls, deviceProfile, playback };
+    }
+
+    it('resolves only after bitrate detection, the settings write and the new stream have landed', async () => {
+        const { player, calls, deviceProfile, playback } = createPlayingVideoPlayer();
+
+        const result = playbackManager.setMaxStreamingBitrate({ enableAutomaticBitrateDetection: true }, player);
+
+        expect(typeof result?.then).toBe('function');
+        const state = trackSettled(result);
+
+        await waitFor(() => bitrateProbeCalls.length === 1);
+        expect(bitrateProbeCalls).toEqual([true]);
+        await sleep(20);
+        expect(state.settled).toBe(false);
+
+        bitrateProbe.resolve(3000000);
+        await waitFor(() => calls.deviceProfile === 1);
+        expect(appSettings.enableAutomaticBitrateDetection(false, 'Video')).toBe(true);
+        expect(Number(appSettings.maxStreamingBitrate(false, 'Video'))).toBe(3000000);
+        await sleep(20);
+        expect(state.settled).toBe(false);
+
+        deviceProfile.resolve({});
+        await waitFor(() => calls.play.length === 1);
+        await sleep(20);
+        expect(state.settled).toBe(false);
+
+        playback.resolve();
+        await waitFor(() => state.settled);
+        expect(player.streamInfo.started).toBe(true);
+        expect(player.maxStreamingBitrate).toBe(3000000);
+    });
+
+    it('awaits the stream change for a fixed bitrate choice too', async () => {
+        const { player, calls, deviceProfile, playback } = createPlayingVideoPlayer();
+
+        const result = playbackManager.setMaxStreamingBitrate({ enableAutomaticBitrateDetection: false, maxBitrate: 420000 }, player);
+
+        expect(typeof result?.then).toBe('function');
+        const state = trackSettled(result);
+
+        await waitFor(() => calls.deviceProfile === 1);
+        expect(bitrateProbeCalls).toEqual([]);
+        expect(appSettings.enableAutomaticBitrateDetection(false, 'Video')).toBe(false);
+        deviceProfile.resolve({});
+        await waitFor(() => calls.play.length === 1);
+        await sleep(20);
+        expect(state.settled).toBe(false);
+
+        playback.resolve();
+        await waitFor(() => state.settled);
+        expect(player.maxStreamingBitrate).toBe(420000);
+    });
+
+    /**
+     * Asserts `result` is a promise that stays pending through the device
+     * profile request and the new stream's play(), settling only after both.
+     */
+    async function expectAwaitsStreamChange(result, { calls, deviceProfile, playback }) {
+        expect(typeof result?.then).toBe('function');
+        const state = trackSettled(result);
+
+        await waitFor(() => calls.deviceProfile === 1);
+        await sleep(20);
+        expect(state.settled).toBe(false);
+
+        deviceProfile.resolve({});
+        await waitFor(() => calls.play.length === 1);
+        await sleep(20);
+        expect(state.settled).toBe(false);
+
+        playback.resolve();
+        await waitFor(() => state.settled);
+        expect(state.error).toBeNull();
+    }
+
+    it('seek on a transcoded stream resolves once the re-requested stream plays', async () => {
+        const harness = createPlayingVideoPlayer({ playMethod: 'Transcode' });
+
+        await expectAwaitsStreamChange(playbackManager.seek(300000000, harness.player), harness);
+
+        expect(harness.calls.play[0].playerStartPositionTicks).toBe(300000000);
+    });
+
+    it('setAudioStreamIndex on a transcoded stream resolves once the new audio stream plays', async () => {
+        const harness = createPlayingVideoPlayer({
+            playMethod: 'Transcode',
+            extraStreams: [{ Index: 1, Type: 'Audio', Codec: 'aac' }, { Index: 2, Type: 'Audio', Codec: 'ac3' }]
+        });
+
+        await expectAwaitsStreamChange(playbackManager.setAudioStreamIndex(2, harness.player), harness);
+
+        expect(harness.player.audioStreamIndex).toBe(2);
+    });
+
+    it('setSubtitleStreamIndex resolves once a burned-in subtitle stream plays', async () => {
+        const harness = createPlayingVideoPlayer({
+            playMethod: 'Transcode',
+            extraStreams: [{ Index: 3, Type: 'Subtitle', Codec: 'pgssub', DeliveryMethod: 'Encode' }]
+        });
+
+        await expectAwaitsStreamChange(playbackManager.setSubtitleStreamIndex(3, harness.player), harness);
+
+        expect(harness.player.subtitleStreamIndex).toBe(3);
+    });
+
+    it('a remote SetMaxStreamingBitrate command applies the requested cap', async () => {
+        const harness = createPlayingVideoPlayer();
+
+        const result = playbackManager.sendCommand({ Name: 'SetMaxStreamingBitrate', Arguments: { Bitrate: '420000' } }, harness.player);
+
+        await expectAwaitsStreamChange(result, harness);
+        expect(bitrateProbeCalls).toEqual([]);
+        expect(appSettings.enableAutomaticBitrateDetection(false, 'Video')).toBe(false);
+        expect(harness.player.maxStreamingBitrate).toBe(420000);
+    });
+
+    it('seekRelative hands the offset to a player that manages its own playlist', () => {
+        const offsets = [];
+        const player = {
+            name: 'c209-self-managing-player',
+            isLocalPlayer: false,
+            getPlaylist: () => Promise.resolve([]),
+            seekRelative(offsetTicks) {
+                offsets.push(offsetTicks);
+                return 'forwarded';
+            }
+        };
+
+        expect(playbackManager.seekRelative(50000000, player)).toBe('forwarded');
+        expect(offsets).toEqual([50000000]);
+    });
+
+    it('queue resolves only after items are handed to a player that manages its own playlist', async () => {
+        const profile = createDeferred();
+        const queued = [];
+        const player = {
+            name: 'c209-queueing-player',
+            isLocalPlayer: true,
+            getPlaylist: () => Promise.resolve([]),
+            getDeviceProfile: () => profile.promise,
+            getMaxStreamingBitrate: () => 8000000,
+            queue(items) {
+                queued.push(items);
+            }
+        };
+        const item = { Id: 'c209-queued', Name: 'Queued', ServerId: STREAM_SERVER_ID, MediaType: 'Video', Type: 'Movie' };
+
+        const state = trackSettled(playbackManager.queue({ items: [item] }, player));
+        await sleep(20);
+        expect(state.settled).toBe(false);
+        expect(queued).toEqual([]);
+
+        profile.resolve({ TranscodingProfiles: [], DirectPlayProfiles: [], CodecProfiles: [] });
+        await waitFor(() => state.settled);
+        expect(state.error).toBeNull();
+        expect(queued).toEqual([[item]]);
+    });
+
+    it('nextTrack returns the play pipeline for the next queued item', async () => {
+        appSettings.enableAutomaticBitrateDetection(false, 'Video', false);
+        const harness = createPlayingVideoPlayer();
+        const next = { Id: 'c209-next', Name: 'Next', ServerId: STREAM_SERVER_ID, MediaType: 'Video', Type: 'Movie' };
+        playbackManager._playQueueManager.setPlaylist([harness.player.streamInfo.item, next]);
+        playbackManager._playQueueManager.setPlaylistState(playbackManager._playQueueManager.getPlaylist()[0].PlaylistItemId, 0);
+
+        try {
+            const result = playbackManager.nextTrack(harness.player);
+
+            expect(typeof result?.then).toBe('function');
+            const state = trackSettled(result);
+            await waitFor(() => state.settled);
+        } finally {
+            playbackManager._playQueueManager.reset();
+        }
+    });
+
+    it('instantMix resolves only after the mix request and the resulting play request finish', async () => {
+        const harness = createPlayingVideoPlayer();
+
+        const result = playbackManager.instantMix({ Id: 'c209-seed', ServerId: STREAM_SERVER_ID }, harness.player);
+
+        expect(typeof result?.then).toBe('function');
+        const state = trackSettled(result);
+        await sleep(20);
+        expect(state.settled).toBe(false);
+
+        // An empty mix has nothing to play: the play request fails, and that
+        // failure now reaches the instantMix caller instead of floating.
+        instantMixResponse.resolve({ Items: [] });
+        await waitFor(() => state.settled);
     });
 });

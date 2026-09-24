@@ -286,7 +286,10 @@ export function createPlaybackStreamController(context) {
 
         const apiClient = context.serverConnections.getApiClient(manager.currentItem(player).ServerId);
 
-        apiClient.getEndpointInfo().then(function (endpointInfo) {
+        // Return the whole chain (endpoint lookup, bitrate probe, settings
+        // write, stream change) so callers such as the quality menu resolve
+        // only once the new stream is actually playing.
+        return apiClient.getEndpointInfo().then(function (endpointInfo) {
             const playerData = context.state.getPlayerData(player);
             const mediaType = playerData.streamInfo ? playerData.streamInfo.mediaType : null;
 
@@ -299,10 +302,10 @@ export function createPlaybackStreamController(context) {
                 promise = Promise.resolve(options.maxBitrate);
             }
 
-            promise.then(function (bitrate) {
+            return promise.then(function (bitrate) {
                 appSettings.maxStreamingBitrate(endpointInfo.IsInNetwork, mediaType, bitrate);
 
-                changeStream(player, context.state.getCurrentTicks(player), {
+                return changeStream(player, context.state.getCurrentTicks(player), {
                     MaxStreamingBitrate: bitrate
                 });
             });
@@ -317,13 +320,13 @@ export function createPlaybackStreamController(context) {
             return player.seek(ticks);
         }
 
-        changeStream(player, ticks);
+        return changeStream(player, ticks);
     };
 
     const seekRelative = function (offsetTicks, player) {
         player = player || manager._currentPlayer;
         if (player && !enableLocalPlaylistManagement(player) && player.seekRelative) {
-            return player.seekRelative(ticks);
+            return player.seekRelative(offsetTicks);
         }
 
         const ticks = context.state.getCurrentTicks(player) + offsetTicks;
