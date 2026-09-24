@@ -24,12 +24,25 @@
 // Usage:
 //   node scripts/validate-features.mjs
 //   node scripts/validate-features.mjs --features path/to/features.json
+//   node scripts/validate-features.mjs --staged
+//
+// --staged checks the git INDEX (what `git commit` would actually commit),
+// not the on-disk working tree: features.json and every scanned test file
+// are read via `git show :<path>`, and the scanned file set comes from
+// `git ls-files` rather than a filesystem walk. This makes the gate immune
+// to unrelated, unstaged, in-progress edits elsewhere in a shared worktree
+// (e.g. another concurrent task's dirty test file with a stray @covers
+// reference): such a file simply is not part of what is being committed, so
+// --staged does not see it. An untracked file, or a tracked file's unstaged
+// edit, is invisible to --staged by construction. Default (no --staged)
+// behavior is unchanged: it still reads whatever sits on disk right now.
 //
 // Pre-commit (.git/hooks/pre-commit):
-//   node scripts/validate-features.mjs
+//   node scripts/validate-features.mjs --staged
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 function parseFeaturesFileArg(argv) {
     const flagIndex = argv.indexOf('--features');
@@ -39,18 +52,164 @@ function parseFeaturesFileArg(argv) {
     return 'features.json';
 }
 
-const featuresFile = parseFeaturesFileArg(process.argv.slice(2));
+function hasStagedFlag(argv) {
+    return argv.includes('--staged');
+}
 
+const argv = process.argv.slice(2);
+const featuresFile = parseFeaturesFileArg(argv);
+const staged = hasStagedFlag(argv);
+
+// Fixed allowlist of standard install directories for the git binary.
+// --staged always invokes git as an absolute path from this list rather
+// than a bare 'git' resolved through the inherited PATH: a PATH search
+// trusts every directory ahead of the real binary, so if PATH has been
+// tampered with upstream of this process (a compromised shell profile, a
+// malicious local bin directory prepended earlier in the chain) a bare
+// 'git' could silently run something else. Extend this list, do not widen
+// it to a PATH search, if a legitimate install location is missing.
+const GIT_BINARY_CANDIDATES = [ '/usr/bin/git', '/opt/homebrew/bin/git', '/usr/local/bin/git' ];
+
+/**
+ * Resolve an absolute path to the git binary from GIT_BINARY_CANDIDATES.
+ * Only called in --staged mode.
+ *
+ * @returns {string} absolute path to a git executable.
+ */
+function resolveGitBinary() {
+    const found = GIT_BINARY_CANDIDATES.find((candidate) => fs.existsSync(candidate));
+    if (!found) {
+        console.error(`--staged requires git; none found at: ${GIT_BINARY_CANDIDATES.join(', ')}`);
+        process.exit(2);
+    }
+    return found;
+}
+
+const gitBinary = staged ? resolveGitBinary() : null;
+
+/**
+ * Resolve the git repository root (top-level working-tree directory) so
+ * every --staged git invocation below operates on repo-root-relative paths
+ * regardless of the process's own cwd. Only called in --staged mode.
+ *
+ * @returns {string} absolute path to the git top-level directory.
+ */
+function getRepoRoot() {
+    try {
+        return execFileSync(gitBinary, ['rev-parse', '--show-toplevel'], {
+            encoding: 'utf8'
+        }).trim();
+    } catch (e) {
+        console.error('--staged requires running inside a git repository');
+        console.error(e.message);
+        process.exit(2);
+    }
+}
+
+/**
+ * Resolve symlinks in a path without requiring the path itself to exist on
+ * disk (e.g. a file that is staged but has since been deleted from the
+ * working tree). Falls back to resolving the nearest existing ancestor.
+ *
+ * @param {string} candidatePath - absolute path to resolve.
+ * @returns {string} the symlink-resolved absolute path.
+ */
+function realpathTolerant(candidatePath) {
+    try {
+        return fs.realpathSync(candidatePath);
+    } catch {
+        // allow-silent-catch: candidatePath itself may not exist on disk
+        // (staged then locally deleted); resolve its parent instead.
+        return path.join(fs.realpathSync(path.dirname(candidatePath)), path.basename(candidatePath));
+    }
+}
+
+/**
+ * Convert an absolute (or cwd-relative) filesystem path into a repo-relative,
+ * forward-slash path suitable for `git show :<path>` / comparison against
+ * `git ls-files` output. Both sides are realpath-resolved before comparing:
+ * `git rev-parse --show-toplevel` resolves symlinks (e.g. macOS's
+ * /var -> /private/var), but a path built from `os.tmpdir()` or a bare CLI
+ * argument typically has not, so comparing them raw can misreport a path
+ * inside the repo as outside it.
+ *
+ * @param {string} targetPath - path to convert.
+ * @param {string} root - absolute git top-level directory.
+ * @returns {string} repo-root-relative path with forward slashes.
+ */
+function toRepoRelative(targetPath, root) {
+    const resolvedTarget = realpathTolerant(path.resolve(process.cwd(), targetPath));
+    const resolvedRoot = fs.realpathSync(root);
+    const relative = path.relative(resolvedRoot, resolvedTarget);
+    if (relative.startsWith('..')) {
+        console.error(`${targetPath} is outside the git repository at ${root}`);
+        process.exit(2);
+    }
+    return relative.split(path.sep).join('/');
+}
+
+/**
+ * Read a file's content exactly as it sits in the git index (staged state),
+ * ignoring any unstaged working-tree edit on top of it.
+ *
+ * @param {string} root - absolute git top-level directory.
+ * @param {string} repoRelativePath - path relative to `root`.
+ * @returns {string} utf8-decoded staged (index) content.
+ * @throws {Error} if the path has no stage-0 entry in the index (untracked,
+ *   never staged, or staged for deletion).
+ */
+function readIndexFile(root, repoRelativePath) {
+    return execFileSync(gitBinary, ['show', `:${repoRelativePath}`], {
+        cwd: root,
+        encoding: 'utf8'
+    });
+}
+
+/**
+ * List every path git currently has staged in its index (i.e. tracked
+ * content, reflecting `git add` but never an unstaged edit or an untracked
+ * new file). Paths are repo-root-relative with forward slashes.
+ *
+ * Uses `-z` (NUL-separated, unquoted) output rather than plain newline
+ * splitting: a path containing a literal newline would otherwise be
+ * mis-split into two entries. Mirrors the same precaution
+ * tools/lib/gpl_staged_file_notices.py takes for the identical reason.
+ *
+ * @param {string} root - absolute git top-level directory.
+ * @returns {string[]} repo-relative paths of all indexed files.
+ */
+function listIndexFiles(root) {
+    return execFileSync(gitBinary, ['ls-files', '-z'], { cwd: root, encoding: 'utf8' })
+        .split('\0')
+        .filter(Boolean);
+}
+
+const repoRoot = staged ? getRepoRoot() : null;
 const featuresPath = path.resolve(process.cwd(), featuresFile);
-if (!fs.existsSync(featuresPath)) {
-    console.error(`features.json not found at ${featuresPath}`);
-    console.error('Create features.json at the project root. See ~/.claude/docs/features-json-guide.md');
-    process.exit(2);
+
+let featuresSource;
+if (staged) {
+    const relativeFeaturesPath = toRepoRelative(featuresPath, repoRoot);
+    try {
+        featuresSource = readIndexFile(repoRoot, relativeFeaturesPath);
+    } catch (e) {
+        console.error(`${featuresFile} has no staged content in the git index (${relativeFeaturesPath})`);
+        console.error('--staged mode reads staged content: `git add` it first, or omit --staged to check the working tree.');
+        console.error(e.message);
+        process.exit(2);
+    }
+} else {
+    if (!fs.existsSync(featuresPath)) {
+        console.error(`features.json not found at ${featuresPath}`);
+        console.error('Create features.json at the project root. See ~/.claude/docs/features-json-guide.md');
+        process.exit(2);
+    }
+    featuresSource = fs.readFileSync(featuresPath, 'utf8');
 }
 
 let manifest;
 try {
-    manifest = JSON.parse(fs.readFileSync(featuresPath, 'utf8'));
+    manifest = JSON.parse(featuresSource);
 } catch (e) {
     console.error(`Failed to parse ${featuresFile}: ${e.message}`);
     process.exit(2);
@@ -134,16 +293,43 @@ function walkFiles(dir, extensions) {
 }
 
 const testExtensions = ['.test.js', '.test.ts', '.test.jsx', '.test.tsx', '.spec.js', '.spec.ts', '.spec.jsx', '.spec.tsx', '.test.mjs', '.spec.mjs'];
-const testFiles = [];
-for (const dir of testDirs) {
-    testFiles.push(...walkFiles(path.resolve(process.cwd(), dir), testExtensions));
+
+/**
+ * List every git-indexed test file under the given directories, using the
+ * staged file set so an untracked or unstaged-only file never appears.
+ *
+ * @param {string} root - absolute git top-level directory.
+ * @param {string[]} dirs - repo-root-relative test directories to scan.
+ * @param {string[]} extensions - test-file suffixes to match.
+ * @returns {string[]} repo-relative paths of matching indexed test files.
+ */
+function listStagedTestFiles(root, dirs, extensions) {
+    return listIndexFiles(root).filter((repoRelativePath) => {
+        const inTestDir = dirs.some((dir) => (
+            repoRelativePath === dir || repoRelativePath.startsWith(`${dir}/`)
+        ));
+        return inTestDir && extensions.some((ext) => repoRelativePath.endsWith(ext));
+    });
+}
+
+let testFiles;
+if (staged) {
+    // Entries are repo-relative paths; readIndexFile below reads their
+    // staged content directly, mirroring the disk-mode branch's absolute
+    // paths + fs.readFileSync.
+    testFiles = listStagedTestFiles(repoRoot, testDirs, testExtensions);
+} else {
+    testFiles = [];
+    for (const dir of testDirs) {
+        testFiles.push(...walkFiles(path.resolve(process.cwd(), dir), testExtensions));
+    }
 }
 
 const COVERS_PATTERNS = [/itCovers\s*[.(]\s*['"`]([^'"`]+)['"`]/g, /\/\/\s*@covers\s+([\w.]+)/g];
 
 const coveredPathIds = new Set();
 for (const file of testFiles) {
-    const content = fs.readFileSync(file, 'utf8');
+    const content = staged ? readIndexFile(repoRoot, file) : fs.readFileSync(file, 'utf8');
     for (const re of COVERS_PATTERNS) {
         re.lastIndex = 0;
         let match;
