@@ -66,14 +66,29 @@ test('reload mid-playback resumes near the same position and keeps playing', asy
     const screenState = await onScreenState(page, 'video');
     expect(screenState.insideViewport, `video should be on screen after reload: ${JSON.stringify(screenState)}`).toBe(true);
 
+    // `el.paused` flips to false essentially synchronously with the
+    // underlying play() call, well before the browser has fetched any media
+    // data at all: direct instrumentation (see the c273 followup, slow-start
+    // fault-injection notes) caught it with readyState 0, duration null and
+    // currentTime 0 at that exact instant, every time, then self-correcting
+    // to the real resumed position within roughly 500ms-1s once metadata
+    // loads. Polling on `paused` samples that transient loading instant, not
+    // a real failure to resume, and reads as a permanent "lands at 0" only
+    // because the very next line reads currentTime right then. Poll for
+    // metadata actually being loaded (readyState >= HAVE_METADATA, the
+    // earliest point seekOnPlaybackStart's immediate-seek branch could have
+    // run) instead, so a still-loading element keeps polling rather than
+    // being sampled mid-load; a genuinely stuck resume still fails this via
+    // timeout.
     await expect
         .poll(
-            async () => video.evaluate((el: HTMLVideoElement) => el.paused),
-            { timeout: 20_000, message: 'reloaded playback should resume playing, not paused' }
+            async () => video.evaluate((el: HTMLVideoElement) => el.readyState >= HTMLMediaElement.HAVE_METADATA),
+            { timeout: 20_000, message: 'reloaded playback never loaded metadata (readyState stuck below HAVE_METADATA)' }
         )
-        .toBe(false);
+        .toBe(true);
 
     const after = await videoAfter.evaluate((el: HTMLVideoElement) => ({ t: el.currentTime, paused: el.paused }));
+    expect(after.paused, 'reloaded playback should resume playing, not paused').toBe(false);
     const drift = Math.abs(after.t - before.t);
     expect(drift, `resumed position drifted ${drift.toFixed(2)}s from the pre-reload position `
         + `(before=${before.t.toFixed(2)}s, after=${after.t.toFixed(2)}s)`).toBeLessThanOrEqual(POSITION_TOLERANCE_SECONDS);
