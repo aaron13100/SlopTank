@@ -747,6 +747,57 @@
           ]
         }
       ]
+    },
+    {
+      "id": "video.reload_resume",
+      "title": "Video reload resumes at the correct position and play state",
+      "description": "Reloading the video page (a real browser reload, not an in-app route change) resumes within a few seconds of the pre-reload position and preserves whether it was playing or paused, using a local same-tab snapshot instead of only the server's own (network-dependent, paused-state-blind) resume position.",
+      "owner": "web-client",
+      "kind": "user-action",
+      "files": [
+        "src/components/playback/playbackReloadSnapshot.js",
+        "src/components/playback/playbackReloadCapture.js",
+        "src/controllers/playback/video/permalinkResume.js",
+        "src/components/htmlMediaHelper.js",
+        "e2e/video-reload-resume.spec.ts"
+      ],
+      "added": "2026-09-24",
+      "paths": [
+        {
+          "id": "video.reload.mid_playback.resumes_near_same_position_and_playing",
+          "type": "happy",
+          "requiredAssertions": [
+            "position_within_tolerance",
+            "still_playing"
+          ]
+        },
+        {
+          "id": "video.reload.while_paused.resumes_same_position_and_stays_paused",
+          "type": "happy",
+          "requiredAssertions": [
+            "position_within_tolerance",
+            "still_paused"
+          ]
+        },
+        {
+          "id": "video.reload.seek_drop.currentTime_advanced_before_duration_known",
+          "type": "unhappy",
+          "failureClass": "race_condition",
+          "requiredAssertions": [
+            "seek_still_applied",
+            "media_ready_fires"
+          ]
+        },
+        {
+          "id": "video.reload.snapshot_corrupt.discarded_without_throwing",
+          "type": "unhappy",
+          "failureClass": "data_corruption",
+          "requiredAssertions": [
+            "returns_null",
+            "does_not_throw"
+          ]
+        }
+      ]
     }
   ]
 }

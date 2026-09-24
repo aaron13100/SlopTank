@@ -36,10 +36,9 @@ import LibraryMenu from '../../../scripts/libraryMenu';
 import { setBackdropTransparency, TRANSPARENCY_LEVEL } from '../../../components/backdrop/backdrop';
 import SyncPlayIconControl from './SyncPlayIconControl';
 import PersistentTitleControl from './PersistentTitleControl';
-import { getParameterByName } from '../../../utils/url.ts';
 import { toApi } from '../../../utils/jellyfin-apiclient/compat';
 import { canonicalizeLegacyGuidRoute } from '../../../components/router/permalinkCanonicalizer';
-import { permalinkStartSecondsToTicks } from '../../../components/router/permalinkId.ts';
+import { createPermalinkResume } from './permalinkResume';
 import SubtitleTrackMenu from './SubtitleTrackMenu';
 import EpisodePlaybackMenu from './EpisodePlaybackMenu';
 import VolumeControl from './VolumeControl';
@@ -654,61 +653,11 @@ export default function (view) {
         setPermalinkPreparing(false);
     }
 
-    function resumeFromPermalink() {
-        if (playbackManager.getCurrentPlayer() || permalinkResumePromise) {
-            return permalinkResumePromise;
-        }
-
-        const id = getParameterByName('id');
-        const serverId = getParameterByName('serverId');
-        const isPermalinkPlayback = getParameterByName('permalinkPlayback') === '1';
-
-        if (!id || !serverId) {
-            return;
-        }
-
-        // A permalink watch link (/web/w/<id>?t=<seconds>, see
-        // permalinkId.permalinkStartSecondsToTicks) resolves to this same
-        // /web/video route with a 't' query param appended; it always wins
-        // over the server-saved resume position when present and valid.
-        const requestedStartTicks = permalinkStartSecondsToTicks(getParameterByName('t'));
-
-        const apiClient = ServerConnections.getApiClient(serverId);
-        setPermalinkPreparing(true);
-
-        permalinkResumePromise = apiClient.getItem(apiClient.getCurrentUserId(), id).then((item) => {
-            canonicalizeVideoRoute(item);
-
-            if (playbackManager.getCurrentPlayer() || !playbackManager.canPlay(item)) {
-                setPermalinkPreparing(false);
-                return;
-            }
-
-            return playbackManager.play({
-                items: [item],
-                startPositionTicks: requestedStartTicks ?? (item.UserData?.PlaybackPositionTicks || 0),
-                fullscreen: true,
-                alreadyOnVideoOsd: true,
-                skipAutomaticBitrateDetection: isPermalinkPlayback
-            });
-        }).then(() => {
-            // The first play() can be interrupted while the resume seek is
-            // applied. Retry automatically once preparation has completed so
-            // a direct link never depends on a click made during startup.
-            const player = playbackManager.getCurrentPlayer();
-            if (player && playbackManager.paused(player)) {
-                return playbackManager.unpause(player);
-            }
-        }).catch((error) => {
-            setPermalinkPreparing(false);
-            console.error('failed to resume item from permalink: ', error);
-            appRouter.goHome();
-        }).finally(() => {
-            permalinkResumePromise = null;
-        });
-
-        return permalinkResumePromise;
-    }
+    // See permalinkResume.js: resume-from-permalink is a self-contained
+    // responsibility (fetch the item, resolve the right start position and
+    // paused/playing state, start playback) with only two dependencies back
+    // into this controller, both passed in below.
+    const permalinkResume = createPermalinkResume({ setPermalinkPreparing, canonicalizeVideoRoute });
 
     /**
      * Replaces the legacy GUID watch route with the item's canonical
@@ -1612,7 +1561,6 @@ export default function (view) {
     let subtitleSyncOverlay;
     let trickplayResolution = null;
     const trickplayDiscovery = new TrickplayDiscovery();
-    let permalinkResumePromise;
     let isViewSetup = false;
     const nowPlayingPositionSlider = view.querySelector('.osdPositionSlider');
     const nowPlayingPositionText = view.querySelector('.osdPositionText');
@@ -1708,7 +1656,7 @@ export default function (view) {
         try {
             Events.on(playbackManager, 'playerchange', onPlayerChange);
             bindToPlayer(playbackManager.getCurrentPlayer());
-            resumeFromPermalink();
+            permalinkResume.resume();
             /* eslint-disable-next-line compat/compat */
             dom.addEventListener(document, window.PointerEvent ? 'pointermove' : 'mousemove', onPointerMove, {
                 passive: true

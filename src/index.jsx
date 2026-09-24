@@ -189,6 +189,7 @@ function loadPlatformFeatures() {
 
     if (!browser.tv && !browser.xboxOne) {
         loadDynamicModule(() => import('./components/playback/playbackorientation'), './components/playback/playbackorientation');
+        loadDynamicModule(() => import('./components/playback/playbackReloadCapture'), './components/playback/playbackReloadCapture');
         registerServiceWorker();
 
         if (window.Notification) {
