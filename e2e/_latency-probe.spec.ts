@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-18.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-18, 2026-09-26.
 import { test } from '@playwright/test';
 import { login } from './fixtures';
 
@@ -28,8 +28,10 @@ test.setTimeout(180_000);
 
 test('latency probe: login and playback phases', async ({ page }) => {
     const marks: Record<string, number> = {};
-    const mark = (name: string) => { marks[name] = Date.now(); };
-    const report = (from: string, to: string) => Date.now() - marks[from];
+    const mark = (name: string) => {
+        marks[name] = Date.now();
+    };
+    const report = (from: string, to: string) => marks[to] - marks[from];
 
     const playbackInfo: number[] = [];
     page.on('response', (response) => {
@@ -71,9 +73,9 @@ test('latency probe: login and playback phases', async ({ page }) => {
 
     const navigation = await page.evaluate(() => {
         const entries = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
-        return entries[0]
-            ? { dcl: Math.round(entries[0].domContentLoadedEventEnd), load: Math.round(entries[0].loadEventEnd) }
-            : { dcl: -1, load: -1 };
+        return entries[0] ?
+            { dcl: Math.round(entries[0].domContentLoadedEventEnd), load: Math.round(entries[0].loadEventEnd) } :
+            { dcl: -1, load: -1 };
     });
 
     console.log(`LAT login: commit=${report('start', 'login-commit')}ms dcl=${report('login-commit', 'login-dcl')}ms load=${report('login-dcl', 'login-load')}ms form+auth=${report('login-load', 'login-done')}ms total=${report('start', 'login-done')}ms`);
