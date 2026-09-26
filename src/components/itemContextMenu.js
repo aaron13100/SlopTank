@@ -1,7 +1,6 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-02-14, 2026-02-20, 2026-03-12, 2026-07-18, 2026-07-24, 2026-07-31, 2026-08-01, 2026-09-08, 2026-09-09, 2026-09-14, 2026-09-15, 2026-09-21.
+// SlopTank modification notice: added or changed by SlopTank on 2026-02-14, 2026-02-20, 2026-03-12, 2026-07-18, 2026-07-24, 2026-07-31, 2026-08-01, 2026-09-08, 2026-09-09, 2026-09-14, 2026-09-15, 2026-09-21, 2026-09-26.
 import { BaseItemKind } from '@jellyfin/sdk/lib/generated-client/models/base-item-kind';
 import { getLibraryApi } from '@jellyfin/sdk/lib/utils/api/library-api';
-import { getPlaystateApi } from '@jellyfin/sdk/lib/utils/api/playstate-api';
 
 import { AppFeature } from 'constants/appFeature';
 import { toApi } from 'utils/jellyfin-apiclient/compat';
@@ -64,7 +63,7 @@ function getRemoveFromContinueLabel(item) {
         return globalize.translate('ClearListeningProgress');
     }
 
-    return globalize.translate('ClearWatchProgress');
+    return globalize.translate('RemoveFromContinueWatching');
 }
 
 export async function getCommands(options) {
@@ -333,8 +332,7 @@ export async function getCommands(options) {
     }
 
     const canRemoveFromContinue = !itemHelper.isLocalItem(item)
-        && item.UserData?.PlaybackPositionTicks
-        && !item.UserData?.Played;
+        && item.UserData?.PlaybackPositionTicks > 0;
 
     if (canRemoveFromContinue) {
         commands.push({

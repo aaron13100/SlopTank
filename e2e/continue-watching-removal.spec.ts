@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-21, 2026-09-24.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-21, 2026-09-24, 2026-09-26.
 /**
  * Regression coverage for "Remove from Continue Watching" (queue task
  * t_260913_214241_633, owner request 2026-09-13, upstream feature request
@@ -15,7 +15,7 @@
  * This spec drives the real served client end to end: login -> seed a resume
  * position through the app's own ApiClient (the same call a real player
  * makes on stop) -> the actual Home page's Continue Watching rail -> the
- * card's own "more" menu -> "Clear watch progress" -> assert the card leaves
+ * card's own "more" menu -> "Remove from Continue Watching" -> assert the card leaves
  * the rail without a page reload, and that watched state/play count survive.
  */
 import type { Page } from '@playwright/test';
@@ -50,6 +50,7 @@ interface ContinueWatchingTestWindow extends Window {
 const RESUME_POSITION_FRACTION = 0.2;
 
 let resumePositionTicks = 0;
+let originalUserData: UserDataSnapshot | undefined;
 
 function continueWatchingCard(page: Page, itemId: string) {
     return page.locator(`h2:has-text("Continue Watching") ~ * [data-id="${itemId}"]`).first();
@@ -89,14 +90,16 @@ async function setResumePosition(page: Page, itemId: string, ticks: number): Pro
     }, { id: itemId, positionTicks: ticks });
 }
 
-async function clearResumePositionDirect(page: Page, itemId: string): Promise<void> {
-    await page.evaluate(async (id) => {
+async function saveUserData(page: Page, itemId: string, data: Partial<UserDataSnapshot>): Promise<void> {
+    await page.evaluate(async ({ id, userData }) => {
         const api = (window as unknown as ContinueWatchingTestWindow).ApiClient;
         await api.ajax({
-            type: 'DELETE',
-            url: api.getUrl(`UserResumeItems/${id}`, { userId: api.getCurrentUserId() })
+            type: 'POST',
+            url: api.getUrl(`UserItems/${id}/UserData`, { userId: api.getCurrentUserId() }),
+            data: JSON.stringify(userData),
+            contentType: 'application/json'
         });
-    }, itemId);
+    }, { id: itemId, userData: data });
 }
 
 // The card's "more" trigger has two markups depending on layoutManager.mobile
@@ -110,30 +113,34 @@ const CARD_MENU_BUTTON_SELECTOR = '.cardOverlayButton[data-action="menu"]';
 
 async function openCardMenu(page: Page, itemId: string): Promise<void> {
     const card = continueWatchingCard(page, itemId);
-    await expect(card).toBeVisible({ timeout: 15_000 });
+    await expect(card).toBeVisible();
     await card.scrollIntoViewIfNeeded();
     const state = await onScreenState(page, `[data-id="${itemId}"] ${CARD_MENU_BUTTON_SELECTOR}`);
     expect(state.reachable, `card options button should be reachable: ${JSON.stringify(state)}`).toBe(true);
     await card.locator(CARD_MENU_BUTTON_SELECTOR).click();
-    await expect(page.locator('.actionSheetMenuItem[data-id="removefromcontinue"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('.actionSheetMenuItem[data-id="removefromcontinue"]')).toBeVisible();
 }
 
 test.beforeEach(async ({ page, config }) => {
     // Start every case from a known state: a real resume position exists, and
     // nothing else about the item's history is disturbed.
+    originalUserData = undefined;
     await login(page, config.username, config.password);
+    originalUserData = await getUserData(page, config.itemId);
     resumePositionTicks = await computeResumePositionTicks(page, config.itemId);
     await setResumePosition(page, config.itemId, resumePositionTicks);
 });
 
 test.afterEach(async ({ page, config }) => {
-    // Leave the shared fixture item the way other specs expect to find it
-    // (no residual resume position), regardless of how the test above ended.
-    await clearResumePositionDirect(page, config.itemId);
+    // Restore the real snapshot, including pre-existing progress and history.
+    // Test order and the configured account must not change that contract.
+    if (originalUserData) {
+        await saveUserData(page, config.itemId, originalUserData);
+    }
 });
 
 // @covers continue_watching.removal.clears_resume_only
-test('removing an item from Continue Watching drops the card without a reload and preserves watched state', async ({ page, config }) => {
+test('removing an item from Continue Watching drops the card without a reload and preserves watched state', async ({ page, config }, testInfo) => {
     const itemId = config.itemId;
 
     const before = await getUserData(page, itemId);
@@ -146,7 +153,7 @@ test('removing an item from Continue Watching drops the card without a reload an
     // first, but the rendered rail kept showing pre-seed data). Force an
     // actual reload so the rail's data fetch re-runs against current state.
     await page.reload();
-    await expect(continueWatchingCard(page, itemId)).toBeVisible({ timeout: 15_000 });
+    await expect(continueWatchingCard(page, itemId)).toBeVisible();
 
     // A real page reload would reset any window-level state; surviving this
     // marker after the removal proves the card left via the SPA refresh path
@@ -156,9 +163,12 @@ test('removing an item from Continue Watching drops the card without a reload an
     });
 
     await openCardMenu(page, itemId);
+    await expect(page.locator('.actionSheetMenuItem[data-id="removefromcontinue"]'))
+        .toHaveText('Remove from Continue Watching');
+    await page.screenshot({ path: testInfo.outputPath('rail-before.png'), animations: 'disabled' });
     await page.locator('.actionSheetMenuItem[data-id="removefromcontinue"]').click();
 
-    await expect(continueWatchingCard(page, itemId)).toHaveCount(0, { timeout: 15_000 });
+    await expect(continueWatchingCard(page, itemId)).toHaveCount(0);
 
     const noReloadMarkerSurvived = await page.evaluate(
         () => (window as unknown as ContinueWatchingTestWindow).__e2eNoReloadMarker === true
@@ -169,6 +179,7 @@ test('removing an item from Continue Watching drops the card without a reload an
     expect(afterRemoval.PlaybackPositionTicks).toBe(0);
     expect(afterRemoval.Played).toBe(before.Played);
     expect(afterRemoval.PlayCount).toBe(before.PlayCount);
+    await page.screenshot({ path: testInfo.outputPath('rail-after.png'), animations: 'disabled' });
 
     // A later real playback checkpoint (the same call a player makes on
     // stop) must be able to put the item right back in Continue Watching.
@@ -180,7 +191,7 @@ test('removing an item from Continue Watching drops the card without a reload an
     // first, but the rendered rail kept showing pre-seed data). Force an
     // actual reload so the rail's data fetch re-runs against current state.
     await page.reload();
-    await expect(continueWatchingCard(page, itemId)).toBeVisible({ timeout: 15_000 });
+    await expect(continueWatchingCard(page, itemId)).toBeVisible();
 });
 
 // @covers continue_watching.removal.keyboard_reachable
@@ -195,7 +206,7 @@ test('the removal action is reachable and operable from the keyboard alone', asy
     // actual reload so the rail's data fetch re-runs against current state.
     await page.reload();
     const card = continueWatchingCard(page, itemId);
-    await expect(card).toBeVisible({ timeout: 15_000 });
+    await expect(card).toBeVisible();
     await card.scrollIntoViewIfNeeded();
 
     // Reach the card's own options button through a real focus, then operate
@@ -208,7 +219,7 @@ test('the removal action is reachable and operable from the keyboard alone', asy
     ), { message: 'the card options button should be keyboard-focusable' }).toBe(true);
 
     await page.keyboard.press('Enter');
-    await expect(page.locator('.actionSheetMenuItem[data-id="removefromcontinue"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('.actionSheetMenuItem[data-id="removefromcontinue"]')).toBeVisible();
 
     let reachedTarget = false;
     for (let press = 0; press < 15; press++) {
@@ -224,33 +235,60 @@ test('the removal action is reachable and operable from the keyboard alone', asy
     expect(reachedTarget, 'Tab order inside the open menu should reach the removal action').toBe(true);
 
     await page.keyboard.press('Enter');
-    await expect(continueWatchingCard(page, itemId)).toHaveCount(0, { timeout: 15_000 });
+    await expect(continueWatchingCard(page, itemId)).toHaveCount(0);
 
     const afterRemoval = await getUserData(page, itemId);
     expect(afterRemoval.PlaybackPositionTicks).toBe(0);
+});
+
+// @covers continue_watching.removal.preserves_rewatch_history
+test('a rewatch can leave Continue Watching without erasing its watched flag or play count', async ({ page, config }) => {
+    await saveUserData(page, config.itemId, { Played: true, PlayCount: 3 });
+    const before = await getUserData(page, config.itemId);
+    expect(before.Played).toBe(true);
+    expect(before.PlaybackPositionTicks).toBeGreaterThan(0);
+    await page.reload();
+    await openCardMenu(page, config.itemId);
+    await page.locator('.actionSheetMenuItem[data-id="removefromcontinue"]').click();
+    await expect(continueWatchingCard(page, config.itemId)).toHaveCount(0);
+    expect(await getUserData(page, config.itemId)).toEqual({
+        PlaybackPositionTicks: 0,
+        Played: true,
+        PlayCount: 3
+    });
 });
 
 // @covers continue_watching.removal.keyboard_focus_returns_on_close
 test('a keyboard-opened card menu takes focus and hands it back to its trigger on Escape', async ({ page, config }) => {
     await page.reload();
     const card = continueWatchingCard(page, config.itemId);
-    await expect(card).toBeVisible({ timeout: 15_000 });
+    await expect(card).toBeVisible();
     await card.scrollIntoViewIfNeeded();
 
     const trigger = card.locator(CARD_MENU_BUTTON_SELECTOR);
     await trigger.focus();
     await page.keyboard.press('Enter');
-    await expect(page.locator('.actionSheetMenuItem[data-id="removefromcontinue"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('.actionSheetMenuItem[data-id="removefromcontinue"]')).toBeVisible();
 
     await expect.poll(() => page.evaluate(
         () => Boolean(document.activeElement?.closest('.actionSheet'))
     ), { message: 'opening the menu from the keyboard should move focus into it, not drop it on <body>' }).toBe(true);
 
     await page.keyboard.press('Escape');
-    await expect(page.locator('.actionSheet')).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.locator('.actionSheet')).toHaveCount(0);
     await expect.poll(() => trigger.evaluate((el) => el === document.activeElement), {
         message: 'closing a keyboard-opened menu should return focus to the button that opened it'
     }).toBe(true);
+
+    // Escape after the popup closes must not become page-level Back.
+    const homeUrl = page.url();
+    await page.keyboard.press('Escape');
+    await page.evaluate(async () => {
+        await new Promise<number>(resolve => requestAnimationFrame(resolve));
+        await new Promise<number>(resolve => requestAnimationFrame(resolve));
+    });
+    await expect(page).toHaveURL(homeUrl);
+    await expect(trigger).toBeFocused();
 });
 
 // @covers continue_watching.removal.pointer_open_does_not_steal_focus
@@ -290,12 +328,12 @@ test('a failed removal keeps the card and surfaces the real server error', async
     // first, but the rendered rail kept showing pre-seed data). Force an
     // actual reload so the rail's data fetch re-runs against current state.
     await page.reload();
-    await expect(continueWatchingCard(page, itemId)).toBeVisible({ timeout: 15_000 });
+    await expect(continueWatchingCard(page, itemId)).toBeVisible();
 
     await openCardMenu(page, itemId);
     await page.locator('.actionSheetMenuItem[data-id="removefromcontinue"]').click();
 
-    await expect(page.locator('.toast')).toContainText('forced-e2e-failure', { timeout: 10_000 });
+    await expect(page.locator('.toast')).toContainText('forced-e2e-failure');
 
     // The card must still be there: the failed DELETE must not have been
     // treated as a success.
@@ -304,10 +342,67 @@ test('a failed removal keeps the card and surfaces the real server error', async
     const afterFailure = await getUserData(page, itemId);
     expect(afterFailure.PlaybackPositionTicks).toBe(resumePositionTicks);
 
-    // Let the afterEach cleanup's own DELETE through for real; otherwise this
-    // route would also fail it, leaving the shared fixture item's resume
-    // position set for whatever spec runs next.
+    // Remove the injected failure so further calls exercise the real endpoint.
     await page.unroute('**/UserResumeItems/**');
+});
+
+test.describe('touch navigation', () => {
+    test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+    // @covers continue_watching.removal.touch_reachable
+    test('a touch user can remove a resume card', async ({ page, config }, testInfo) => {
+        await page.addInitScript(() => localStorage.setItem('layout', 'mobile'));
+        await page.reload();
+        const card = continueWatchingCard(page, config.itemId);
+        await expect(card).toBeVisible();
+        await expect(page.locator('html')).toHaveClass(/layout-mobile/);
+        // Resume cards use the compact mobile layout without a footer menu.
+        // Their title opens the details page, whose More control is touchable.
+        await card.locator('.cardText a').first().tap();
+        const trigger = page.locator('.btnMoreCommands:visible');
+        await expect(trigger).toBeVisible();
+        await trigger.scrollIntoViewIfNeeded();
+        await trigger.tap();
+        const action = page.locator('.actionSheetMenuItem[data-id="removefromcontinue"]');
+        await expect(action).toBeVisible();
+        await action.scrollIntoViewIfNeeded();
+        const state = await onScreenState(page, '.actionSheetMenuItem[data-id="removefromcontinue"]');
+        expect(state.reachable, JSON.stringify(state)).toBe(true);
+        await page.screenshot({ path: testInfo.outputPath('mobile-remove-action.png'), animations: 'disabled' });
+        await action.tap();
+        await expect.poll(async () => (await getUserData(page, config.itemId)).PlaybackPositionTicks).toBe(0);
+        await expect(page.locator('.actionSheet')).toHaveCount(0);
+        await page.goBack();
+        await expect(page.locator('.homePage:visible')).toBeVisible();
+        await expect(continueWatchingCard(page, config.itemId)).toHaveCount(0);
+    });
+});
+
+// @covers continue_watching.removal.tv_reachable
+test('TV focus navigation reaches and activates the removal action', async ({ page, config }, testInfo) => {
+    await page.addInitScript(() => localStorage.setItem('layout', 'tv'));
+    await page.reload();
+    await expect(page.locator('html')).toHaveClass(/layout-tv/);
+    const card = continueWatchingCard(page, config.itemId);
+    await expect(card).toBeVisible();
+    await card.scrollIntoViewIfNeeded();
+    await card.focus();
+    await page.keyboard.press('ContextMenu');
+    const action = page.locator('.actionSheetMenuItem[data-id="removefromcontinue"]');
+    await expect(action).toBeVisible();
+    await expect.poll(() => page.evaluate(
+        () => Boolean(document.activeElement?.closest('.actionSheet'))
+    )).toBe(true);
+    for (let press = 0; press < 20 && !(await action.evaluate(el => el === document.activeElement)); press++) {
+        await page.keyboard.press('ArrowDown');
+    }
+    await expect(action).toBeFocused();
+    const state = await onScreenState(page, '.actionSheetMenuItem[data-id="removefromcontinue"]');
+    expect(state.reachable, JSON.stringify(state)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('tv-remove-action.png'), animations: 'disabled' });
+    await page.keyboard.press('Enter');
+    await expect(continueWatchingCard(page, config.itemId)).toHaveCount(0);
+    expect((await getUserData(page, config.itemId)).PlaybackPositionTicks).toBe(0);
 });
 
 // @covers continue_watching.removal.failure_without_json_body_still_shows_http_status
@@ -338,12 +433,12 @@ test('a failure with an unparseable error body still surfaces the HTTP status, n
     // first, but the rendered rail kept showing pre-seed data). Force an
     // actual reload so the rail's data fetch re-runs against current state.
     await page.reload();
-    await expect(continueWatchingCard(page, itemId)).toBeVisible({ timeout: 15_000 });
+    await expect(continueWatchingCard(page, itemId)).toBeVisible();
 
     await openCardMenu(page, itemId);
     await page.locator('.actionSheetMenuItem[data-id="removefromcontinue"]').click();
 
-    await expect(page.locator('.toast')).toContainText('HTTP 503', { timeout: 10_000 });
+    await expect(page.locator('.toast')).toContainText('HTTP 503');
 
     // Same fail-safe contract as the structured-error case: card stays, and
     // nothing about the item's resume state was touched.

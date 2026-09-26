@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-09-08, 2026-09-09, 2026-09-24.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-09-08, 2026-09-09, 2026-09-24, 2026-09-26.
 import focusManager from '../focusManager';
 import browser from '../../scripts/browser';
 import layoutManager from '../layoutManager';
@@ -15,31 +15,13 @@ import { loadDynamicModule } from 'utils/dynamicImport';
 
 let globalOnOpenCallback;
 
-// `:focus-visible` is the browser's own record of keyboard-driven focus (it
-// matches after Tab/Enter/arrow navigation, not after a mouse click). Older TV
-// webviews reject the selector outright, so probe the exact call once instead
-// of letting `matches()` throw on every dialog open there.
-const supportsFocusVisible = (() => {
-    try {
-        document.createElement('button').matches(':focus-visible');
-        return true;
-    } catch (err) {
-        console.info('[dialogHelper] :focus-visible unsupported; keyboard-opened dialogs keep the default focus behavior', err);
-        return false;
-    }
-})();
-
 /**
- * Whether focus currently sits on an element the user reached with the keyboard.
+ * Whether a keyboard action preceded the focused dialog opener.
  * @param {Element|null} elem The element to test, usually `document.activeElement`.
- * @returns {boolean} true when `elem` is a real (non-body) element matching `:focus-visible`;
- * always false on browsers without `:focus-visible` support.
+ * @returns {boolean} true for a focused control after keyboard input.
  */
 function isKeyboardFocused(elem) {
-    return Boolean(supportsFocusVisible
-        && elem
-        && elem !== document.body
-        && elem.matches(':focus-visible'));
+    return Boolean(inputManager.isKeyboardInput() && elem && elem !== document.body);
 }
 
 function enableAnimation() {

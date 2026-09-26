@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09, 2026-09-26.
 /**
  * Module for performing keyboard navigation.
  * @module components/input/keyboardnavigation
@@ -168,6 +168,11 @@ export function isInteractiveElement(element) {
 }
 
 export function enable() {
+    // Capture input before a widget consumes it or moves focus in its handler.
+    for (const eventName of ['keydown', 'mousedown', 'touchstart']) {
+        window.addEventListener(eventName, inputManager.recordInputType, { capture: true, passive: true });
+    }
+
     const hasMediaSession = 'mediaSession' in navigator;
     window.addEventListener('keydown', function (e) {
         if (e.defaultPrevented) return;
@@ -228,7 +233,9 @@ export function enable() {
                 break;
 
             case 'Escape':
-                if (layoutManager.tv) {
+                // Keyboard-focused popup menus use the same Back command as TV
+                // dialogs. Keep Escape outside these menus available to the page.
+                if (layoutManager.tv || document.activeElement?.closest('.dialog.opened[data-autofocus="keyboard"]')) {
                     inputManager.handleCommand('back');
                 } else {
                     capture = false;

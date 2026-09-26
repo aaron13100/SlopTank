@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-09-09, 2026-09-26.
 import { appHost } from 'components/apphost';
 import focusManager from 'components/focusManager';
 import { playbackManager } from 'components/playback/playbackmanager';
@@ -7,6 +7,24 @@ import { AppFeature } from 'constants/appFeature';
 import dom from 'utils/dom';
 
 let lastInputTime = new Date().getTime();
+let lastInputType = 'pointer';
+
+/**
+ * Record the input preceding focus changes, including script-driven focus.
+ * @param {Event} event Captured keyboard, mouse or touch input.
+ * @returns {void}
+ */
+export function recordInputType(event) {
+    lastInputType = event.type === 'keydown' ? 'keyboard' : 'pointer';
+}
+
+/**
+ * Whether the most recent captured input came from the keyboard.
+ * @returns {boolean} False until the first keyboard input or after pointer input.
+ */
+export function isKeyboardInput() {
+    return lastInputType === 'keyboard';
+}
 
 export function notify() {
     lastInputTime = new Date().getTime();
@@ -259,6 +277,8 @@ dom.addEventListener(document, 'click', notify, {
 });
 
 export default {
+    recordInputType: recordInputType,
+    isKeyboardInput: isKeyboardInput,
     handleCommand: handleCommand,
     notify: notify,
     notifyMouseMove: notifyMouseMove,
