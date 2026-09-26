@@ -699,14 +699,16 @@
     {
       "id": "continue_watching.removal",
       "title": "Remove an item from Continue Watching without marking it watched",
-      "description": "A per-user 'Clear watch progress' action on a Continue Watching card clears only that user's resume position (DELETE UserResumeItems/{itemId}), dropping the card from the rail without a page reload and without touching watched state, play count, or any other user's data.",
+      "description": "A per-user 'Remove from Continue Watching' action on a Continue Watching card clears only that user's resume position (DELETE UserResumeItems/{itemId}), dropping the card from the rail without a page reload and without touching watched state, play count, or any other user's data.",
       "owner": "web-client",
       "kind": "user-action",
       "files": [
         "src/components/itemContextMenu.js",
         "src/scripts/deleteHelper.js",
         "src/components/actionSheet/actionSheet.ts",
-        "src/components/dialogHelper/dialogHelper.js"
+        "src/components/dialogHelper/dialogHelper.js",
+        "src/scripts/keyboardNavigation.js",
+        "src/scripts/inputManager.js"
       ],
       "added": "2026-09-21",
       "paths": [
@@ -733,7 +735,8 @@
           "type": "happy",
           "requiredAssertions": [
             "keyboard_open_moves_focus_into_menu",
-            "escape_returns_focus_to_trigger"
+            "escape_returns_focus_to_trigger",
+            "escape_outside_menu_does_not_navigate"
           ]
         },
         {
@@ -761,6 +764,29 @@
             "toast_shows_http_status_fallback",
             "card_retained",
             "resume_position_unchanged"
+          ]
+        },
+        {
+          "id": "continue_watching.removal.preserves_rewatch_history",
+          "type": "happy",
+          "requiredAssertions": [
+            "rewatch_action_available",
+            "played_true_and_playcount_preserved"
+          ]
+        },
+        {
+          "id": "continue_watching.removal.touch_reachable",
+          "type": "happy",
+          "requiredAssertions": [
+            "touch_removes_card"
+          ]
+        },
+        {
+          "id": "continue_watching.removal.tv_reachable",
+          "type": "happy",
+          "requiredAssertions": [
+            "arrow_navigation_reaches_action",
+            "enter_removes_card"
           ]
         }
       ]
