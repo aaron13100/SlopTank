@@ -339,6 +339,51 @@ test('Document PiP subtitle appearance close button stays transparent over the d
     expect(closeStyle.background).toBe('rgba(0, 0, 0, 0)');
 });
 
+// @covers subtitle_controls.track_menu.document_pip_custom_renderer_and_live_appearance
+test('manual Document PiP subtitle sizing does not replace the normal preference on exit', async ({ page, config }) => {
+    await login(page, config.username, config.password);
+    const video = await startPlayback(page, config);
+    const mainSubtitleLine = page.locator(
+        '.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)');
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
+    await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
+    await parkOnCue(video, mainSubtitleLine);
+
+    // Restore the real account to its captured pre-diagnostic 100% setting,
+    // then use that normal size as the durable value each PiP cycle must keep.
+    await openSizeOverlay(page);
+    await setSizeSlider(page, 100);
+    const normalFontSize = await mainSubtitleLine.evaluate(
+        line => getComputedStyle(line).fontSize);
+    await expect(page.locator('.subtitleSizerSlider')).toHaveValue('100');
+    await page.keyboard.press('Escape');
+
+    for (const temporarySize of [ '150', '125' ]) {
+        const pipPagePromise = page.context().waitForEvent('page');
+        await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnPip');
+        const pipPage = await pipPagePromise;
+        await pipPage.locator('.documentPipSubtitleAppearanceButton').click();
+
+        const pipSlider = pipPage.locator('.subtitleSizerSlider');
+        await expect(pipSlider).toHaveValue('100');
+        await pipSlider.focus();
+        const adjustmentSteps = (Number(temporarySize) - 100) / 5;
+        for (let step = 0; step < adjustmentSteps; step++) {
+            await pipSlider.press('ArrowRight');
+        }
+        await expect(pipSlider).toHaveValue(temporarySize);
+
+        await pipPage.close();
+        await expect(page.locator('.videoPlayerContainer video')).toBeVisible();
+        await openSizeOverlay(page);
+        await expect(page.locator('.subtitleSizerSlider')).toHaveValue('100');
+        const restoredFontSize = await mainSubtitleLine.evaluate(
+            line => getComputedStyle(line).fontSize);
+        expect(restoredFontSize).toBe(normalFontSize);
+        await page.keyboard.press('Escape');
+    }
+});
+
 // @covers subtitle_controls.track_menu.sizer_applies_to_rendered_cues
 test('subtitle size applies live to real rendered cues', async ({ page, config }, testInfo) => {
     await login(page, config.username, config.password);
