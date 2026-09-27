@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-15.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-15, 2026-09-27.
 /**
  * Exercises ProductionModuleBoundaryPlugin through the real surface a
  * production build relies on: a webpack compilation. Each case builds a
@@ -19,12 +19,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
 import webpack from 'webpack';
 
 import ProductionModuleBoundaryPlugin from './production-module-boundary-plugin.js';
-
-const here = path.dirname(fileURLToPath(import.meta.url));
 
 function writeFixturePackage(nodeModulesDir, name, files) {
     const packageDir = path.join(nodeModulesDir, name);
@@ -134,6 +131,37 @@ test('refuses an unclassified package not present in the lock', async () => {
         lock: {}
     });
     await assert.rejects(runCompile(compiler), /unclassified package: node_modules\/fixture-unknown-dep/);
+});
+
+test('classifies dependencies through an isolated clone node_modules symlink', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'module-boundary-clone-'));
+    const shared = fs.mkdtempSync(path.join(os.tmpdir(), 'module-boundary-shared-'));
+    const sharedModules = path.join(shared, 'node_modules');
+    const srcDir = path.join(root, 'src');
+    fs.mkdirSync(sharedModules);
+    fs.mkdirSync(srcDir);
+    writeFixturePackage(sharedModules, 'fixture-prod-dep', {
+        'index.js': 'module.exports = { one: 1 };\n'
+    });
+    writeFixtureLock(root, { prod: ['fixture-prod-dep'] });
+    fs.symlinkSync(sharedModules, path.join(root, 'node_modules'), 'dir');
+    fs.writeFileSync(
+        path.join(srcDir, 'index.js'),
+        "import { one } from 'fixture-prod-dep'; console.log(one);\n"
+    );
+    const compiler = webpack({
+        context: srcDir,
+        mode: 'development',
+        target: 'node',
+        entry: './index.js',
+        output: { path: path.join(root, 'dist'), filename: 'bundle.js' },
+        plugins: [new ProductionModuleBoundaryPlugin({
+            projectRoot: root,
+            packageLockFile: path.join(root, 'package-lock.json')
+        })]
+    });
+
+    await runCompile(compiler);
 });
 
 test('refuses a dev-only package listed as a copied asset', async () => {

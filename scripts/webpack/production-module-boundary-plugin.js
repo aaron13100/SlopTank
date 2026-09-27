@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09, 2026-09-15.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09, 2026-09-15, 2026-09-27.
 'use strict';
 
 const fs = require('node:fs');
@@ -32,6 +32,19 @@ function canonicalPath(targetPath) {
 
 function normalizeRelativePath(projectRoot, targetPath) {
     return path.relative(projectRoot, canonicalPath(targetPath)).split(path.sep).join('/');
+}
+
+function packageLockKey(projectRoot, packageDir) {
+    const ordinaryKey = normalizeRelativePath(projectRoot, packageDir);
+    if (!ordinaryKey.startsWith('../')) {
+        return ordinaryKey;
+    }
+    const installedRoot = canonicalPath(path.join(projectRoot, 'node_modules'));
+    const installedPackage = path.relative(installedRoot, canonicalPath(packageDir));
+    if (installedPackage.startsWith('..') || path.isAbsolute(installedPackage)) {
+        return ordinaryKey;
+    }
+    return `node_modules/${installedPackage.split(path.sep).join('/')}`;
 }
 
 function isTestResource(resourcePath) {
@@ -122,9 +135,9 @@ class ProductionModuleBoundaryPlugin {
                 for (const module of modules) {
                     const resource = module.resource?.split('?')[0];
                     if (resource) {
-                        const issuerRelative = module.issuer?.resource
-                            ? normalizeRelativePath(this.projectRoot, module.issuer.resource.split('?')[0])
-                            : null;
+                        const issuerRelative = module.issuer?.resource ?
+                            normalizeRelativePath(this.projectRoot, module.issuer.resource.split('?')[0]) :
+                            null;
                         // An entry module has no issuer: its request is
                         // webpack configuration, which is authored by
                         // definition, whatever path shape the entry used.
@@ -145,7 +158,7 @@ class ProductionModuleBoundaryPlugin {
                 }
 
                 for (const packageDir of shippedPackageDirs) {
-                    const lockKey = normalizeRelativePath(this.projectRoot, packageDir);
+                    const lockKey = packageLockKey(this.projectRoot, packageDir);
                     const lockEntry = lockPackages[lockKey];
                     if (!lockEntry) {
                         violations.push(`unclassified package: ${lockKey}`);
