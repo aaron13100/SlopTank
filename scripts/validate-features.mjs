@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-09-09, 2026-09-24, 2026-09-27.
 // scripts/validate-features.mjs - Pre-commit + CI gate for feature path coverage
 //
 // Ported from ~/.claude/templates/quality-gates/shared/scripts/validate-features.js

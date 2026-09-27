@@ -1,4 +1,5 @@
 #!/bin/sh
+# SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-09-27.
 # scripts/run-in-index-snapshot.sh
 #
 # Run an arbitrary command against a throwaway, read-only export of the

@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-24.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-09-25, 2026-09-27.
 /**
  * Owns the OSD audio-track menu: listing the playing item's audio tracks
  * and switching to the one the user picks.

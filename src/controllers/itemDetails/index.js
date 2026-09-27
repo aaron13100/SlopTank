@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-24, 2026-07-31, 2026-08-03, 2026-08-11, 2026-09-08, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-24, 2026-07-31, 2026-08-03, 2026-08-11, 2026-09-08, 2026-09-09, 2026-09-27.
 import { BaseItemKind } from '@jellyfin/sdk/lib/generated-client/models/base-item-kind';
 import { PersonKind } from '@jellyfin/sdk/lib/generated-client/models/person-kind';
 import { getLibraryApi } from '@jellyfin/sdk/lib/utils/api/library-api';

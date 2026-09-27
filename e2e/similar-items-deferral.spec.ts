@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-27.
 // SlopTank regression: Similar items should not compete with detail-page playback before the section is approached.
 import { expect, submitManualLogin, test } from './fixtures';
 

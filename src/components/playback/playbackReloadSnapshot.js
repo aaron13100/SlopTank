@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-09-27.
 /**
  * The local, same-tab source of truth for "where exactly did playback leave
  * off, and was it playing or paused" across a page reload.
