@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-08-01, 2026-09-07, 2026-09-08, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-01, 2026-09-07, 2026-09-08, 2026-09-09, 2026-09-27.
 'use strict';
 
 // GPLv2 Sections 1 and 3 require the license text and per-component notices
@@ -201,7 +201,7 @@ class ThirdPartyNoticesPlugin {
     }
 
     buildNotices(packageDirs) {
-        const entries = [];
+        const entriesByIdentity = new Map();
         const problems = [];
         const shippedPackageDirs = new Set([
             ...packageDirs,
@@ -214,7 +214,12 @@ class ThirdPartyNoticesPlugin {
                 continue;
             }
             const entry = this.buildEntry(dir, packageJson);
-            entries.push(entry);
+            const existing = entriesByIdentity.get(entry.identity);
+            if (existing && existing.text !== entry.text) {
+                problems.push(`${entry.identity}: conflicting package metadata was resolved from ${existing.dir} and ${dir}`);
+                continue;
+            }
+            entriesByIdentity.set(entry.identity, entry);
             if (entry.missingLicenseIds.length > 0) {
                 problems.push(`${entry.name} ${packageJson.version || 'unknown'}: no license text (bundled or canonical) found for ${entry.missingLicenseIds.join(', ')}`);
             }
@@ -234,6 +239,7 @@ class ThirdPartyNoticesPlugin {
             );
         }
 
+        const entries = Array.from(entriesByIdentity.values());
         entries.sort((a, b) => a.name.localeCompare(b.name));
 
         const header = [
@@ -332,7 +338,13 @@ class ThirdPartyNoticesPlugin {
             missingLicenseIds.push(declared);
         }
 
-        return { name, text: parts.join('\n'), missingLicenseIds };
+        return {
+            name,
+            identity: `${name}@${version}`,
+            dir,
+            text: parts.join('\n'),
+            missingLicenseIds
+        };
     }
 
     readCorpusText(id) {

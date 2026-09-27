@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-08-01, 2026-09-07, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-01, 2026-09-07, 2026-09-09, 2026-09-27.
 /**
  * Exercises ThirdPartyNoticesPlugin through the real entry point a user
  * relies on: a webpack compilation. The integration test below runs an
@@ -113,7 +113,7 @@ function buildUnresolvableLicenseFixtureProject() {
     return root;
 }
 
-function runWebpackBuild(root) {
+function runWebpackBuild(root, additionalPackageDirs = []) {
     const compiler = webpack({
         mode: 'none',
         target: 'node',
@@ -131,7 +131,8 @@ function runWebpackBuild(root) {
             new ThirdPartyNoticesPlugin({
                 licenseFile: path.join(root, 'PROJECT-LICENSE'),
                 attributionsFile: path.join(root, 'ATTRIBUTIONS.md'),
-                licenseTextsDir: repositoryLicenseTextsDir
+                licenseTextsDir: repositoryLicenseTextsDir,
+                additionalPackageDirs
             })
         ]
     });
@@ -156,6 +157,58 @@ function runWebpackBuild(root) {
         });
     });
 }
+
+test('a webpack build emits one notice when a copied runtime package is also in the module graph', async () => {
+    const root = buildFixtureProject();
+    try {
+        // Production builds can observe the same package through two distinct
+        // filesystem spellings (the webpack-resolved module and the explicit
+        // copied-runtime path). A path-based Set cannot identify that these
+        // directories carry the same distributable package identity.
+        const copiedPackageDir = writeFixturePackage(
+            path.join(root, 'node_modules'),
+            'fixture-simple-mit-copy',
+            {
+                packageJson: {
+                    name: 'fixture-simple-mit',
+                    version: '1.0.0',
+                    license: 'MIT',
+                    main: 'index.js'
+                },
+                files: {
+                    'index.js': 'module.exports = 1;\n',
+                    LICENSE: 'MIT License\n\nCopyright (c) 2026 Fixture Author\n\nPermission is hereby granted...\n'
+                }
+            }
+        );
+        await runWebpackBuild(root, [ copiedPackageDir ]);
+
+        const notices = fs.readFileSync(
+            path.join(root, 'dist', 'THIRD-PARTY-NOTICES.txt'),
+            'utf8'
+        );
+        assert.equal(
+            notices.match(/^fixture-simple-mit 1\.0\.0$/gm)?.length,
+            1,
+            'a package shipped through two discovery paths must have one notice entry'
+        );
+        assert.match(
+            notices,
+            /2 third-party packages were resolved into this bundle\./
+        );
+
+        fs.writeFileSync(
+            path.join(copiedPackageDir, 'LICENSE'),
+            'MIT License\n\nCopyright (c) 2026 Conflicting Package Copy\n'
+        );
+        await assert.rejects(
+            () => runWebpackBuild(root, [ copiedPackageDir ]),
+            /fixture-simple-mit@1\.0\.0: conflicting package metadata/
+        );
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
 
 test('a real webpack build emits dist/LICENSE and dist/THIRD-PARTY-NOTICES.txt covering exactly the bundled packages', async () => {
     const root = buildFixtureProject();
