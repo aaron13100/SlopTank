@@ -420,6 +420,13 @@ export class HtmlVideoPlayer {
      */
     #documentPictureInPictureAppearanceOverlay = null;
     /**
+     * Per-PiP-session appearance settings. Adjustments in the PiP panel are
+     * previews for the current playback session and must not replace the
+     * user's normal saved preferences.
+     * @type {Object | null}
+     */
+    #documentPictureInPictureAppearanceSettings = null;
+    /**
      * @type {boolean | null}
      */
     #documentPictureInPictureOriginalVideoControls = null;
@@ -3211,9 +3218,21 @@ export class HtmlVideoPlayer {
             return;
         }
 
+        this.#documentPictureInPictureAppearanceSettings ??= {
+            ...userSettings.getSubtitleAppearanceSettings()
+        };
+
+        const appearanceSettings = this.#documentPictureInPictureAppearanceSettings;
+        const temporarySettings = {
+            getSubtitleAppearanceSettings: () => ({ ...appearanceSettings }),
+            setSubtitleAppearanceSettings: value => {
+                Object.assign(appearanceSettings, value);
+            }
+        };
+
         this.#documentPictureInPictureAppearanceOverlay = new SubtitleSizer({
             player: this,
-            settings: userSettings,
+            settings: temporarySettings,
             translate: globalize.translate,
             onClose: () => {
                 this.#documentPictureInPictureAppearanceOverlay = null;
@@ -3307,6 +3326,7 @@ export class HtmlVideoPlayer {
         this.#documentPictureInPicturePageHideHandler = null;
         this.#documentPictureInPictureAppearanceOverlay?.destroy();
         this.#documentPictureInPictureAppearanceOverlay = null;
+        this.#documentPictureInPictureAppearanceSettings = null;
         this.#documentPictureInPictureAppearanceButton?.remove();
         this.#documentPictureInPictureAppearanceButton = null;
         if (video && this.#documentPictureInPictureOriginalVideoControls != null) {
