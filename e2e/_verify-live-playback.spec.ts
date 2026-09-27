@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-18.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-18, 2026-09-28.
 import { test, expect } from '@playwright/test';
 import { login } from './fixtures';
 
@@ -54,4 +54,19 @@ test(`live playback: ${ITEM_NAME} starts promptly from search`, async ({ page })
     console.log(`LIVE_PLAYBACK ${ITEM_NAME} login=${loginMs}ms home=${homeMs}ms detail=${detailMs}ms playing=${playedMs}ms`);
     console.log(`LIVE_PLAYBACK_SRC ${currentSrc.slice(0, 160)}`);
     await page.screenshot({ path: `/tmp/live-playback-${ITEM_NAME.replace(/[^a-z0-9]+/gi, '-')}.png` });
+
+    // Stop the real streaming request before Playwright tears down its browser
+    // context.  Leaving the media element attached to a large static stream
+    // made Chromium's context close block in filesystem I/O until the entire
+    // load-scaled test timeout elapsed, even though decoded video had already
+    // proved playback (observed on the live host on 2026-09-28).  Navigating
+    // away after detaching the source gives the browser an explicit bounded
+    // end to the user flow and also lets Jellyfin release the smoke session
+    // before the next probe starts.
+    await video.evaluate((el: HTMLVideoElement) => {
+        el.pause();
+        el.removeAttribute('src');
+        el.load();
+    });
+    await page.goto('about:blank', { waitUntil: 'commit', timeout: 30_000 });
 });
