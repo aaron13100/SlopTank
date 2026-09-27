@@ -14,6 +14,7 @@ import cardBuilder from 'components/cardbuilder/cardBuilder';
 import { buildCardImage } from 'components/cardbuilder/cardImage';
 import confirm from 'components/confirm/confirm';
 import imageLoader from 'components/images/imageLoader';
+import renderSimilarItems, { disposeSimilarItems } from './similarItemsRenderer';
 import itemContextMenu from 'components/itemContextMenu';
 import itemHelper from 'components/itemHelper';
 import mediaInfo from 'components/mediainfo/mediainfo';
@@ -1252,56 +1253,6 @@ function renderMoreFromArtist(view, item, apiClient) {
     }
 }
 
-function renderSimilarItems(page, item, context) {
-    const similarCollapsible = page.querySelector('#similarCollapsible');
-
-    if (similarCollapsible) {
-        if (item.Type != 'Movie' && item.Type != 'Trailer' && item.Type != 'Series' && item.Type != 'Program' && item.Type != 'Recording' && item.Type != 'MusicAlbum' && item.Type != 'MusicArtist' && item.Type != 'Playlist' && item.Type != 'Audio') {
-            similarCollapsible.classList.add('hide');
-            return;
-        }
-
-        similarCollapsible.classList.remove('hide');
-        const apiClient = ServerConnections.getApiClient(item.ServerId);
-        const options = {
-            userId: apiClient.getCurrentUserId(),
-            limit: 12,
-            fields: 'PrimaryImageAspectRatio,CanDelete'
-        };
-
-        if (item.Type == 'MusicAlbum' && item.AlbumArtists && item.AlbumArtists.length) {
-            options.ExcludeArtistIds = item.AlbumArtists[0].Id;
-        }
-
-        apiClient.getSimilarItems(item.Id, options).then(function (result) {
-            if (!result.Items.length) {
-                similarCollapsible.classList.add('hide');
-                return;
-            }
-
-            similarCollapsible.classList.remove('hide');
-            let html = '';
-            html += cardBuilder.getCardsHtml({
-                items: result.Items,
-                shape: 'autooverflow',
-                showParentTitle: item.Type == 'MusicAlbum',
-                centerText: true,
-                showTitle: true,
-                context: context,
-                lazy: true,
-                showDetailsMenu: true,
-                coverImage: item.Type == 'MusicAlbum' || item.Type == 'MusicArtist',
-                overlayPlayButton: true,
-                overlayText: false,
-                showYear: item.Type === 'Movie' || item.Type === 'Trailer' || item.Type === 'Series'
-            });
-            const similarContent = similarCollapsible.querySelector('.similarContent');
-            similarContent.innerHTML = html;
-            imageLoader.lazyChildren(similarContent);
-        });
-    }
-}
-
 function renderSeriesAirTime(page, item) {
     const seriesAirTime = page.querySelector('#seriesAirTime');
     if (item.Type != 'Series') {
@@ -2184,6 +2135,7 @@ export default function (view, params) {
             libraryMenu.setTransparentMenu(false);
         });
         view.addEventListener('viewdestroy', function () {
+            disposeSimilarItems(view);
             currentItem = null;
             self._currentPlaybackMediaSources = null;
             self.currentRecordingFields = null;
