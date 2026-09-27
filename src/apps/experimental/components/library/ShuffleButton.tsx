@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-27.
 import { ItemSortBy } from '@jellyfin/sdk/lib/generated-client/models/item-sort-by';
 import React, { FC, useCallback } from 'react';
 import Shuffle from '@mui/icons-material/Shuffle';
@@ -39,7 +40,7 @@ const ShuffleButton: FC<ShuffleButtonProps> = ({
                     ...getFiltersQuery(viewType, libraryViewSettings),
                     SortBy: [ItemSortBy.Random]
                 }
-            }).catch(err => {
+            }).catch((err: unknown) => {
                 console.error('[ShuffleButton] failed to play', err);
             });
         }

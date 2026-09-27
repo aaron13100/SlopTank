@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09, 2026-09-27.
 import { BaseItemKind } from '@jellyfin/sdk/lib/generated-client/models/base-item-kind';
 import { ItemSortBy } from '@jellyfin/sdk/lib/generated-client/models/item-sort-by';
 import { getItemsApi } from '@jellyfin/sdk/lib/utils/api/items-api';
@@ -147,7 +147,7 @@ function addToPlaylist(dlg: DialogElement, id: string) {
         playbackManager.queue({
             serverId: currentServerId,
             ids: itemIds.split(',')
-        }).catch(err => {
+        }).catch((err: unknown) => {
             console.error('[PlaylistEditor] failed to add to queue', err);
         });
         dlg.submitted = true;
@@ -370,9 +370,9 @@ function centerFocus(elem: HTMLDivElement | null, horiz: boolean, on: boolean) {
 
     loadDynamicModule(() => import('../../scripts/scrollHelper'),
         '../../scripts/scrollHelper').then((scrollHelper) => {
-            const fn = on ? 'on' : 'off';
-            scrollHelper.centerFocus[fn](elem, horiz);
-        })
+        const fn = on ? 'on' : 'off';
+        scrollHelper.centerFocus[fn](elem, horiz);
+    })
         .catch(err => {
             console.error('[PlaylistEditor] failed to load scroll helper', err);
         });

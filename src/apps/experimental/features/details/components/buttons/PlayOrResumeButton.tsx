@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-27.
 import React, { FC, useCallback, useMemo } from 'react';
 import IconButton from '@mui/material/IconButton';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -60,7 +61,7 @@ const PlayOrResumeButton: FC<PlayOrResumeButtonProps> = ({
             );
             playbackManager.play({
                 items: [channel]
-            }).catch(err => {
+            }).catch((err: unknown) => {
                 console.error('[PlayOrResumeButton] failed to play', err);
             });
             return;
@@ -69,7 +70,7 @@ const PlayOrResumeButton: FC<PlayOrResumeButtonProps> = ({
         playbackManager.play({
             items: [item],
             ...playOptions
-        }).catch(err => {
+        }).catch((err: unknown) => {
             console.error('[PlayOrResumeButton] failed to play', err);
         });
     }, [apiContext, item, playOptions, queryClient]);

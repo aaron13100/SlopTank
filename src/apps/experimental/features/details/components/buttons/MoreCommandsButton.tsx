@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-27.
 import React, { FC, useCallback, useEffect, useMemo, useState } from 'react';
 import IconButton from '@mui/material/IconButton';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -169,7 +170,7 @@ const MoreCommandsButton: FC<MoreCommandsButtonProps> = ({
                             item: item,
                             items: items || [],
                             serverId: item?.ServerId
-                        }).catch(err => {
+                        }).catch((err: unknown) => {
                             console.error('[MoreCommandsButton] failed to play', err);
                         });
                     } else if (result.command === 'queueallfromhere') {
@@ -178,7 +179,7 @@ const MoreCommandsButton: FC<MoreCommandsButtonProps> = ({
                             items: items || [],
                             serverId: item?.ServerId,
                             queue: true
-                        }).catch(err => {
+                        }).catch((err: unknown) => {
                             console.error('[MoreCommandsButton] failed to play', err);
                         });
                     } else if (result.deleted) {

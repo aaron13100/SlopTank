@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-27.
 import React, { FC, useCallback } from 'react';
 import Button from '@mui/material/Button';
 import PlayArrow from '@mui/icons-material/PlayArrow';
@@ -35,7 +36,7 @@ const PlayAllButton: FC<PlayAllButtonProps> = ({
                     SortBy: [libraryViewSettings.SortBy],
                     SortOrder: [libraryViewSettings.SortOrder]
                 }
-            }).catch(err => {
+            }).catch((err: unknown) => {
                 console.error('[PlayAllButton] failed to play', err);
             });
         } else {
@@ -48,7 +49,7 @@ const PlayAllButton: FC<PlayAllButtonProps> = ({
                     SortBy: [libraryViewSettings.SortBy],
                     SortOrder: [libraryViewSettings.SortOrder]
                 }
-            }).catch(err => {
+            }).catch((err: unknown) => {
                 console.error('[PlayAllButton] failed to play', err);
             });
         }
