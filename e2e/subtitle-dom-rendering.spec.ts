@@ -307,6 +307,38 @@ test('Document PiP keeps custom subtitles and live appearance controls', async (
     await expect(page.locator('.videoPlayerContainer video')).toBeVisible();
 });
 
+// @covers subtitle_controls.track_menu.document_pip_custom_renderer_and_live_appearance
+test('Document PiP subtitle appearance close button stays transparent over the dark panel', async ({ page, config }) => {
+    await login(page, config.username, config.password);
+    const video = await startPlayback(page, config);
+    const mainSubtitleLine = page.locator(
+        '.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)');
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
+    await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
+    await parkOnCue(video, mainSubtitleLine);
+
+    await openSizeOverlay(page);
+    const normalCloseBackground = await page.locator('.subtitleSizer-closeButton')
+        .evaluate(button => getComputedStyle(button).backgroundColor);
+    expect(normalCloseBackground).toBe('rgba(0, 0, 0, 0)');
+    await page.keyboard.press('Escape');
+
+    const pipPagePromise = page.context().waitForEvent('page');
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnPip');
+    const pipPage = await pipPagePromise;
+    await pipPage.locator('.documentPipSubtitleAppearanceButton').click();
+
+    const closeButton = pipPage.locator('.subtitleSizer-closeButton');
+    await expect(closeButton).toBeVisible();
+    const closeStyle = await closeButton.evaluate(button => ({
+        background: getComputedStyle(button).backgroundColor,
+        classes: button.className
+    }));
+
+    expect(closeStyle.classes.split(/\s+/)).toContain('paper-icon-button-light');
+    expect(closeStyle.background).toBe('rgba(0, 0, 0, 0)');
+});
+
 // @covers subtitle_controls.track_menu.sizer_applies_to_rendered_cues
 test('subtitle size applies live to real rendered cues', async ({ page, config }, testInfo) => {
     await login(page, config.username, config.password);
