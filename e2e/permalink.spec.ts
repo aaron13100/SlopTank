@@ -1,7 +1,8 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-24, 2026-07-31, 2026-08-01, 2026-08-03, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-24, 2026-07-31, 2026-08-01, 2026-08-03, 2026-09-09, 2026-09-28.
 import { expect, login, requireEpisodeItemId, requireNoProviderItemId, submitManualLogin, test } from './fixtures';
+import { loadScaledMs } from './load-scaled-bounds';
 
-test.setTimeout(600_000);
+test.setTimeout(loadScaledMs(600_000));
 
 /**
  * Budgets for the server round trips these tests wait on.
@@ -20,17 +21,17 @@ test.setTimeout(600_000);
  * "nothing was copied" or "never navigated" for an operation that was simply
  * still running, which hides real regressions behind a latency budget.
  */
-const ENSURE_TIMEOUT_MS = 90_000;
+const ENSURE_TIMEOUT_MS = loadScaledMs(90_000);
 
 /** Opening an info link: discovery plus details redemption. */
-const RESOLVE_TIMEOUT_MS = 150_000;
+const RESOLVE_TIMEOUT_MS = loadScaledMs(150_000);
 
 /**
  * Opening a play link, which is heavier than an info link: discovery, the
  * playback-lease exchange and the playback redemption, and the redemption
  * additionally materializes and hashes the immutable snapshot.
  */
-const PLAYBACK_RESOLVE_TIMEOUT_MS = 300_000;
+const PLAYBACK_RESOLVE_TIMEOUT_MS = loadScaledMs(300_000);
 
 /**
  * Landing on the video route only means resolution finished; the player still
@@ -47,7 +48,7 @@ const PLAYBACK_RESOLVE_TIMEOUT_MS = 300_000;
  * failure this whole file exists to detect. Sized the same way as the round
  * trip budgets above: generous enough that only a real stall trips it.
  */
-const PLAYER_READY_TIMEOUT_MS = 60_000;
+const PLAYER_READY_TIMEOUT_MS = loadScaledMs(60_000);
 
 /**
  * Waits for a permalink route to reach its target, using the Retry affordance
@@ -237,11 +238,11 @@ async function clickItemMenuCommand(
     });
 
     const moreCommands = page.locator('.btnMoreCommands');
-    await expect(moreCommands).toBeVisible({ timeout: 20_000 });
+    await expect(moreCommands).toBeVisible({ timeout: loadScaledMs(20_000) });
     await moreCommands.click();
 
     const command = page.locator(`[data-id="${commandId}"]`);
-    await expect(command).toBeVisible({ timeout: 10_000 });
+    await expect(command).toBeVisible({ timeout: loadScaledMs(10_000) });
     await command.click();
 }
 
@@ -318,7 +319,7 @@ test.describe('pretty permalinks (docs/internal/permalink-url-design.md)', () =>
         await page.goto(`/${UNMINTED_IMDB_ID}`);
 
         const message = page.locator('#permalinkMessagePage');
-        await expect(message).toBeVisible({ timeout: 20_000 });
+        await expect(message).toBeVisible({ timeout: loadScaledMs(20_000) });
         // The distinct EvidenceRequired state, not the generic resolve error:
         // this is what a bundle that loses typed failures collapses away.
         await expect(message).toContainText('Open the item on this server and use Copy Link once');
@@ -331,7 +332,7 @@ test.describe('pretty permalinks (docs/internal/permalink-url-design.md)', () =>
 
         await page.goto(`/${UNKNOWN_SLOPTANK_ID}`);
 
-        await expect(page.locator('#permalinkMessagePage')).toBeVisible({ timeout: 20_000 });
+        await expect(page.locator('#permalinkMessagePage')).toBeVisible({ timeout: loadScaledMs(20_000) });
         await expect(page.locator('#permalinkMessagePage')).toContainText(UNKNOWN_SLOPTANK_ID);
     });
 
@@ -340,7 +341,7 @@ test.describe('pretty permalinks (docs/internal/permalink-url-design.md)', () =>
 
         await page.goto('/not-a-real-permalink');
 
-        await expect(page.locator('#fallbackPage')).toBeVisible({ timeout: 20_000 });
+        await expect(page.locator('#fallbackPage')).toBeVisible({ timeout: loadScaledMs(20_000) });
     });
 
     test('a previously shared #/details?...&autoplay=1 link still starts playback (regression: autoplay was silently dropped when the video route became the durable permalink)', async ({ page, config }) => {
@@ -394,7 +395,7 @@ test.describe('signed-out access (design section 4.3)', () => {
         // ConnectionRequired encodes the permalink path into the login url
         // before any resolution is attempted, so a signed-out visitor never
         // sees a bare "not found" for a link they simply have not opened yet.
-        await page.waitForURL(/\/web\/login\?/, { timeout: 20_000 });
+        await page.waitForURL(/\/web\/login\?/, { timeout: loadScaledMs(20_000) });
         expect(new URL(page.url()).search).toContain(encodeURIComponent(`/${alias}`));
 
         await submitManualLogin(page, config.username, config.password);
@@ -442,7 +443,7 @@ test.describe('share and copy links (design section 5): ensure runs before any U
 
         // Held mid-flight: the command must already be showing progress rather
         // than leaving the UI looking like nothing happened.
-        await expect(page.locator('.docspinner.mdlSpinnerActive')).toBeVisible({ timeout: 10_000 });
+        await expect(page.locator('.docspinner.mdlSpinnerActive')).toBeVisible({ timeout: loadScaledMs(10_000) });
         // ...and it must still be showing it a beat later, not flash once.
         await expect(page.locator('.toastContainer .toast')).toHaveCount(0);
 

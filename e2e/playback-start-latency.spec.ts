@@ -1,7 +1,8 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-02, 2026-09-08, 2026-09-09, 2026-09-10.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-02, 2026-09-08, 2026-09-09, 2026-09-10, 2026-09-28.
 import { VIDEO_ROUTE, WATCH_PERMALINK_ROUTE, expect, login, test } from './fixtures';
+import { loadScaledMs } from './load-scaled-bounds';
 
-test.setTimeout(300_000);
+test.setTimeout(loadScaledMs(300_000));
 
 /**
  * Real-browser latency coverage for the two ways a video actually gets played:
@@ -53,7 +54,7 @@ const PLAYBACK_START_BUDGET_MS = 10_000;
  * full media scan on the play path. So the wait is generous and the ASSERTION
  * is strict, and a failure gets to name the real number.
  */
-const PLAYBACK_START_CEILING_MS = 240_000;
+const PLAYBACK_START_CEILING_MS = loadScaledMs(240_000);
 
 /**
  * How long minting a watch link may take before the test gives up on it.
@@ -64,7 +65,7 @@ const PLAYBACK_START_CEILING_MS = 240_000;
  * real click does not pay it. This ceiling only stops the test hanging forever
  * on a library that has never been precomputed.
  */
-const MINT_TIMEOUT_MS = 900_000;
+const MINT_TIMEOUT_MS = loadScaledMs(900_000);
 
 interface PlaybackReport {
     ItemId: string;
@@ -207,7 +208,7 @@ async function withServerPlayback<T>(
             const response = await page.context().request.post(playback.stoppedUrl, {
                 data: playback.report,
                 headers: playback.authorizationHeaders,
-                timeout: 30_000
+                timeout: loadScaledMs(30_000)
             });
             if (!response.ok()) {
                 throw new Error(
@@ -264,10 +265,10 @@ test.describe('playback start latency', () => {
 
         for (const itemId of latencyItemIds(config.itemId)) {
             await page.goto(`/web/details?id=${itemId}&serverId=${config.serverId}`);
-            await page.waitForURL((url) => url.pathname !== '/web/details', { timeout: 90_000 });
+            await page.waitForURL((url) => url.pathname !== '/web/details', { timeout: loadScaledMs(90_000) });
 
             const playButton = page.locator('.mainDetailButtons .btnPlay:visible');
-            await expect(playButton).toBeVisible({ timeout: 60_000 });
+            await expect(playButton).toBeVisible({ timeout: loadScaledMs(60_000) });
 
             const elapsedMs = await withServerPlayback(page, itemId, async () => {
                 const started = nowMs();
@@ -295,7 +296,7 @@ test.describe('playback start latency', () => {
             // exactly that string is the shared-link path rather than a
             // reconstruction of it.
             await page.goto(`/web/details?id=${itemId}&serverId=${config.serverId}`);
-            await page.waitForURL((url) => url.pathname !== '/web/details', { timeout: 90_000 });
+            await page.waitForURL((url) => url.pathname !== '/web/details', { timeout: loadScaledMs(90_000) });
 
             // Minting is a request the page issues while playback starts, and
             // it must be allowed to finish. Navigating away cancels it and
@@ -311,7 +312,7 @@ test.describe('playback start latency', () => {
             );
             const watchUrl = await withServerPlayback(page, itemId, async () => {
                 await page.locator('.mainDetailButtons .btnPlay:visible').click();
-                await page.waitForURL(WATCH_PERMALINK_ROUTE, { timeout: 180_000 });
+                await page.waitForURL(WATCH_PERMALINK_ROUTE, { timeout: loadScaledMs(180_000) });
                 await waitUntilPlaying(page);
                 await minted;
                 return page.url();

@@ -1,26 +1,6 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-23, 2026-08-01, 2026-09-09, 2026-09-15, 2026-09-16, 2026-09-18, 2026-09-24.
-import os from 'node:os';
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-23, 2026-08-01, 2026-09-09, 2026-09-15, 2026-09-16, 2026-09-18, 2026-09-24, 2026-09-28.
 import { defineConfig } from '@playwright/test';
-
-/**
- * Scale a quiet-host wall-clock bound by measured machine contention.
- *
- * This suite runs on the live 2-core host next to Jellyfin, nightly encodes
- * and queue work, where a 1-minute load average far above the core count is
- * the normal operating condition, not an anomaly to wait out. A fixed 30s
- * test timeout failed every spec in its login beforeEach at load ~70
- * (2026-09-24). Same formula as the queue runner's
- * qr_resolve_load_scaled_deadline and tests/test_encode_entry_point.py
- * _load_scaled_timeout: base x clamp(load1 / ncpu, 1x, scaleMax).
- * @param baseMs The bound that holds on an idle host.
- * @param scaleMax Upper limit on the multiplier.
- * @returns The scaled bound in milliseconds (the base where load is not reported, e.g. Windows).
- */
-function loadScaledMs(baseMs: number, scaleMax = 20): number {
-    const [ load1 ] = os.loadavg();
-    const perCore = load1 / (os.cpus().length || 1);
-    return Math.round(baseMs * Math.max(1, Math.min(perCore, scaleMax)));
-}
+import { loadScaledMs } from './e2e/load-scaled-bounds';
 
 /**
  * E2E config for real-browser regression coverage of behavior the legacy
