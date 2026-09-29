@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-23.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-23, 2026-09-29.
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { EventType } from 'constants/eventType';
@@ -28,32 +28,30 @@ describe('PersistentTitleControl', () => {
         document.body.innerHTML = '';
     });
 
-    it('shows the composed title once the OSD auto-hides', () => {
+    it('shows the composed title while the OSD controls are visible', () => {
         const { element } = createHarness();
 
         showTitle('Brooklyn Nine-Nine - S2:E3 - The Jimmy Jab Games');
-        expect(element.classList.contains('hide')).toBe(true);
-
-        showOsd(false);
+        showOsd(true);
         expect(element.classList.contains('hide')).toBe(false);
         expect(element.textContent).toBe('Brooklyn Nine-Nine - S2:E3 - The Jimmy Jab Games');
     });
 
-    it('hides again while the OSD is up, showing only one title on screen', () => {
+    it('hides when the OSD hides, so the name never outlives the controls', () => {
         const { element } = createHarness();
 
         showTitle('The Breakfast Club (1985)');
-        showOsd(false);
+        showOsd(true);
         expect(element.classList.contains('hide')).toBe(false);
 
-        showOsd(true);
+        showOsd(false);
         expect(element.classList.contains('hide')).toBe(true);
     });
 
-    it('never renders with an empty title, even while the OSD is hidden', () => {
+    it('never renders with an empty title, even while the OSD is visible', () => {
         const { element } = createHarness();
 
-        showOsd(false);
+        showOsd(true);
         expect(element.classList.contains('hide')).toBe(true);
 
         showTitle('');
@@ -66,7 +64,7 @@ describe('PersistentTitleControl', () => {
         const { element } = createHarness();
 
         showTitle('Brooklyn Nine-Nine - S2:E3 - The Jimmy Jab Games');
-        showOsd(false);
+        showOsd(true);
         showTitle('Brooklyn Nine-Nine - S2:E4 - Halloween II');
         expect(element.textContent).toBe('Brooklyn Nine-Nine - S2:E4 - Halloween II');
         expect(element.classList.contains('hide')).toBe(false);
@@ -75,7 +73,7 @@ describe('PersistentTitleControl', () => {
     it('stops listening after destroy, leaving no listener on the document', () => {
         const { control, element } = createHarness();
 
-        showOsd(false);
+        showOsd(true);
         showTitle('The Breakfast Club (1985)');
         expect(element.classList.contains('hide')).toBe(false);
 

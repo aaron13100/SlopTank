@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-24, 2026-07-31, 2026-08-01, 2026-08-09, 2026-08-12, 2026-09-02, 2026-09-09, 2026-09-14, 2026-09-15.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-24, 2026-07-31, 2026-08-01, 2026-08-09, 2026-08-12, 2026-09-02, 2026-09-09, 2026-09-14, 2026-09-15, 2026-09-29.
 import { test as base, expect } from '@playwright/test';
 
 import permalinkGrammar from '../src/components/router/permalink-grammar-v1.json';
@@ -375,6 +375,20 @@ export async function parkOnCue(
 export const test = base.extend<{ config: E2eConfig }>({
     page: async ({ page }, use) => {
         await page.addInitScript(() => {
+            // Development-build chrome that never exists in production: the
+            // webpack dev-server error overlay, and the TanStack Query
+            // devtools badge (.tsqd-parent-container, a full-viewport SVG
+            // circle anchored bottom-right). The badge is invisible to the
+            // assertions but intercepts pointer events over the bottom-right
+            // corner of the OSD, where the fullscreen button lives (observed
+            // 2026-09-29: every click on .btnFullscreen was swallowed by its
+            // <circle>), and lands in screenshots as something a viewer of
+            // the real client never sees. Hidden through CSS rather than DOM
+            // removal: removing the node makes React re-mount the devtools
+            // forever, a mutation loop that starves the page under test.
+            const style = document.createElement('style');
+            style.textContent = '.tsqd-parent-container { display: none !important; }';
+            document.addEventListener('DOMContentLoaded', () => document.head.append(style), { once: true });
             const removeWebpackOverlay = () => {
                 document.querySelector('#webpack-dev-server-client-overlay')?.remove();
             };

@@ -2,8 +2,8 @@
   "features": [
     {
       "id": "video.persistent_title",
-      "title": "Persistent now-playing title label",
-      "description": "The now-playing title stays readable after the OSD fades, follows episode transitions, and never lingers after playback ends.",
+      "title": "Now-playing title label that tracks the player controls",
+      "description": "The now-playing title is on screen only while the player controls are visible, windowed and full screen, follows episode transitions, and never lingers after playback ends.",
       "owner": "web-client",
       "kind": "user-action",
       "files": [
@@ -13,11 +13,20 @@
       "added": "2026-09-12",
       "paths": [
         {
-          "id": "video.persistent_title.visible_while_the_osd_is_hidden",
+          "id": "video.persistent_title.tracks_osd_visibility",
           "type": "happy",
           "requiredAssertions": [
-            "title_visible_after_osd_fades",
-            "title_hides_when_osd_returns"
+            "label_visible_while_controls_shown",
+            "label_hidden_after_controls_auto_hide",
+            "label_returns_with_controls"
+          ]
+        },
+        {
+          "id": "video.persistent_title.tracks_osd_visibility_fullscreen",
+          "type": "happy",
+          "requiredAssertions": [
+            "label_hidden_in_fullscreen_with_controls_hidden",
+            "label_returns_with_controls_in_fullscreen"
           ]
         },
         {
@@ -44,11 +53,11 @@
           ]
         },
         {
-          "id": "video.persistent_title.osd_visible_suppresses_duplicate",
+          "id": "video.persistent_title.outlives_controls",
           "type": "unhappy",
           "failureClass": "domain",
           "requiredAssertions": [
-            "only_one_title_on_screen"
+            "label_hidden_when_controls_hide_in_windowed_and_fullscreen"
           ]
         }
       ]

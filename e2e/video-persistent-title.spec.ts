@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-23.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-23, 2026-09-29.
 import { expect, type Page } from '@playwright/test';
 
 import {
@@ -8,26 +8,42 @@ import {
     requireEpisodeItemId,
     test,
     VIDEO_ROUTE,
+    wakeOsd,
     type OnScreenState
 } from './fixtures';
 
 test.setTimeout(240_000);
 
 /**
- * The always-visible now-playing label on the video player.
+ * The now-playing title label on the video player.
  *
- * The viewer asked (2026-09-12, t_260912_190014_995) for the title, season and
- * episode number to stay on screen the whole time, Netflix style, instead of
- * vanishing with the OSD. The label is decoration: `pointer-events: none`,
- * never focusable, `aria-hidden`, hidden while the OSD is up (the OSD already
- * shows the same title, and two titles on screen is the defect).
+ * The owner asked (2026-09-28, t_260928_225116_193), reversing the earlier
+ * 2026-09-12 "Netflix style" always-on request: the label must be visible
+ * ONLY while the player controls (OSD) are visible. When the controls
+ * auto-hide, windowed or in full screen, the label hides with them, and a
+ * mouse move brings both back together. Reported symptom: the episode name
+ * stayed on screen in full screen after the controls faded.
+ *
+ * The label is decoration: `pointer-events: none`, never focusable,
+ * `aria-hidden`. Its visibility is driven by the same SHOW_VIDEO_OSD event
+ * the OSD chrome itself fires (osdVisibility.js), so it cannot drift from
+ * the controls again.
  */
+
+/**
+ * The scope every player-DOM read in this spec uses: a next-track transition
+ * routes through a fresh video view while the old one stays mounted but
+ * hidden (viewManager adds .hide to it), and reads scoped any wider match
+ * both copies -- a strict-mode violation on locators and a wrong answer from
+ * querySelector.
+ */
+const ACTIVE_PAGE = '.page:not(.hide)';
 
 // Scoped to the view that is on screen: a next-track transition routes
 // through a fresh video view while the old one stays mounted but hidden
 // (viewManager adds .hide to it), and the hidden copy's label must never be
 // mistaken for the one the viewer is looking at.
-const PERSISTENT_TITLE = '.page:not(.hide) .persistentVideoTitle';
+const PERSISTENT_TITLE = `${ACTIVE_PAGE} .persistentVideoTitle`;
 
 /** Everything the assertions need about the label's rendered state. */
 interface PersistentTitleState {
@@ -66,7 +82,7 @@ async function startPlayback(page: Page, itemId: string, serverId: string) {
  * header and the VIDEO_TITLE_CHANGE event the persistent label consumes, so
  * equality between the two proves the label did not grow a second composer.
  * textContent works while the header is faded, and it fades with the OSD
- * after ~3 idle seconds, so no OSD waking is needed here.
+ * after ~3 idle seconds, so the OSD is woken here to read it.
  */
 async function readHeaderTitle(page: Page): Promise<string> {
     await expect
@@ -93,13 +109,23 @@ async function waitForHeaderTitleChange(page: Page, previous: string): Promise<s
     return (await page.locator('.skinHeader .pageTitle').textContent())?.trim() || '';
 }
 
-async function persistentTitleState(page: Page): Promise<PersistentTitleState> {
-    return page.evaluate((selector: string) => {
-        const element = document.querySelector(selector);
+async function persistentTitleState(page: Page): Promise<PersistentTitleState & { osdVisible: boolean }> {
+    return page.evaluate((selectors: [ string, string ]) => {
+        const [ titleSelector, pageScope ] = selectors;
+        // The controls are judged by the same state osdVisibility sets: the
+        // 'hide' class (added after the fade-out transition) and computed
+        // display. Read in-page and scoped, because an unscoped selector
+        // matches the hidden previous-episode view too.
+        const osdBottom = document.querySelector(`${pageScope} .videoOsdBottom-maincontrols`);
+        const osdVisible = !!osdBottom
+            && !osdBottom.classList.contains('hide')
+            && window.getComputedStyle(osdBottom).display !== 'none';
+
+        const element = document.querySelector(titleSelector);
         if (!element) {
             return {
                 exists: false, text: '', hiddenByClass: false, display: '',
-                visibility: '', pointerEvents: '', ariaHidden: null
+                visibility: '', pointerEvents: '', ariaHidden: null, osdVisible
             };
         }
 
@@ -111,9 +137,10 @@ async function persistentTitleState(page: Page): Promise<PersistentTitleState> {
             display: style.display,
             visibility: style.visibility,
             pointerEvents: style.pointerEvents,
-            ariaHidden: element.getAttribute('aria-hidden')
+            ariaHidden: element.getAttribute('aria-hidden'),
+            osdVisible
         };
-    }, PERSISTENT_TITLE);
+    }, [ PERSISTENT_TITLE, ACTIVE_PAGE ]);
 }
 
 /**
@@ -128,7 +155,10 @@ async function waitUntilOsdHidden(page: Page): Promise<void> {
     await expect
         .poll(async () => page.evaluate(() => {
             let opacity = 1;
-            let node: Element | null = document.querySelector('.videoOsdBottom-maincontrols');
+            // Scoped to the on-screen view: after a next-track transition the
+            // previous episode's view stays mounted hidden, and the first
+            // unscoped match can be that stale copy.
+            let node: Element | null = document.querySelector('.page:not(.hide) .videoOsdBottom-maincontrols');
             while (node) {
                 const style = window.getComputedStyle(node);
                 if (style.display === 'none' || style.visibility === 'hidden') return 0;
@@ -143,54 +173,72 @@ async function waitUntilOsdHidden(page: Page): Promise<void> {
         .toBeLessThan(0.05);
 }
 
+/** Wait until the bottom OSD controls of the on-screen view are up again. */
+async function waitUntilOsdShown(page: Page): Promise<void> {
+    await expect
+        .poll(() => persistentTitleState(page).then(state => state.osdVisible), {
+            timeout: 15_000,
+            message: 'expected the OSD controls to come back after the pointer moves'
+        })
+        .toBe(true);
+}
+
+/** Wait until the document is (or is no longer) in element fullscreen. */
+async function waitForFullscreen(page: Page, fullscreen: boolean): Promise<void> {
+    await expect
+        .poll(() => page.evaluate(() => document.fullscreenElement !== null), {
+            timeout: 20_000,
+            message: `expected the document to ${fullscreen ? 'enter' : 'leave'} fullscreen`
+        })
+        .toBe(fullscreen);
+}
+
 /**
  * Expect the label on screen with exactly the expected string, and placed at
- * the bottom-left where it cannot sit under the centered subtitle column.
+ * the bottom-left where it cannot sit under the centered subtitle column,
+ * while the OSD controls are up beside it.
  *
- * One atomic predicate, retried as a whole: the app can fire a stray,
- * input-free showOsd seconds after a control press (observed ~2s after a
- * next-track press), and the label hides instantly inside that dispatch
- * while the OSD controls fade over 300ms. Splitting "state looks right"
- * from "on screen" into two reads lets a re-show slip between them.
+ * One atomic predicate, retried as a whole: the label's visibility now
+ * follows the OSD, so the OSD is held awake inside the poll (the
+ * revealOsdControl pattern) -- a poll that let the 3s idle timer hide the
+ * controls mid-read would fail on correct behavior. Splitting "state looks
+ * right" from "on screen" into two reads lets a hide slip between them.
  *
  * onScreenState() rather than toBeVisible(): USER reachability (the brief's
  * placement decision), not DOM presence.
  */
 async function expectPersistentTitleOnScreen(page: Page, expected: string) {
-    let last: { state: PersistentTitleState; screen: OnScreenState; video: { paused: boolean; currentTime: number } } | undefined;
+    let last: { state: PersistentTitleState & { osdVisible: boolean }; screen: OnScreenState } | undefined;
     try {
         await expect
             .poll(async () => {
-                const [state, screen, video] = await Promise.all([
+                await wakeOsd(page);
+                const [state, screen] = await Promise.all([
                     persistentTitleState(page),
-                    onScreenState(page, PERSISTENT_TITLE),
-                    page.evaluate(() => {
-                        const el = document.querySelector('video');
-                        return { paused: el ? el.paused : true, currentTime: el ? el.currentTime : -1 };
-                    })
+                    onScreenState(page, PERSISTENT_TITLE)
                 ]);
-                last = { state, screen, video };
+                last = { state, screen };
                 return state.exists && !state.hiddenByClass && state.text === expected
                     && state.display === 'block' && state.visibility === 'visible'
                     && state.pointerEvents === 'none' && state.ariaHidden === 'true'
+                    && state.osdVisible
                     && screen.insideViewport
                     && screen.rect !== null
                     && screen.rect.y + screen.rect.height >= screen.viewport.height * 0.9
                     && screen.rect.x < screen.viewport.width * 0.15;
             }, {
                 timeout: 30_000,
-                message: 'expected the persistent title on screen, bottom-left, with the composed title, once the OSD is hidden'
+                message: 'expected the persistent title on screen, bottom-left, with the composed title, while the OSD controls are visible'
             })
             .toBe(true);
     } catch (timeout) {
         // The poll message alone cannot say WHY the label never showed: the
         // captured last sample distinguishes a label defect (state/screen)
-        // from the app holding the OSD up or playback sitting paused.
+        // from the app holding the OSD down or hiding it.
         throw new Error( // allow-raw-error: test assertion failure detail, not production code
             'persistent title never reached the on-screen steady state; last sample:'
             + ` state=${JSON.stringify(last?.state)}`
-            + ` screen=${JSON.stringify(last?.screen)}`
-            + ` video=${JSON.stringify(last?.video)}`,
+            + ` screen=${JSON.stringify(last?.screen)}`,
             { cause: timeout as Error }
         );
     }
@@ -205,10 +253,25 @@ async function expectPersistentTitleOnScreen(page: Page, expected: string) {
     expect(screen.rect!.x).toBeLessThan(screen.viewport.width * 0.15);
 }
 
+/**
+ * Expect the label hidden from the viewer: the control class AND off screen.
+ *
+ * The class alone is an implementation detail; the second read proves the
+ * viewer cannot see it (a 0x0 box from display:none fails insideViewport).
+ */
 async function expectPersistentTitleHidden(page: Page, why: string) {
+    let last: { state: PersistentTitleState; screen: OnScreenState } | undefined;
     await expect
-        .poll(() => persistentTitleState(page), { timeout: 15_000, message: why })
-        .toMatchObject({ exists: true, hiddenByClass: true });
+        .poll(async () => {
+            const [state, screen] = await Promise.all([
+                persistentTitleState(page),
+                onScreenState(page, PERSISTENT_TITLE)
+            ]);
+            last = { state, screen };
+            return state.exists && state.hiddenByClass && !screen.insideViewport;
+        }, { timeout: 15_000, message: why })
+        .toBe(true);
+    expect(last!.screen.insideViewport, `on-screen while hidden: ${JSON.stringify(last!.screen)}`).toBe(false);
 }
 
 interface ItemDetails {
@@ -225,41 +288,13 @@ async function fetchItem(page: Page, itemId: string): Promise<ItemDetails> {
             ApiClient: {
                 getCurrentUserId(): string;
                 getItem(userId: string, itemId: string): Promise<Record<string, unknown>>;
-            };
+            }
         }).ApiClient;
         return api.getItem(api.getCurrentUserId(), id) as unknown as ItemDetails;
     }, itemId);
 }
 
-// @covers video.persistent_title.visible_while_the_osd_is_hidden
-// @covers video.persistent_title.osd_visible_suppresses_duplicate
-test('movie title stays on screen after the OSD fades and hides again when the OSD returns', async ({ page, config }) => {
-    await login(page, config.username, config.password);
-    await startPlayback(page, config.itemId, config.serverId);
-
-    const item = await fetchItem(page, config.itemId);
-    const title = await readHeaderTitle(page);
-    // The composed string must still name the movie, year included (the
-    // existing composer appends it, and the owner kept that).
-    expect(title).toContain(item.Name || '');
-    expect(title).toContain(`(${item.ProductionYear})`);
-
-    await waitUntilOsdHidden(page);
-    await expectPersistentTitleOnScreen(page, title);
-    await page.screenshot({ path: test.info().outputPath('movie-persistent-title.png') });
-
-    // Bringing the OSD back must take the label away: the OSD shows the same
-    // title, and two of them on screen is the defect.
-    await page.mouse.move(20, 20);
-    await page.mouse.move(120, 120);
-    await expect
-        .poll(async () => page.locator('.videoOsdBottom-maincontrols').isVisible(), {
-            timeout: 15_000,
-            message: 'expected the OSD controls to come back after the pointer moves'
-        })
-        .toBe(true);
-    await expectPersistentTitleHidden(page, 'expected the persistent title to hide while the OSD is up');
-
+async function leavePlayer(page: Page) {
     await page.goBack();
     await expect(page.locator('video')).toHaveCount(0);
     await expect
@@ -268,23 +303,100 @@ test('movie title stays on screen after the OSD fades and hides again when the O
             message: 'expected the persistent title off screen after leaving the player'
         })
         .toMatchObject({ insideViewport: false });
+}
+
+// @covers video.persistent_title.tracks_osd_visibility
+// @covers video.persistent_title.episode_string_and_episode_transition
+// @covers video.persistent_title.outlives_controls
+test('episode label shows with the controls, hides when they auto-hide, returns with a mouse move', async ({ page, config }) => {
+    const episodeId = requireEpisodeItemId();
+    await login(page, config.username, config.password);
+    await startPlayback(page, episodeId, config.serverId);
+
+    const episode = await fetchItem(page, episodeId);
+    const title = await readHeaderTitle(page);
+    // The full wanted shape: "Series - S1:E1 - Episode" (the composer may
+    // append a year; equality with the header title covers that tail).
+    expect(title).toContain(episode.SeriesName || '');
+    expect(title).toContain(`S${episode.ParentIndexNumber}:E${episode.IndexNumber}`);
+    expect(title).toContain(episode.Name || '');
+
+    // Controls up (a mouse move just woke them): the label is up with them.
+    await wakeOsd(page);
+    await waitUntilOsdShown(page);
+    await expectPersistentTitleOnScreen(page, title);
+    await page.screenshot({ path: test.info().outputPath('windowed-controls-shown.png') });
+
+    // Controls auto-hide while the viewer sits still: the label must go with
+    // them -- this is the 2026-09-28 owner report, windowed variant.
+    await waitUntilOsdHidden(page);
+    await expectPersistentTitleHidden(page, 'expected the persistent title to hide when the OSD auto-hides');
+    await page.screenshot({ path: test.info().outputPath('windowed-controls-hidden.png') });
+
+    // A mouse move brings the controls back; the label comes back with them.
+    await page.mouse.move(20, 20);
+    await page.mouse.move(120, 120);
+    await waitUntilOsdShown(page);
+    await expectPersistentTitleOnScreen(page, title);
+
+    await leavePlayer(page);
+});
+
+// @covers video.persistent_title.tracks_osd_visibility_fullscreen
+// @covers video.persistent_title.outlives_controls
+test('in full screen the label hides with the controls and returns with them', async ({ page, config }) => {
+    const episodeId = requireEpisodeItemId();
+    await login(page, config.username, config.password);
+    await startPlayback(page, episodeId, config.serverId);
+
+    const title = await readHeaderTitle(page);
+
+    // Enter real fullscreen through the control a viewer presses. The player
+    // fullscreens the document root (Screenfull.toggle()), which is why the
+    // fixed-position label stays rendered in fullscreen at all.
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnFullscreen');
+    await waitForFullscreen(page, true);
+
+    // Controls up in fullscreen: the label is up with them.
+    await wakeOsd(page);
+    await waitUntilOsdShown(page);
+    await expectPersistentTitleOnScreen(page, title);
+
+    // The owner-reported case: controls auto-hide in fullscreen, and the
+    // name must leave the screen with them, not stay over the movie.
+    await waitUntilOsdHidden(page);
+    await expectPersistentTitleHidden(page, 'expected the persistent title hidden in full screen once the controls hide');
+    await page.screenshot({ path: test.info().outputPath('fullscreen-controls-hidden.png') });
+
+    // A mouse move in fullscreen brings the controls back, and the label
+    // comes back with them.
+    await page.mouse.move(20, 20);
+    await page.mouse.move(120, 120);
+    await waitUntilOsdShown(page);
+    await expectPersistentTitleOnScreen(page, title);
+
+    // Leave fullscreen the way a viewer does: the same button, now the exit
+    // control (a bare Escape keypress is not mapped to exiting fullscreen
+    // by this player, observed 2026-09-29). Then leave the player.
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnFullscreen');
+    await waitForFullscreen(page, false);
+    await leavePlayer(page);
 });
 
 // @covers video.persistent_title.episode_string_and_episode_transition
-test('episode label names series, season/episode and title, and follows the next episode', async ({ page, config }) => {
+// @covers video.persistent_title.transition_clears_previous_title
+test('the label follows the next episode and never shows the previous episode over the new one', async ({ page, config }) => {
     const episodeId = requireEpisodeItemId();
     await login(page, config.username, config.password);
     await startPlayback(page, episodeId, config.serverId);
 
     const episode = await fetchItem(page, episodeId);
     const firstTitle = await readHeaderTitle(page);
-    // The full wanted shape: "Series - S1:E1 - Episode" (the composer may
-    // append a year; equality with the OSD title covers that tail).
     expect(firstTitle).toContain(episode.SeriesName || '');
     expect(firstTitle).toContain(`S${episode.ParentIndexNumber}:E${episode.IndexNumber}`);
-    expect(firstTitle).toContain(episode.Name || '');
 
-    await waitUntilOsdHidden(page);
+    await wakeOsd(page);
+    await waitUntilOsdShown(page);
     await expectPersistentTitleOnScreen(page, firstTitle);
 
     await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnNextTrack');
@@ -298,21 +410,17 @@ test('episode label names series, season/episode and title, and follows the next
     expect(nextTitle).toContain(episode.SeriesName || '');
     expect(nextTitle).not.toContain(episode.Name || '');
 
-    // Pressing the button legitimately brings the OSD back up, so the label
-    // is judged in the steady state: wait for the controls to idle-hide
-    // again, the same contract the movie test asserts on first appearance.
-    await waitUntilOsdHidden(page);
+    // Pressing the button legitimately keeps the OSD up, so the label is
+    // judged with the controls visible: it must carry the NEW episode's
+    // composed title and nothing of the old one.
     await expectPersistentTitleOnScreen(page, nextTitle);
-    await page.screenshot({ path: test.info().outputPath('episode-persistent-title.png') });
+    await page.screenshot({ path: test.info().outputPath('next-episode-controls-shown.png') });
 
-    await page.goBack();
-    await expect(page.locator('video')).toHaveCount(0);
-    await expect
-        .poll(() => onScreenState(page, PERSISTENT_TITLE), {
-            timeout: 20_000,
-            message: 'expected the persistent title off screen after leaving the player'
-        })
-        .toMatchObject({ insideViewport: false });
+    // And when the controls idle-hide again, the label goes with them.
+    await waitUntilOsdHidden(page);
+    await expectPersistentTitleHidden(page, 'expected the persistent title to hide when the OSD auto-hides after the episode transition');
+
+    await leavePlayer(page);
 });
 
 // @covers video.persistent_title.gone_when_playback_ends
@@ -335,6 +443,16 @@ test('the label is gone when playback ends on its own', async ({ page, config })
         })
         .toBe(true);
 
+    // The movie keeps its composed shape (name plus year) and the same
+    // controls-coupled visibility before the ending is reached.
+    const movie = await fetchItem(page, config.itemId);
+    const title = await readHeaderTitle(page);
+    expect(title).toContain(movie.Name || '');
+    expect(title).toContain(`(${movie.ProductionYear})`);
+    await wakeOsd(page);
+    await waitUntilOsdShown(page);
+    await expectPersistentTitleOnScreen(page, title);
+
     await expect
         .poll(() => video.evaluate((element: HTMLVideoElement) => element.duration), {
             timeout: 20_000,
@@ -350,7 +468,8 @@ test('the label is gone when playback ends on its own', async ({ page, config })
     // nothing of the label left on screen.
     await expect
         .poll(() => page.url(), { timeout: 60_000, message: 'expected the app to leave the player when playback ends' })
-        .not.toMatch(VIDEO_ROUTE);
+        .not
+        .toMatch(VIDEO_ROUTE);
     await expect
         .poll(() => onScreenState(page, PERSISTENT_TITLE), {
             timeout: 20_000,
