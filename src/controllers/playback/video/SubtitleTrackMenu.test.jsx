@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-25, 2026-07-26, 2026-09-09, 2026-09-25, 2026-09-27.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-25, 2026-07-26, 2026-09-09, 2026-09-25, 2026-09-27, 2026-09-29.
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PropTypes from 'prop-types';
 import React, { useEffect, useRef } from 'react';
@@ -33,11 +33,21 @@ MenuHarness.propTypes = {
  * object exercised through the same preview API contract the HTML video
  * player implements, recording each call's effect on its own state.
  */
+/**
+ * @param withOffset - Offset capability of the playback adapter: false (no
+ *   offset support at all), true (offsets fully usable on the active track)
+ *   or 'burnedIn' (the player supports offsets but the active track's
+ *   rendering path cannot take one).
+ * @param subtitleIndex - Stream index the adapter reports as the active
+ *   subtitle track; -1 plays with subtitles Off.
+ */
 function createHarness({
     selectedIds,
     textSize = '',
     playerKind = 'local',
-    withSecondary = false
+    withSecondary = false,
+    withOffset = false,
+    subtitleIndex = 3
 }) {
     let appearanceSettings = { textSize, verticalPosition: -5 };
     let liveApplyCount = 0;
@@ -75,14 +85,21 @@ function createHarness({
         }
     };
 
+    const offsetState = {
+        supported: withOffset !== false,
+        canHandle: withOffset === true,
+        enableShowingCalls: []
+    };
     const playback = {
         secondarySelections: [],
         subtitleSelections: [],
+        canHandleOffsetOnCurrentSubtitle: () => offsetState.canHandle,
+        enableShowingSubtitleOffset: p => offsetState.enableShowingCalls.push(p),
         getSubtitleStream: (_, index) => [
             { Codec: 'srt', DeliveryMethod: 'External', DisplayTitle: 'English', Index: 3 },
             { Codec: 'srt', DeliveryMethod: 'External', DisplayTitle: 'French', Index: 4 }
         ].find(stream => stream.Index === index),
-        getSubtitleStreamIndex: () => 3,
+        getSubtitleStreamIndex: () => subtitleIndex,
         getSecondarySubtitleStreamIndex: () => -1,
         playerHasSecondarySubtitleSupport: () => withSecondary,
         secondarySubtitleTracks: () => withSecondary ?
@@ -93,6 +110,7 @@ function createHarness({
         subtitleTracks: () => [
             { Codec: 'srt', DeliveryMethod: 'External', DisplayTitle: 'English', Index: 3 }
         ],
+        supportSubtitleOffset: () => offsetState.supported,
         trackHasSecondarySubtitleSupport: () => withSecondary
     };
     const settings = {
@@ -129,6 +147,7 @@ function createHarness({
         getLiveApplyCount: () => liveApplyCount,
         getResetIdleCount: () => resetIdleCount,
         getToggleSubtitleSyncCount: () => toggleSubtitleSyncCount,
+        offsetState,
         options,
         playback,
         player,
@@ -292,6 +311,70 @@ describe('SubtitleTrackMenu', () => {
         ]);
         expect(harness.actionSheet.calls[1].title).toBe('SecondarySubtitles');
         expect(harness.playback.secondarySelections).toEqual([ 4 ]);
+    });
+
+    /**
+     * Owner decision 2026-09-27: the subtitle offset entry belongs on this
+     * Subtitles (CC) menu, next to appearance, where the rest of the subtitle
+     * controls already live -- it used to sit behind the gear menu instead.
+     * Selecting it must drive the exact same overlay path the gear entry
+     * drove: tell the player to show offsets, then open the sync overlay.
+     */
+    it('lists Subtitle Offset right after appearance and opens the sync overlay', async () => {
+        const harness = createHarness({
+            selectedIds: [ 'subtitleoffset' ],
+            withSecondary: true,
+            withOffset: true
+        });
+        render(<MenuHarness options={harness.options} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }));
+        await waitFor(() => expect(harness.actionSheet.calls).toHaveLength(1));
+
+        expect(harness.actionSheet.calls[0].items.map(item => item.name)).toEqual([
+            'HeaderSubtitleAppearance',
+            'SubtitleOffset',
+            'SecondarySubtitles',
+            'Off',
+            'English'
+        ]);
+
+        expect(harness.offsetState.enableShowingCalls).toEqual([ harness.player ]);
+        expect(harness.getToggleSubtitleSyncCount()).toBe(1);
+        expect(harness.toggleSubtitleSyncActions).toEqual([ undefined ]);
+    });
+
+    it('hides Subtitle Offset while subtitles are Off', async () => {
+        const harness = createHarness({
+            selectedIds: [ undefined ],
+            subtitleIndex: -1,
+            withOffset: true
+        });
+        render(<MenuHarness options={harness.options} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }));
+        await waitFor(() => expect(harness.actionSheet.calls).toHaveLength(1));
+
+        expect(harness.actionSheet.calls[0].items.map(item => item.name)).toEqual([
+            'HeaderSubtitleAppearance',
+            'Off',
+            'English'
+        ]);
+        expect(harness.offsetState.enableShowingCalls).toEqual([]);
+    });
+
+    it('hides Subtitle Offset when the current track cannot take an offset', async () => {
+        const harness = createHarness({
+            selectedIds: [ undefined ],
+            withOffset: 'burnedIn'
+        });
+        render(<MenuHarness options={harness.options} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }));
+        await waitFor(() => expect(harness.actionSheet.calls).toHaveLength(1));
+
+        expect(harness.actionSheet.calls[0].items.map(item => item.name)).not.toContain('SubtitleOffset');
+        expect(harness.offsetState.enableShowingCalls).toEqual([]);
     });
 
     // @covers subtitle_controls.track_menu.reopen_replaces_overlay

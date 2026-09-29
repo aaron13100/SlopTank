@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-08-29, 2026-09-02, 2026-09-09, 2026-09-16.
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-29, 2026-09-02, 2026-09-09, 2026-09-16, 2026-09-29.
 import {
     clickOsdControl,
     expect,
@@ -551,7 +551,9 @@ test('ASS preserves authored layout while appearance, secondary, and paused offs
         return horizontallySeparate || verticallySeparate;
     }, { timeout: 30_000 }).toBe(true);
 
-    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnVideoOsdSettings');
+    // The offset entry moved from the gear menu to the Subtitles (CC) menu
+    // (owner decision 2026-09-27); the overlay it opens is unchanged.
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
     await page.locator('.actionSheetMenuItem', { hasText: 'Subtitle Offset' }).click();
     await expect(page.locator('.subtitleSyncContainer')).toBeVisible();
     await expectOverlayReachable(page, '.subtitleSyncContainer');

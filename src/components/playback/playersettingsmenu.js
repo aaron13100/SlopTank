@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-09-27.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-09-27, 2026-09-29.
 import actionsheet from '../actionSheet/actionSheet';
 import { playbackManager } from '../playback/playbackmanager';
 import globalize from 'lib/globalize';
@@ -225,14 +225,6 @@ function showWithUser(options, player, user) {
         });
     }
 
-    if (options.suboffset) {
-        menuItems.push({
-            name: globalize.translate('SubtitleOffset'),
-            id: 'suboffset',
-            asideText: null
-        });
-    }
-
     if (options.stats) {
         menuItems.push({
             name: globalize.translate('PlaybackData'),
@@ -276,11 +268,6 @@ function handleSelectedOption(id, options, player) {
         case 'stats':
             if (options.onOption) {
                 options.onOption('stats');
-            }
-            return Promise.resolve();
-        case 'suboffset':
-            if (options.onOption) {
-                options.onOption('suboffset');
             }
             return Promise.resolve();
         default:

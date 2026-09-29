@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-08-29, 2026-09-02, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-29, 2026-09-02, 2026-09-09, 2026-09-29.
 import {
     clickOsdControl,
     expect,
@@ -68,25 +68,36 @@ async function dragOffsetSliderTo(page: import('@playwright/test').Page, seconds
     expect(Math.abs(parseFloat(actual) - seconds)).toBeLessThanOrEqual(0.5);
 }
 
-// @covers subtitle_controls.track_menu.no_subtitle_enabled.offset_explains_itself
-test('subtitle offset explains itself without a subtitle and shifts cues with one', async ({ page, config }) => {
+// @covers subtitle_controls.track_menu.offset_shifts_displayed_cue
+// @covers subtitle_controls.track_menu.no_subtitle_enabled.offset_entry_hidden
+test('subtitle offset opens from the Subtitles menu and shifts cues with one', async ({ page, config }) => {
     await login(page, config.username, config.password);
     const video = await startPlayback(page, config);
 
     // Playback can restore the user's last subtitle choice. Establish the
-    // no-subtitle precondition through the same menu a user operates.
+    // no-subtitle precondition through the same menu a user operates, by the
+    // item's id: a hasText 'Off' match would hit the 'Subtitle Offset' entry
+    // first ("Offset" contains "Off"), which is exactly the kind of collision
+    // the move to a shared sheet introduced.
     await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
-    await page.locator('.actionSheetMenuItem', { hasText: 'Off' }).first().click();
+    await page.locator('.actionSheetMenuItem[data-id="-1"]').click();
     await expect(page.locator('.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)')).toHaveCount(0);
 
-    // Without an enabled subtitle the entry must exist and explain itself (it
-    // used to be silently hidden).
+    // The offset entry lives on the Subtitles (CC) menu since 2026-09-27, and
+    // only while a track is active: with subtitles Off there is nothing to
+    // shift, so the sheet must not offer the entry (the old gear entry
+    // showed an explanation toast instead, a path the move retired).
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
+    await expect(page.locator('.actionSheetMenuItem', { hasText: 'Subtitle Offset' })).toHaveCount(0);
+    // Dismiss with a press on the backdrop corner, away from the centered sheet.
+    await page.mouse.click(5, 5);
+    await expect(page.locator('.dialogBackdrop')).toHaveCount(0);
+
+    // The gear menu no longer lists the entry either.
     await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnVideoOsdSettings');
-    const offsetItem = page.locator('.actionSheetMenuItem', { hasText: 'Subtitle Offset' });
-    await expect(offsetItem).toBeVisible();
-    await offsetItem.click();
-    await expect(page.locator('.toast')).toContainText('Turn on a subtitle track');
-    await expect(page.locator('.subtitleSyncContainer')).toBeHidden();
+    await expect(page.locator('.actionSheetMenuItem', { hasText: 'Subtitle Offset' })).toHaveCount(0);
+    await page.mouse.click(5, 5);
+    await expect(page.locator('.dialogBackdrop')).toHaveCount(0);
 
     // Enable the external subtitle and park on a cue.
     await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
@@ -96,10 +107,10 @@ test('subtitle offset explains itself without a subtitle and shifts cues with on
     const textBefore = await subtitleLine.textContent();
     expect(textBefore).toBeTruthy();
 
-    // Now the offset entry opens the overlay.
-    // @covers subtitle_controls.track_menu.offset_shifts_displayed_cue
-    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnVideoOsdSettings');
-    await offsetItem.click();
+    // With a track active, the offset entry opens the overlay from the CC
+    // menu, where the appearance entry it sits beside already lives.
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
+    await page.locator('.actionSheetMenuItem', { hasText: 'Subtitle Offset' }).click();
     await expect(page.locator('.subtitleSyncContainer')).toBeVisible();
     // Same body-appended overlay shape as the size control: it must land on
     // screen, not wherever page flow happens to put it.

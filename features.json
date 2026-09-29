@@ -437,11 +437,12 @@
           ]
         },
         {
-          "id": "subtitle_controls.track_menu.no_subtitle_enabled.offset_explains_itself",
+          "id": "subtitle_controls.track_menu.no_subtitle_enabled.offset_entry_hidden",
           "type": "unhappy",
           "failureClass": "validation",
           "requiredAssertions": [
-            "toast_explains_precondition"
+            "offset_entry_absent_from_subtitles_menu",
+            "offset_entry_absent_from_gear_menu"
           ]
         },
         {

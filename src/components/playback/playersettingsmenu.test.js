@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-24.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-09-29.
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { ServerConnections } from 'lib/jellyfin-apiclient';
@@ -204,5 +204,46 @@ describe('player settings menu quality choice', () => {
         expect(state.error).toBeNull();
         expect(appSettings.enableAutomaticBitrateDetection(false, 'Video')).toBe(true);
         expect(player.maxStreamingBitrate).toBe(3000000);
+    });
+
+    /**
+     * Owner decision 2026-09-27: subtitle offset moved to the Subtitles (CC)
+     * menu next to appearance. Even for an offset-capable player mid-playback
+     * with subtitle tracks present -- the exact state that used to put the
+     * entry on this sheet -- the gear menu must no longer offer it. The
+     * pre-move caller (settingsOverlays) passed suboffset: true after
+     * checking the player itself, so the option being ignored is what proves
+     * the entry is gone.
+     */
+    it('no longer lists the subtitle offset entry, even for an offset-capable player', async () => {
+        const { player } = createPlayingVideoPlayer();
+        player.setSubtitleOffset = () => undefined;
+        player.streamInfo.mediaSource.MediaStreams.push({
+            Index: 1,
+            Type: 'Subtitle',
+            Codec: 'srt',
+            DisplayTitle: 'English',
+            IsExternal: true
+        });
+
+        actionSheetSeam.shown.length = 0;
+        // Dismiss the sheet without choosing: the contents are the assertion.
+        actionSheetSeam.clicks = [ undefined ];
+
+        // Attach the outcome observer before the first await: show() rejects
+        // with the bare `undefined` the menu uses for "closed without a
+        // choice", which would otherwise land as an unhandled rejection while
+        // waitFor is still polling.
+        const outcome = playerSettingsMenu.show({
+            player,
+            stats: true,
+            suboffset: true
+        }).then(() => 'resolved', () => 'rejected');
+
+        await waitFor(() => actionSheetSeam.shown.length === 1);
+        const ids = actionSheetSeam.shown[0].items.map((item) => item.id);
+        expect(ids).not.toContain('suboffset');
+        expect(ids).toContain('stats');
+        expect(await outcome).toBe('rejected');
     });
 });

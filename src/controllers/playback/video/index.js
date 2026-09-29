@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-28, 2026-08-01, 2026-08-03, 2026-08-09, 2026-08-11, 2026-08-28, 2026-09-08, 2026-09-09, 2026-09-23, 2026-09-24.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-28, 2026-08-01, 2026-08-03, 2026-08-09, 2026-08-11, 2026-08-28, 2026-09-08, 2026-09-09, 2026-09-23, 2026-09-24, 2026-09-29.
 /**
  * Video OSD controller: the composition root for the video playback page.
  *
@@ -502,8 +502,7 @@ export default function (view) {
     const settingsOverlays = createSettingsOverlays({
         getPlayer: () => currentPlayer,
         playback: playbackManager,
-        resetIdle: () => osd.resetIdle(),
-        showToast: (message) => showVideoToast(message)
+        resetIdle: () => osd.resetIdle()
     });
 
     const nowPlayingDetails = createNowPlayingDetails({ view });

@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-25, 2026-09-09, 2026-09-25, 2026-09-27.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-25, 2026-09-09, 2026-09-25, 2026-09-27, 2026-09-29.
 /**
  * In-player subtitle track and appearance menu controller.
  * @module controllers/playback/video/SubtitleTrackMenu
@@ -8,6 +8,7 @@ import { getTextSizeMultiplier } from '../../../components/subtitlesettings/subt
 
 const SIZE_MENU_ID = 'subtitlesize';
 const SECONDARY_MENU_ID = 'secondarysubtitle';
+const OFFSET_MENU_ID = 'subtitleoffset';
 /**
  * Preset fallback for players without the live preview API (remote players).
  * textSize values are the persisted numeric-multiplier format.
@@ -151,6 +152,17 @@ export default class SubtitleTrackMenu {
             });
         }
 
+        // Spliced after the secondary block so the offset entry lands
+        // directly under appearance (owner decision 2026-09-27: offset is a
+        // subtitle appearance control, not a playback setting), and only
+        // when the player can actually act on a selection.
+        if (this.canShiftSubtitleOffset(player, currentIndex)) {
+            items.splice(1, 0, {
+                id: OFFSET_MENU_ID,
+                name: this.translate('SubtitleOffset')
+            });
+        }
+
         try {
             const selectedId = await actionSheet.show({
                 title: this.translate('Subtitles'),
@@ -166,6 +178,12 @@ export default class SubtitleTrackMenu {
                 await this.showSizeControl(actionSheet, player);
             } else if (selectedId === SECONDARY_MENU_ID) {
                 await this.showSecondaryMenu(actionSheet, player);
+            } else if (selectedId === OFFSET_MENU_ID) {
+                // The exact path the gear entry used: the sync overlay only
+                // renders its offset UI once the player has been told to
+                // show it, so ordering these calls matters.
+                this.playback.enableShowingSubtitleOffset(player);
+                this.toggleSubtitleSync();
             } else if (selectedId != null) {
                 const selectedIndex = parseInt(selectedId, 10);
                 if (Number.isFinite(selectedIndex) && selectedIndex !== currentIndex) {
@@ -187,6 +205,26 @@ export default class SubtitleTrackMenu {
                 this.playback.getSubtitleStream(player, currentIndex),
                 player
             );
+    }
+
+    /**
+     * Whether the offset entry belongs in the sheet for the captured player:
+     * a subtitle track must be active, the player must support offsets at
+     * all, and the active track's rendering path must accept one. Anything
+     * else keeps the entry out of the sheet entirely -- the old gear entry
+     * showed an explanation toast on click instead (owner decision
+     * 2026-09-27 moved the entry here, which retired that toast path).
+     * @param {Object} player - Player captured at menu open.
+     * @param {number} currentIndex - Active subtitle stream index, -1 when Off.
+     * @returns {boolean} True when selecting the entry can open a usable offset overlay.
+     */
+    canShiftSubtitleOffset(player, currentIndex) {
+        // The offset API is optional on playback adapters (remote players,
+        // test doubles); an absent method hides the entry instead of throwing,
+        // the same way the size entry probes the player's preview API.
+        return currentIndex !== -1
+            && !!this.playback.supportSubtitleOffset?.(player)
+            && !!this.playback.canHandleOffsetOnCurrentSubtitle?.(player);
     }
 
     async showSecondaryMenu(actionSheet, player) {
