@@ -62,7 +62,7 @@ import Events from '../../utils/events.ts';
 import { includesAny } from '../../utils/container.ts';
 import { isHls } from '../../utils/mediaSource.ts';
 import { loadDynamicModule } from 'utils/dynamicImport';
-import { copyDocumentStyles } from './documentPipStyles';
+import { copyDocumentStyles } from '../../utils/documentPipStyles';
 
 /**
  * Returns resolved URL.

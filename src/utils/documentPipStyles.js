@@ -3,6 +3,10 @@
  * Copies an app document's loaded styles into another document (the Document
  * Picture-in-Picture popup), which resolves CSS against its own stylesheets
  * only.
+ *
+ * Lives in utils, not src/plugins: pluginManager bundles every file under
+ * src/plugins through a dynamic import context, which would drag this module's
+ * vitest test into the production build and trip the boundary plugin.
  */
 
 /**
