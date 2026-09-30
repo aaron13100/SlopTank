@@ -142,3 +142,91 @@
         right: 0.5em;
     }
 }
+
+/* Opt-in rows (c307): language/glyph badge pills, submenu chevrons and a
+   trailing check. Rows that use none of these are untouched. */
+.actionSheetBadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    min-width: 2.4em;
+    height: 1.7em;
+    padding: 0 0.5em;
+    border-radius: 0.85em;
+    background: rgba(255, 255, 255, 0.12);
+    color: inherit;
+    font-size: 75%;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    line-height: 1;
+
+    [dir="ltr"] & {
+        margin: 0 0.85em 0 0.45em;
+    }
+
+    [dir="rtl"] & {
+        margin: 0 0.45em 0 0.85em;
+    }
+}
+
+.actionSheetBadge-glyph .material-icons {
+    font-size: 1.3em;
+    opacity: 0.8;
+}
+
+.actionSheetMenuItem-selected .actionSheetBadge {
+    background: var(--jf-palette-primary-main, #00a4dc);
+    color: #fff;
+}
+
+.actionSheetMenuItem-selected .actionSheetItemText {
+    font-weight: 600;
+}
+
+.actionSheetTrailingCheck {
+    flex-shrink: 0;
+    color: var(--jf-palette-primary-main, #00a4dc);
+
+    [dir="ltr"] & {
+        margin-left: 0.6em;
+    }
+
+    [dir="rtl"] & {
+        margin-right: 0.6em;
+    }
+}
+
+.actionSheetChevron {
+    flex-shrink: 0;
+    opacity: 0.6;
+
+    [dir="ltr"] & {
+        margin-left: 0.2em;
+    }
+
+    [dir="rtl"] & {
+        margin-right: 0.2em;
+        transform: scaleX(-1);
+    }
+}
+
+/* Settings rows carry a short value, so the wide default gap is not needed. */
+.actionSheetMenuItem-submenu .actionSheetItemAsideText {
+    [dir="ltr"] & {
+        margin-left: 1.5em;
+        margin-right: 0;
+    }
+
+    [dir="rtl"] & {
+        margin-right: 1.5em;
+        margin-left: 0;
+    }
+}
+
+/* Settings icons share the badge column so both groups align. */
+.actionSheetMenuItem-submenu .actionsheetMenuItemIcon {
+    width: 2.4em;
+    text-align: center;
+}

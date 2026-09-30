@@ -303,9 +303,10 @@ describe('SubtitleTrackMenu', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }));
         await waitFor(() => expect(harness.actionSheet.calls).toHaveLength(2));
 
-        expect(harness.actionSheet.calls[0].items.map(item => item.name)).toEqual([
+        expect(harness.actionSheet.calls[0].items.map(item => item.divider ? '---' : item.name)).toEqual([
             'HeaderSubtitleAppearance',
             'SecondarySubtitles',
+            '---',
             'Off',
             'English'
         ]);
@@ -331,10 +332,11 @@ describe('SubtitleTrackMenu', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }));
         await waitFor(() => expect(harness.actionSheet.calls).toHaveLength(1));
 
-        expect(harness.actionSheet.calls[0].items.map(item => item.name)).toEqual([
+        expect(harness.actionSheet.calls[0].items.map(item => item.divider ? '---' : item.name)).toEqual([
             'HeaderSubtitleAppearance',
             'SubtitleOffset',
             'SecondarySubtitles',
+            '---',
             'Off',
             'English'
         ]);
@@ -355,8 +357,9 @@ describe('SubtitleTrackMenu', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }));
         await waitFor(() => expect(harness.actionSheet.calls).toHaveLength(1));
 
-        expect(harness.actionSheet.calls[0].items.map(item => item.name)).toEqual([
+        expect(harness.actionSheet.calls[0].items.map(item => item.divider ? '---' : item.name)).toEqual([
             'HeaderSubtitleAppearance',
+            '---',
             'Off',
             'English'
         ]);

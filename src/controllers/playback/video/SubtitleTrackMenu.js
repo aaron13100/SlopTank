@@ -5,10 +5,15 @@
  */
 
 import { getTextSizeMultiplier } from '../../../components/subtitlesettings/subtitleappearancehelper';
+import {
+    buildSubtitleMenuItems,
+    buildSubtitleTrackItems,
+    languageBadge,
+    OFFSET_MENU_ID,
+    SECONDARY_MENU_ID,
+    SIZE_MENU_ID
+} from './SubtitleMenuItems';
 
-const SIZE_MENU_ID = 'subtitlesize';
-const SECONDARY_MENU_ID = 'secondarysubtitle';
-const OFFSET_MENU_ID = 'subtitleoffset';
 /**
  * Preset fallback for players without the live preview API (remote players).
  * textSize values are the persisted numeric-multiplier format.
@@ -129,39 +134,26 @@ export default class SubtitleTrackMenu {
         }
 
         const currentIndex = this.playback.getSubtitleStreamIndex(player) ?? -1;
-        const streams = [
-            { Index: -1, DisplayTitle: this.translate('Off') },
-            ...this.playback.subtitleTracks(player)
-        ];
+        const tracks = this.playback.subtitleTracks(player);
+        // Off counts as a stream for the secondary-support rule, as it always did.
+        const streams = [ { Index: -1 }, ...tracks ];
         const secondaryStreams = this.playback.secondarySubtitleTracks(player);
-        const items = streams.map(stream => ({
-            id: stream.Index,
-            name: stream.DisplayTitle,
-            selected: stream.Index === currentIndex
-        }));
-
-        items.unshift({
-            id: SIZE_MENU_ID,
-            name: this.translate('HeaderSubtitleAppearance')
+        const showSecondary = this.canAddSecondarySubtitle(player, streams, secondaryStreams, currentIndex);
+        const items = buildSubtitleMenuItems({
+            streams: tracks,
+            currentIndex,
+            translate: this.translate,
+            locale: this.getLocale(),
+            appearanceValue: this.formatAppearanceValue(),
+            offsetValue: this.formatOffsetValue(player),
+            // The offset entry sits directly under appearance (owner decision
+            // 2026-09-27: offset is a subtitle appearance control, not a
+            // playback setting), and only when the player can act on it.
+            showOffset: this.canShiftSubtitleOffset(player, currentIndex),
+            showSecondary,
+            // Only read the secondary selection when the row is shown.
+            secondaryValue: showSecondary ? this.formatSecondaryValue(player, secondaryStreams) : undefined
         });
-
-        if (this.canAddSecondarySubtitle(player, streams, secondaryStreams, currentIndex)) {
-            items.splice(1, 0, {
-                id: SECONDARY_MENU_ID,
-                name: this.translate('SecondarySubtitles')
-            });
-        }
-
-        // Spliced after the secondary block so the offset entry lands
-        // directly under appearance (owner decision 2026-09-27: offset is a
-        // subtitle appearance control, not a playback setting), and only
-        // when the player can actually act on a selection.
-        if (this.canShiftSubtitleOffset(player, currentIndex)) {
-            items.splice(1, 0, {
-                id: OFFSET_MENU_ID,
-                name: this.translate('SubtitleOffset')
-            });
-        }
 
         try {
             const selectedId = await actionSheet.show({
@@ -194,6 +186,50 @@ export default class SubtitleTrackMenu {
         } finally {
             this.resetIdle();
         }
+    }
+
+    /**
+     * Locale for language names on track rows.
+     * @returns {string|undefined} The document language, when set.
+     */
+    getLocale() {
+        return document.documentElement.lang || undefined;
+    }
+
+    /**
+     * Current text size as shown beside the Appearance row.
+     * @returns {string} Percentage such as "100%".
+     */
+    formatAppearanceValue() {
+        const { textSize } = this.settings.getSubtitleAppearanceSettings();
+        return `${Math.round(getTextSizeMultiplier(textSize) * 100)}%`;
+    }
+
+    /**
+     * Current subtitle offset as shown beside the Offset row.
+     * @param {Object} player - Player captured at menu open.
+     * @returns {string|undefined} Signed seconds such as "+0.5s", or undefined when the adapter cannot report one.
+     */
+    formatOffsetValue(player) {
+        const offset = Number(this.playback.getPlayerSubtitleOffset?.(player));
+        if (!Number.isFinite(offset)) {
+            return undefined;
+        }
+        const rounded = Math.round(offset * 100) / 100;
+        return `${rounded > 0 ? '+' : ''}${rounded}s`;
+    }
+
+    /**
+     * Current secondary track as shown beside the Secondary Subtitles row.
+     * @param {Object} player - Player captured at menu open.
+     * @param {Object[]} secondaryStreams - Tracks eligible as secondary.
+     * @returns {string} Language code of the active secondary track, or the translated Off.
+     */
+    formatSecondaryValue(player, secondaryStreams) {
+        const index = this.playback.getSecondarySubtitleStreamIndex(player) ?? -1;
+        const active = secondaryStreams.find(stream => stream.Index === index);
+        const badge = active ? languageBadge(active) : null;
+        return badge?.text ?? this.translate('Off');
     }
 
     canAddSecondarySubtitle(player, streams, secondaryStreams, currentIndex) {
@@ -233,17 +269,14 @@ export default class SubtitleTrackMenu {
         }
 
         const currentIndex = this.playback.getSecondarySubtitleStreamIndex(player) ?? -1;
-        const streams = [
-            { Index: -1, DisplayTitle: this.translate('Off') },
-            ...this.playback.secondarySubtitleTracks(player)
-        ];
         const selectedId = await actionSheet.show({
             title: this.translate('SecondarySubtitles'),
-            items: streams.map(stream => ({
-                id: stream.Index,
-                name: stream.DisplayTitle,
-                selected: stream.Index === currentIndex
-            })),
+            items: buildSubtitleTrackItems({
+                streams: this.playback.secondarySubtitleTracks(player),
+                currentIndex,
+                translate: this.translate,
+                locale: this.getLocale()
+            }),
             positionTo: this.button
         });
 

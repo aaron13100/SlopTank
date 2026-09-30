@@ -60,13 +60,16 @@ test('Subtitle Offset is offered on the Subtitles menu and opens the offset slid
 
     // The gear menu no longer lists the offset entry.
     await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnVideoOsdSettings');
+    // Wait for the menu to exist first: a count of 0 and a corner press both pass vacuously
+    // against a menu that is still opening under load.
+    await expect(page.locator('.actionSheetMenuItem', { hasText: 'Playback Speed' })).toBeVisible();
     await expect(page.locator('.actionSheetMenuItem', { hasText: 'Subtitle Offset' })).toHaveCount(0);
     // Dismiss the way a user does, with a press on the backdrop's corner,
     // safely away from the centered sheet: dismissal without a selection is
     // a supported sheet interaction, and this stays independent of any
     // keyboard handling.
     await page.mouse.click(5, 5);
-    await expect(page.locator('.dialogBackdrop')).toHaveCount(0);
+    await expect(page.locator('.actionSheetMenuItem')).toHaveCount(0);
 
     // ...while the Subtitles menu carries it, on screen and reachable, right
     // where a user looking for subtitle controls will find it.
@@ -79,7 +82,7 @@ test('Subtitle Offset is offered on the Subtitles menu and opens the offset slid
     const placement = await onScreenState(page, '.actionSheetMenuItem[data-id="subtitleoffset"]');
     expect(placement).toMatchObject({ found: true, insideViewport: true, reachable: true });
     // Directly under the appearance entry, per the owner decision.
-    const itemNames = await page.locator('.actionSheetMenuItem').allTextContents();
+    const itemNames = await page.locator('.actionSheetMenuItem .actionSheetItemText').allTextContents();
     expect(itemNames.map(name => (name || '').trim()).indexOf('Subtitle Offset'))
         .toBe(itemNames.map(name => (name || '').trim()).indexOf('Subtitle Appearance') + 1);
 
