@@ -234,7 +234,10 @@ test('the sample line goes away however the user dismisses the size control', as
     //    Nothing about subtitles may be left on screen afterwards.
     await openSizeOverlay(page);
     await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
-    await page.locator('.actionSheetMenuItem', { hasText: 'Off' }).first().click();
+    // By item id, not text: hasText 'Off' matches the 'Subtitle Offset' entry
+    // first ("Offset" contains "Off"), which the Subtitles menu has carried
+    // since 2026-09-27 and which only re-opens a different overlay.
+    await page.locator('.actionSheetMenuItem[data-id="-1"]').click();
     await expect(sampleLine).toHaveCount(0);
     await expect(page.locator('.videoSubtitlesInner')).toHaveCount(0);
 });
