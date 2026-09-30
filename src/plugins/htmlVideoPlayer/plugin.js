@@ -62,6 +62,7 @@ import Events from '../../utils/events.ts';
 import { includesAny } from '../../utils/container.ts';
 import { isHls } from '../../utils/mediaSource.ts';
 import { loadDynamicModule } from 'utils/dynamicImport';
+import { copyDocumentStyles } from './documentPipStyles';
 
 /**
  * Returns resolved URL.
@@ -3150,19 +3151,7 @@ export class HtmlVideoPlayer {
      * @param {Document} targetDocument - PiP document receiving the player.
      */
     copyDocumentPictureInPictureStyles(targetDocument) {
-        targetDocument.querySelectorAll('[data-sloptank-pip-style]')
-            .forEach(element => {
-                element.remove();
-            });
-
-        for (const source of document.querySelectorAll('link[rel="stylesheet"], style')) {
-            const copy = source.cloneNode(true);
-            copy.setAttribute('data-sloptank-pip-style', '');
-            if (source instanceof HTMLLinkElement && copy instanceof HTMLLinkElement) {
-                copy.href = source.href;
-            }
-            targetDocument.head.appendChild(copy);
-        }
+        copyDocumentStyles(document, targetDocument);
 
         const baseStyle = targetDocument.createElement('style');
         baseStyle.setAttribute('data-sloptank-pip-style', '');
