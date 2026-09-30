@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-08-01, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-01, 2026-09-09, 2026-09-30.
 import isEqual from 'lodash-es/isEqual';
 
 import browser from '../../scripts/browser';
@@ -226,7 +226,7 @@ function updateMarkers(range, currentValue) {
     }
 }
 
-EmbySliderPrototype.attachedCallback = function () {
+const attachedCallback = function () {
     if (this.getAttribute('data-embyslider') === 'true') {
         return;
     }
@@ -413,6 +413,8 @@ EmbySliderPrototype.attachedCallback = function () {
     updateValues.call(this);
 };
 
+EmbySliderPrototype.attachedCallback = attachedCallback;
+
 /**
      * Keyboard dragging timeout.
      * After this delay "change" event will be fired.
@@ -595,3 +597,22 @@ document.registerElement('emby-slider', {
     prototype: EmbySliderPrototype,
     extends: 'input'
 });
+
+/**
+ * Upgrade an `is="emby-slider"` element outside the main document's custom
+ * element registry.
+ *
+ * The v0 registry `document.registerElement` created at module scope only
+ * upgrades elements in the document this module loaded into. A template
+ * instantiated into a foreign document (e.g. the Document Picture-in-Picture
+ * popup) never runs the callbacks, so the slider keeps neither its styling
+ * classes nor its track DOM. This export runs the exact attached-callback
+ * upgrade for such an element; the `data-embyslider` guard keeps it a no-op
+ * for elements the registry already upgraded.
+ *
+ * @param {HTMLInputElement} range - The `is="emby-slider"` input to upgrade.
+ * @returns {void}
+ */
+export function upgradeSlider(range) {
+    attachedCallback.call(range);
+}

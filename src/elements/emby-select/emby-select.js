@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-30.
 import layoutManager from '../../components/layoutManager';
 import browser from '../../scripts/browser';
 import actionsheet from '../../components/actionSheet/actionSheet';
@@ -89,7 +90,7 @@ function onKeyDown(e) {
 
 let inputId = 0;
 
-EmbySelectPrototype.createdCallback = function () {
+const createdCallback = function () {
     if (!this.id) {
         this.id = 'embyselect' + inputId;
         inputId++;
@@ -108,7 +109,7 @@ EmbySelectPrototype.createdCallback = function () {
     this.addEventListener('blur', onBlur);
 };
 
-EmbySelectPrototype.attachedCallback = function () {
+const attachedCallback = function () {
     if (this.classList.contains('emby-select')) {
         return;
     }
@@ -126,6 +127,9 @@ EmbySelectPrototype.attachedCallback = function () {
     }
 };
 
+EmbySelectPrototype.createdCallback = createdCallback;
+EmbySelectPrototype.attachedCallback = attachedCallback;
+
 EmbySelectPrototype.setLabel = function (text) {
     const label = this.parentNode?.querySelector('label');
 
@@ -136,4 +140,29 @@ document.registerElement('emby-select', {
     prototype: EmbySelectPrototype,
     extends: 'select'
 });
+
+/**
+ * Upgrade an `is="emby-select"` element outside the main document's custom
+ * element registry.
+ *
+ * The v0 registry `document.registerElement` created at module scope only
+ * upgrades elements in the document this module loaded into. A template
+ * instantiated into a foreign document (e.g. the Document Picture-in-Picture
+ * popup) never runs the callbacks, so the select keeps neither its styling
+ * classes nor its label and arrow markup. This export runs the exact
+ * created- and attached-callback upgrade for such an element; the
+ * `emby-select` class guard keeps it a no-op for elements the registry
+ * already upgraded.
+ *
+ * @param {HTMLSelectElement} select - The `is="emby-select"` element to upgrade.
+ * @returns {void}
+ */
+export function upgradeSelect(select) {
+    if (select.classList.contains('emby-select')) {
+        return;
+    }
+
+    createdCallback.call(select);
+    attachedCallback.call(select);
+}
 

@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-03-12, 2026-07-18, 2026-07-19, 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-25, 2026-07-26, 2026-07-31, 2026-08-09, 2026-08-29, 2026-09-08, 2026-09-09, 2026-09-27.
+// SlopTank modification notice: added or changed by SlopTank on 2026-03-12, 2026-07-18, 2026-07-19, 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-25, 2026-07-26, 2026-07-31, 2026-08-09, 2026-08-29, 2026-09-08, 2026-09-09, 2026-09-27, 2026-09-30.
 import DOMPurify from 'dompurify';
 import debounce from 'lodash-es/debounce';
 import ResizeObserver from 'resize-observer-polyfill';
@@ -3205,6 +3205,46 @@ export class HtmlVideoPlayer {
     }
 
     /**
+     * Scope a subtitle appearance settings adapter to the surface that will
+     * host the panel. While Document PiP is open every panel is hosted in the
+     * PiP window (see getSubtitleAppearanceOverlayHost), so every panel, no
+     * matter which control opened it, gets a per-PiP-session in-memory adapter:
+     * adjustments are temporary previews and never replace the durable
+     * preference. Outside PiP the returned adapter delegates to the durable one.
+     * @param {Object} durableSettings - Durable adapter
+     * (getSubtitleAppearanceSettings / setSubtitleAppearanceSettings).
+     * @returns {Object} Adapter the panel must read and write through.
+     */
+    scopeSubtitleAppearanceSettings(durableSettings) {
+        // Resolved per call, not once: a panel opened while PiP is open may
+        // outlive the PiP window, and after exit it must persist normally.
+        const pipSessionSettings = () => {
+            if (!this.#documentPictureInPictureWindow) {
+                return null;
+            }
+            this.#documentPictureInPictureAppearanceSettings ??= {
+                ...durableSettings.getSubtitleAppearanceSettings()
+            };
+            return this.#documentPictureInPictureAppearanceSettings;
+        };
+
+        return {
+            getSubtitleAppearanceSettings: () => {
+                const session = pipSessionSettings();
+                return session ? { ...session } : durableSettings.getSubtitleAppearanceSettings();
+            },
+            setSubtitleAppearanceSettings: value => {
+                const session = pipSessionSettings();
+                if (session) {
+                    Object.assign(session, value);
+                } else {
+                    durableSettings.setSubtitleAppearanceSettings(value);
+                }
+            }
+        };
+    }
+
+    /**
      * Open the appearance panel from the compact control inside Document PiP.
      * @private
      * @returns {Promise<void>}
@@ -3218,21 +3258,9 @@ export class HtmlVideoPlayer {
             return;
         }
 
-        this.#documentPictureInPictureAppearanceSettings ??= {
-            ...userSettings.getSubtitleAppearanceSettings()
-        };
-
-        const appearanceSettings = this.#documentPictureInPictureAppearanceSettings;
-        const temporarySettings = {
-            getSubtitleAppearanceSettings: () => ({ ...appearanceSettings }),
-            setSubtitleAppearanceSettings: value => {
-                Object.assign(appearanceSettings, value);
-            }
-        };
-
         this.#documentPictureInPictureAppearanceOverlay = new SubtitleSizer({
             player: this,
-            settings: temporarySettings,
+            settings: userSettings,
             translate: globalize.translate,
             onClose: () => {
                 this.#documentPictureInPictureAppearanceOverlay = null;

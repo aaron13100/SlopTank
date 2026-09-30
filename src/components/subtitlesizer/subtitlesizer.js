@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-07-24, 2026-07-25, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-07-24, 2026-07-25, 2026-09-09, 2026-09-30.
 /**
  * In-player subtitle appearance overlay. Size and vertical position are
  * adjusted with live sliders; font family and weight are adjusted with
@@ -16,8 +16,8 @@ import {
     VERTICAL_POSITION_TOP
 } from '../subtitlesettings/subtitleappearancehelper';
 import Events from '../../utils/events.ts';
-import '../../elements/emby-slider/emby-slider';
-import '../../elements/emby-select/emby-select';
+import { upgradeSlider } from '../../elements/emby-slider/emby-slider';
+import { upgradeSelect } from '../../elements/emby-select/emby-select';
 import layoutManager from '../layoutManager';
 import template from './subtitlesizer.template.html';
 import './subtitlesizer.scss';
@@ -33,8 +33,10 @@ export default class SubtitleSizer {
      * @param {Object} options.player - Player implementing the preview API
      * (setSubtitleAppearancePreview / clearSubtitleAppearancePreview /
      * getSubtitleRenderingInfo / updateSubtitleAppearance).
-     * @param {Object} options.settings - User settings adapter
-     * (getSubtitleAppearanceSettings / setSubtitleAppearanceSettings).
+     * @param {Object} options.settings - Durable user settings adapter
+     * (getSubtitleAppearanceSettings / setSubtitleAppearanceSettings); the
+     * player may substitute a temporary one via
+     * scopeSubtitleAppearanceSettings.
      * @param {Function} options.translate - String translation adapter.
      * @param {Function} [options.onInteract] - Called on every adjustment, so
      * the host can keep its controls awake while the user is working.
@@ -43,7 +45,11 @@ export default class SubtitleSizer {
      */
     constructor(options) {
         this.player = options.player;
-        this.settings = options.settings;
+        // The player decides which store a panel hosted on its surface may
+        // write (Document PiP panels get a temporary one); remote/test
+        // players without the hook use the adapter as given.
+        this.settings = this.player.scopeSubtitleAppearanceSettings?.(options.settings)
+            ?? options.settings;
         this.translate = options.translate;
         this.onInteract = options.onInteract;
         this.onClose = options.onClose;
@@ -66,8 +72,25 @@ export default class SubtitleSizer {
         this.positionValueLabel = parent.querySelector('.subtitlePositionValue');
         this.message = parent.querySelector('.subtitleSizerMessage');
         this.controls = parent.querySelector('.subtitleSizerControls');
+        this.closeButton = parent.querySelector('.subtitleSizer-closeButton');
+
+        // The v0 custom-element registry that upgrades these controls belongs
+        // to the document this module loaded into. When the panel renders
+        // into a foreign document (Document PiP), the registry never fires
+        // its callbacks there, so the sliders and selects would keep neither
+        // styling classes nor track/label markup. Upgrade explicitly: a
+        // no-op in the main document (the registry already ran), the full
+        // callback work in any other document.
+        upgradeSlider(this.slider);
+        upgradeSlider(this.positionSlider);
+        upgradeSelect(this.fontSelect);
+        upgradeSelect(this.weightSelect);
 
         if (layoutManager.tv) {
+            // The paper-icon-button-light createdCallback adds this class in
+            // TV layout; like the controls below, the close button cannot
+            // rely on that callback firing in a foreign document.
+            this.closeButton.classList.add('show-focus');
             [ this.slider, this.positionSlider, this.fontSelect, this.weightSelect ]
                 .forEach(control => {
                     control.classList.add('focusable');
@@ -104,8 +127,7 @@ export default class SubtitleSizer {
         this.positionSlider.addEventListener('change', this.onPositionChange);
         this.fontSelect.addEventListener('change', this.onAppearanceSelectChange);
         this.weightSelect.addEventListener('change', this.onAppearanceSelectChange);
-        parent.querySelector('.subtitleSizer-closeButton')
-            .addEventListener('click', this.onCloseClick);
+        this.closeButton.addEventListener('click', this.onCloseClick);
         // Capture phase: dismissing this overlay is what Escape means while it
         // is open, so the key must not also reach the player's own handler.
         this.ownerDocument.addEventListener('keydown', this.onKeyDown, true);

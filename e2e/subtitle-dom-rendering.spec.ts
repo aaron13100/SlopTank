@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-08-29, 2026-09-02, 2026-09-09, 2026-09-27.
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-29, 2026-09-02, 2026-09-09, 2026-09-27, 2026-09-30.
 import {
     clickOsdControl,
     expect,
@@ -339,6 +339,191 @@ test('Document PiP subtitle appearance close button stays transparent over the d
     expect(closeStyle.background).toBe('rgba(0, 0, 0, 0)');
 });
 
+/**
+ * Sample the PiP close button's computed styling for one interaction state.
+ *
+ * The pass condition is the one the owner actually saw broken: an isolated
+ * LIGHT background square on the dark panel. Any background that composites
+ * with the panel (rgba(28, 28, 28, 0.8) over black) to a light color fails,
+ * and so does an icon too dark to read, so the assertion covers themed
+ * hover/focus/active tints while rejecting the UA-default button face the
+ * missing class used to produce.
+ *
+ * @param pipPage - Page for the Document PiP window.
+ * @returns Computed-state facts for the close button.
+ */
+async function readCloseButtonState(pipPage: import('@playwright/test').Page) {
+    return pipPage.locator('.subtitleSizer-closeButton').evaluate(button => {
+        type Rgba = { r: number, g: number, b: number, a: number };
+        const parseColor = (value: string): Rgba | null => {
+            const match = value.match(/rgba?\(([^)]+)\)/);
+            if (!match) return null;
+            const parts = match[1].split(',').map(Number);
+            return {
+                r: parts[0], g: parts[1], b: parts[2],
+                a: parts.length > 3 ? parts[3] : 1
+            };
+        };
+        const luminance = (color: Rgba | null) => {
+            if (!color) return null;
+            return (0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b) / 255;
+        };
+        const rawBackground = getComputedStyle(button).backgroundColor;
+        const background = parseColor(rawBackground);
+        // Composite the button background over the dark panel color.
+        let compositeMaxChannel: number | null = null;
+        if (background) {
+            compositeMaxChannel = background.a * Math.max(background.r, background.g, background.b)
+                + (1 - background.a) * 28;
+        }
+        const icon = button.querySelector('.material-icons');
+        const iconColor = icon ? parseColor(getComputedStyle(icon).color) : null;
+        return {
+            rawBackground,
+            backgroundCompositesLight: compositeMaxChannel !== null && compositeMaxChannel > 96,
+            iconLuminance: luminance(iconColor)
+        };
+    });
+}
+
+// @covers subtitle_controls.track_menu.document_pip_custom_renderer_and_live_appearance
+test('Document PiP close button interaction states keep a dark background and visible icon', async ({ page, config }, testInfo) => {
+    test.setTimeout(240_000);
+    await login(page, config.username, config.password);
+    const video = await startPlayback(page, config);
+    const mainSubtitleLine = page.locator(
+        '.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)');
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
+    await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
+    await parkOnCue(video, mainSubtitleLine);
+
+    const pipPagePromise = page.context().waitForEvent('page');
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnPip');
+    const pipPage = await pipPagePromise;
+    await pipPage.locator('.documentPipSubtitleAppearanceButton').click();
+    const closeButton = pipPage.locator('.subtitleSizer-closeButton');
+    await expect(closeButton).toBeVisible();
+
+    const states: Record<string, unknown> = {};
+    const assertState = async (label: string) => {
+        const state = await readCloseButtonState(pipPage);
+        states[label] = state;
+        expect(state.backgroundCompositesLight, `${label} background ${state.rawBackground}`)
+            .toBe(false);
+        expect(state.iconLuminance, `${label} icon luminance`).toBeGreaterThanOrEqual(0.35);
+    };
+
+    await assertState('rest');
+
+    await closeButton.hover();
+    await assertState('hover');
+
+    // Keyboard focus, the way a user gets it: Tab into the panel until the
+    // close button itself is the focused element.
+    await pipPage.locator('.subtitleSizerContainer').click({ position: { x: 12, y: 70 } });
+    let focused = false;
+    for (let attempt = 0; attempt < 8 && !focused; attempt++) {
+        await pipPage.keyboard.press('Tab');
+        focused = await pipPage.evaluate(() =>
+            document.activeElement?.classList.contains('subtitleSizer-closeButton') ?? false);
+    }
+    expect(focused, 'Tab navigation must reach the close button').toBe(true);
+    await assertState('keyboardFocus');
+
+    // :active needs a held press; release off the button so the press never
+    // completes a click that would close the overlay mid-assertion.
+    const box = await closeButton.boundingBox();
+    if (!box) throw new Error('close button has no box'); // allow-raw-error: e2e setup fast-fail, not production code
+    await pipPage.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await pipPage.mouse.down();
+    await assertState('active');
+    await pipPage.mouse.move(box.x - 40, box.y + box.height + 40);
+    await pipPage.mouse.up();
+
+    await testInfo.attach('pip-close-button-states.json', {
+        body: JSON.stringify(states, null, 2),
+        contentType: 'application/json'
+    });
+    await pipPage.close();
+});
+
+// @covers subtitle_controls.track_menu.document_pip_custom_renderer_and_live_appearance
+test('Document PiP appearance panel upgrades its sliders and selects like the main panel', async ({ page, config }, testInfo) => {
+    test.setTimeout(240_000);
+    await login(page, config.username, config.password);
+    const video = await startPlayback(page, config);
+    const mainSubtitleLine = page.locator(
+        '.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)');
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
+    await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
+    await parkOnCue(video, mainSubtitleLine);
+
+    // The main-window panel is the design reference: the same template,
+    // upgraded by the main document's custom-element registry.
+    await openSizeOverlay(page);
+    const mainPanel = await page.locator('.subtitleSizer').evaluate(panel => {
+        const slider = panel.querySelector('.subtitleSizerSlider') as HTMLInputElement;
+        const select = panel.querySelector('.subtitleFontSelect') as HTMLSelectElement;
+        const lower = slider.parentElement?.querySelector<HTMLElement>('.mdl-slider-background-lower');
+        return {
+            sliderClasses: slider.className,
+            sliderFillWidth: lower?.style.width ?? '(none)',
+            selectClasses: select.className,
+            selectBackground: getComputedStyle(select).backgroundColor,
+            selectLabels: Array.from(panel.querySelectorAll('.subtitleSizerSelectGrid .selectLabel'))
+                .map(label => (label.textContent || '').trim()),
+            selectArrows: panel.querySelectorAll('.subtitleSizerSelectGrid .selectArrowContainer').length
+        };
+    });
+    await page.keyboard.press('Escape');
+
+    const pipPagePromise = page.context().waitForEvent('page');
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnPip');
+    const pipPage = await pipPagePromise;
+    await pipPage.locator('.documentPipSubtitleAppearanceButton').click();
+    await expect(pipPage.locator('.subtitleSizerContainer')).toBeVisible();
+
+    const pipPanel = await pipPage.locator('.subtitleSizer').evaluate(panel => {
+        const slider = panel.querySelector('.subtitleSizerSlider') as HTMLInputElement;
+        const select = panel.querySelector('.subtitleFontSelect') as HTMLSelectElement;
+        const lower = slider.parentElement?.querySelector<HTMLElement>('.mdl-slider-background-lower');
+        return {
+            sliderClasses: slider.className,
+            sliderContainerChildren: Array.from(slider.parentElement?.children ?? [])
+                .map(child => child.className),
+            hasTrackDom: !!slider.parentElement?.querySelector('.mdl-slider-background-flex'),
+            sliderFillWidth: lower?.style.width ?? '(none)',
+            selectClasses: select.className,
+            selectBackground: getComputedStyle(select).backgroundColor,
+            selectLabels: Array.from(panel.querySelectorAll('.subtitleSizerSelectGrid .selectLabel'))
+                .map(label => (label.textContent || '').trim()),
+            selectArrows: panel.querySelectorAll('.subtitleSizerSelectGrid .selectArrowContainer').length
+        };
+    });
+    await testInfo.attach('pip-panel-controls.json', {
+        body: JSON.stringify({ mainPanel, pipPanel }, null, 2),
+        contentType: 'application/json'
+    });
+
+    // The v0 registry never fires in the popup document, so the component
+    // must have upgraded its controls itself: styling classes, slider track
+    // DOM with a real fill, select labels and arrows, and computed styles
+    // identical to the main panel.
+    expect(pipPanel.sliderClasses.split(/\s+/)).toContain('mdl-slider');
+    expect(pipPanel.hasTrackDom).toBe(true);
+    expect(parseFloat(pipPanel.sliderFillWidth)).toBeGreaterThan(30);
+    expect(pipPanel.sliderFillWidth).toBe(mainPanel.sliderFillWidth);
+    expect(pipPanel.selectClasses.split(/\s+/)).toEqual(
+        expect.arrayContaining([ 'emby-select', 'emby-select-withcolor' ]));
+    expect(pipPanel.selectBackground).toBe(mainPanel.selectBackground);
+    expect(pipPanel.selectLabels).toEqual(mainPanel.selectLabels);
+    expect(pipPanel.selectLabels.length).toBe(2);
+    expect(pipPanel.selectLabels.every(label => label.length > 0)).toBe(true);
+    expect(pipPanel.selectArrows).toBe(2);
+
+    await pipPage.close();
+});
+
 // @covers subtitle_controls.track_menu.document_pip_custom_renderer_and_live_appearance
 test('manual Document PiP subtitle sizing does not replace the normal preference on exit', async ({ page, config }) => {
     await login(page, config.username, config.password);
@@ -382,6 +567,249 @@ test('manual Document PiP subtitle sizing does not replace the normal preference
         expect(restoredFontSize).toBe(normalFontSize);
         await page.keyboard.press('Escape');
     }
+});
+
+/**
+ * Read the server-side display preferences document for the logged-in user.
+ *
+ * Subtitle appearance itself is device-local, so this document must be
+ * byte-identical across a PiP session too: it proves no PiP code path
+ * touched the server-side preferences store at all.
+ *
+ * @param page - Page logged in as the user under test.
+ * @returns Raw response text of the usersettings display preferences.
+ */
+async function readServerDisplayPrefs(page: import('@playwright/test').Page) {
+    return page.evaluate(async () => {
+        const credentials = JSON.parse(localStorage.getItem('jellyfin_credentials') || '{}');
+        const token = credentials.Servers?.[0]?.AccessToken;
+        if (!token) return '(no token)';
+        const response = await fetch('/Users/Me', {
+            headers: { Authorization: `MediaBrowser Token="${token}"` }
+        });
+        const user = await response.json();
+        const prefs = await fetch(`/DisplayPreferences/usersettings?userId=${user.Id}&client=emby`, {
+            headers: { Authorization: `MediaBrowser Token="${token}"` }
+        });
+        return prefs.text();
+    });
+}
+
+/**
+ * Read the durable subtitle-appearance storage blob(s) from the page.
+ *
+ * Subtitle appearance persists through appSettings into localStorage under
+ * `localplayersubtitleappearance3` (user-prefixed). Byte-identical before and
+ * after a PiP session is the proof that nothing in the session leaked into
+ * the durable store.
+ *
+ * @param page - Page logged in as the user under test.
+ * @returns Map of localStorage key to stored value for every appearance key.
+ */
+async function readDurableAppearance(page: import('@playwright/test').Page) {
+    return page.evaluate(() => {
+        const stored: Record<string, string | null> = {};
+        for (let index = 0; index < localStorage.length; index++) {
+            const key = localStorage.key(index);
+            if (key && /localplayersubtitleappearance/.test(key)) {
+                stored[key] = localStorage.getItem(key);
+            }
+        }
+        return stored;
+    });
+}
+
+// @covers subtitle_controls.track_menu.document_pip_custom_renderer_and_live_appearance
+test('Document PiP exit via playback teardown keeps the normal preference', async ({ page, config }, testInfo) => {
+    test.setTimeout(300_000);
+    await login(page, config.username, config.password);
+    const video = await startPlayback(page, config);
+    const mainSubtitleLine = page.locator(
+        '.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)');
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
+    await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
+    await parkOnCue(video, mainSubtitleLine);
+
+    await openSizeOverlay(page);
+    await setSizeSlider(page, 100);
+    await page.keyboard.press('Escape');
+    const durableBefore = await readDurableAppearance(page);
+
+    // In Chrome's Document PiP the popup document never contains the OSD, so
+    // the in-player PiP toggle cannot exist there. The toggle a user still
+    // has is the main window's own .btnPip while PiP is open; probe whether
+    // that control is reachable, and record the outcome either way.
+    const pipPagePromise = page.context().waitForEvent('page');
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnPip');
+    const pipPage = await pipPagePromise;
+    await pipPage.locator('.documentPipSubtitleAppearanceButton').click();
+    const pipSlider = pipPage.locator('.subtitleSizerSlider');
+    await expect(pipSlider).toHaveValue('100');
+    await pipSlider.focus();
+    await pipSlider.press('ArrowRight');
+    await expect(pipSlider).toHaveValue('105');
+
+    let mainToggleReachable = false;
+    for (let attempt = 0; attempt < 4 && !mainToggleReachable; attempt++) {
+        await page.mouse.move(20, 20);
+        await page.mouse.move(120, 120);
+        mainToggleReachable = await page.locator('.btnPip:visible').count() > 0;
+    }
+    await testInfo.attach('pip-main-toggle-probe.json', {
+        body: JSON.stringify({ mainToggleReachable }),
+        contentType: 'application/json'
+    });
+
+    if (mainToggleReachable) {
+        // Exit route 1: the main window's PiP toggle while the popup is open.
+        await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnPip');
+        await expect.poll(() => pipPage.isClosed()).toBe(true);
+        await expect(page.locator('.videoPlayerContainer video')).toBeVisible();
+        expect(await readDurableAppearance(page)).toEqual(durableBefore);
+
+        // A fresh PiP session for the teardown exit below.
+        const reopenPromise = page.context().waitForEvent('page');
+        await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnPip');
+        const secondPip = await reopenPromise;
+        await secondPip.locator('.documentPipSubtitleAppearanceButton').click();
+        const secondSlider = secondPip.locator('.subtitleSizerSlider');
+        await expect(secondSlider).toHaveValue('100');
+        await secondSlider.focus();
+        await secondSlider.press('ArrowRight');
+        await expect(secondSlider).toHaveValue('105');
+
+        // Exit route 2: playback teardown while Document PiP is open.
+        await page.goBack();
+        await expect.poll(() => secondPip.isClosed(), { timeout: 30_000 })
+            .toBe(true);
+    } else {
+        // Exit route 2 only: playback teardown while Document PiP is open.
+        await page.goBack();
+        await expect.poll(() => pipPage.isClosed(), { timeout: 30_000 })
+            .toBe(true);
+    }
+
+    await expect.poll(() => page.locator('.videoPlayerContainer video').count())
+        .toBe(0);
+    expect(await readDurableAppearance(page)).toEqual(durableBefore);
+
+    // The durable preference must survive the whole session: restart
+    // playback and read it back through the normal panel.
+    const restarted = await startPlayback(page, config);
+    await restarted.evaluate((el: HTMLVideoElement) => el.pause());
+    await openSizeOverlay(page);
+    await expect(page.locator('.subtitleSizerSlider')).toHaveValue('100');
+    expect(await readDurableAppearance(page)).toEqual(durableBefore);
+    await page.keyboard.press('Escape');
+});
+
+// @covers subtitle_controls.track_menu.document_pip_custom_renderer_and_live_appearance
+test('Document PiP multi-field appearance adjustments leave the durable settings untouched', async ({ page, config }, testInfo) => {
+    test.setTimeout(300_000);
+    await login(page, config.username, config.password);
+    const video = await startPlayback(page, config);
+    const mainSubtitleLine = page.locator(
+        '.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)');
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
+    await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
+    await parkOnCue(video, mainSubtitleLine);
+
+    // Fix a multi-field durable baseline: size 100, and whatever position,
+    // font and weight the fresh account starts with.
+    await openSizeOverlay(page);
+    await setSizeSlider(page, 100);
+    const baseline = await page.locator('.subtitleSizer').evaluate(panel => ({
+        position: (panel.querySelector('.subtitlePositionSlider') as HTMLInputElement).value,
+        font: (panel.querySelector('.subtitleFontSelect') as HTMLSelectElement).value,
+        weight: (panel.querySelector('.subtitleWeightSelect') as HTMLSelectElement).value
+    }));
+    await page.keyboard.press('Escape');
+
+    const durableBefore = await readDurableAppearance(page);
+    const serverPrefsBefore = await readServerDisplayPrefs(page);
+
+    const pipPagePromise = page.context().waitForEvent('page');
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnPip');
+    const pipPage = await pipPagePromise;
+    await pipPage.locator('.documentPipSubtitleAppearanceButton').click();
+
+    // Adjust every persisted field inside the PiP session.
+    const pipSlider = pipPage.locator('.subtitleSizerSlider');
+    await expect(pipSlider).toHaveValue('100');
+    await pipSlider.focus();
+    await pipSlider.press('ArrowRight');
+    await expect(pipSlider).toHaveValue('105');
+
+    const positionSlider = pipPage.locator('.subtitlePositionSlider');
+    await positionSlider.focus();
+    await positionSlider.press('ArrowRight');
+    await expect(positionSlider.inputValue()).not.toBe(baseline.position);
+
+    await pipPage.locator('.subtitleFontSelect').selectOption('console');
+    await pipPage.locator('.subtitleWeightSelect').selectOption('bold');
+    await testInfo.attach('pip-multifield-during.png', {
+        body: await pipPage.screenshot(),
+        contentType: 'image/png'
+    });
+
+    await pipPage.close();
+    await expect(page.locator('.videoPlayerContainer video')).toBeVisible();
+
+    // The durable document must be byte-identical, server-side too.
+    expect(await readDurableAppearance(page)).toEqual(durableBefore);
+    const serverPrefsAfter = await readServerDisplayPrefs(page);
+    expect(serverPrefsAfter).toBe(serverPrefsBefore);
+
+    // And the normal panel must show the baseline values, restored.
+    await openSizeOverlay(page);
+    await expect(page.locator('.subtitleSizerSlider')).toHaveValue('100');
+    const restored = await page.locator('.subtitleSizer').evaluate(panel => ({
+        position: (panel.querySelector('.subtitlePositionSlider') as HTMLInputElement).value,
+        font: (panel.querySelector('.subtitleFontSelect') as HTMLSelectElement).value,
+        weight: (panel.querySelector('.subtitleWeightSelect') as HTMLSelectElement).value
+    }));
+    expect(restored).toEqual(baseline);
+    await page.keyboard.press('Escape');
+});
+
+// @covers subtitle_controls.track_menu.document_pip_custom_renderer_and_live_appearance
+test('Document PiP panel opened from the main window menu stays transient', async ({ page, config }) => {
+    test.setTimeout(300_000);
+    await login(page, config.username, config.password);
+    const video = await startPlayback(page, config);
+    const mainSubtitleLine = page.locator(
+        '.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)');
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
+    await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
+    await parkOnCue(video, mainSubtitleLine);
+
+    await openSizeOverlay(page);
+    await setSizeSlider(page, 100);
+    await page.keyboard.press('Escape');
+    const durableBefore = await readDurableAppearance(page);
+
+    const pipPagePromise = page.context().waitForEvent('page');
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnPip');
+    const pipPage = await pipPagePromise;
+
+    // The user opens the appearance panel from the main window's subtitle
+    // menu while PiP is open: the panel is hosted in the PiP window, so the
+    // adjustment made there is a PiP-context adjustment.
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
+    await page.getByText('Subtitle Appearance', { exact: true }).click();
+    const pipSlider = pipPage.locator('.subtitleSizerSlider');
+    await expect(pipSlider).toBeVisible();
+    await expect(pipSlider).toHaveValue('100');
+    await pipSlider.focus();
+    await pipSlider.press('ArrowRight');
+    await expect(pipSlider).toHaveValue('105');
+
+    await pipPage.close();
+    await expect(page.locator('.videoPlayerContainer video')).toBeVisible();
+    expect(await readDurableAppearance(page)).toEqual(durableBefore);
+    await openSizeOverlay(page);
+    await expect(page.locator('.subtitleSizerSlider')).toHaveValue('100');
+    await page.keyboard.press('Escape');
 });
 
 // @covers subtitle_controls.track_menu.sizer_applies_to_rendered_cues
