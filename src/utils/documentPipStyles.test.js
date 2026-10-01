@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-30.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-30, 2026-10-01.
 /**
  * The Document Picture-in-Picture popup only has the styles copied into it.
  * Production CSS-in-JS (Emotion speedy mode) keeps its rules in the CSSOM with

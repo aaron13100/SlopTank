@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-30.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-30, 2026-10-01.
 /**
  * Copies an app document's loaded styles into another document (the Document
  * Picture-in-Picture popup), which resolves CSS against its own stylesheets

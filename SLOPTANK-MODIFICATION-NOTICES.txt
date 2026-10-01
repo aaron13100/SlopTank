@@ -1,4 +1,4 @@
-# SlopTank modification notice: added or changed by SlopTank on 2026-09-09, 2026-09-15, 2026-09-21, 2026-09-23, 2026-09-26.
+# SlopTank modification notice: added or changed by SlopTank on 2026-09-09, 2026-09-15, 2026-09-21, 2026-09-23, 2026-09-26, 2026-10-01.
 # Scope: exact same-directory paths only.
 # Columns: path<TAB>change-dates<TAB>git-mode<TAB>sha256
 .dependency-cruiser-known-violations.json	2026-07-23	100644	9db3a055c5ec96d19be01add7ddfdad559e035b9add3d768f2ad17b7b91cc362
