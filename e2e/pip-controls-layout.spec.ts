@@ -22,9 +22,28 @@ test.setTimeout(240_000);
  * PiP is open, and leaving PiP must restore the exact pre-PiP layout.
  */
 
-const PIP_WINDOW_SIZES: Array<[ number, number ]> = [ [ 320, 180 ], [ 400, 225 ], [ 640, 360 ], [ 1100, 650 ] ];
-const MAIN_WINDOW_SIZES: Array<[ number, number ]> = [ [ 1440, 900 ], [ 900, 700 ] ];
-const PIP_CYCLES = 3;
+const ALL_PIP_WINDOW_SIZES: Array<[ number, number ]> = [ [ 320, 180 ], [ 400, 225 ], [ 640, 360 ], [ 1100, 650 ] ];
+const ALL_MAIN_WINDOW_SIZES: Array<[ number, number ]> = [ [ 1440, 900 ], [ 1920, 1080 ], [ 900, 700 ] ];
+
+/**
+ * Comma-separated "WxH" list from an opt-in env var, so a heavily loaded host can
+ * run the same matrix in bounded slices instead of one run that outlives its
+ * timeout. Unset means the whole matrix.
+ */
+function sizesFromEnv(name: string, all: Array<[ number, number ]>): Array<[ number, number ]> {
+    const raw = process.env[name]; // allow-direct-env: opt-in matrix slicing in an e2e spec
+    if (!raw) return all;
+    const wanted = new Set(raw.split(',').map(entry => entry.trim()));
+    const selected = all.filter(([ w, h ]) => wanted.has(`${w}x${h}`));
+    if (selected.length !== wanted.size) {
+        throw new Error(`${name}=${raw} names a size outside the matrix`); // allow-raw-error: test setup fast-fail, not production code
+    }
+    return selected;
+}
+
+const PIP_WINDOW_SIZES = sizesFromEnv('E2E_PIP_WINDOW_SIZES', ALL_PIP_WINDOW_SIZES);
+const MAIN_WINDOW_SIZES = sizesFromEnv('E2E_PIP_MAIN_SIZES', ALL_MAIN_WINDOW_SIZES);
+const PIP_CYCLES = Number(process.env.E2E_PIP_CYCLES || 3); // allow-direct-env: opt-in matrix slicing in an e2e spec
 
 interface Box { top: number; bottom: number; left: number; width: number; height: number }
 
@@ -55,22 +74,36 @@ async function startPlayback(page: Page, config: { itemId: string; serverId: str
 }
 
 /**
- * Wake the OSD and read every layout fact that PiP must not disturb. The
- * reading is repeated until the controls geometry is identical across three
- * consecutive wakes a second apart: the OSD title row empties itself a few seconds into
- * playback (24px at 900px wide), a time-driven change unrelated to PiP that a
- * single early sample would misread as a PiP layout shift.
+ * Wake the OSD and read every layout fact that PiP must not disturb.
+ *
+ * The OSD carries a transient `.osdMediaStatus` row ("Fetching additional
+ * data", 24px) from the player's beginFetch event to its endFetch event, i.e.
+ * while the item's extra data loads early in playback. Under host load that
+ * window outlasts several seconds, and a baseline taken inside it differs by
+ * exactly that row from every later reading. It is a time-driven loading
+ * indicator, unrelated to PiP, so a reading is only taken once the row is gone
+ * and the geometry then agrees across three consecutive wakes.
  */
 async function measureLayout(page: Page): Promise<PlayerLayout> {
     let previous: PlayerLayout | null = null;
     let agreeing = 0;
-    for (let attempt = 0; attempt < 20; attempt++) {
+    for (let attempt = 0; attempt < 60; attempt++) {
         await expect
             .poll(async () => {
                 await wakeOsd(page);
                 return (await page.locator('.videoOsdBottom-maincontrols:visible').count()) > 0;
             })
             .toBe(true);
+        const fetching = await page.evaluate(() => {
+            const status = document.querySelector('.videoOsdBottom-maincontrols:not([hidden]) .osdMediaStatus');
+            return !!status && !status.classList.contains('hide');
+        });
+        if (fetching) {
+            previous = null;
+            agreeing = 0;
+            await page.waitForTimeout(500);
+            continue;
+        }
         const current = await readLayout(page);
         agreeing = previous && JSON.stringify(previous.controls) === JSON.stringify(current.controls) ? agreeing + 1 : 0;
         if (agreeing >= 2) {
@@ -79,7 +112,7 @@ async function measureLayout(page: Page): Promise<PlayerLayout> {
         previous = current;
         await page.waitForTimeout(1_000);
     }
-    throw new Error('OSD controls geometry never settled across 20 samples'); // allow-raw-error: test setup fast-fail, not production code
+    throw new Error('OSD controls geometry never settled across 60 samples'); // allow-raw-error: test setup fast-fail, not production code
 }
 
 async function readLayout(page: Page): Promise<PlayerLayout> {
@@ -146,11 +179,42 @@ async function assertControlsReachable(page: Page, label: string) {
     });
 }
 
+/**
+ * What the Document PiP popup itself shows the user: the native video controls,
+ * the subtitle appearance button, and anything of the main-page OSD that leaked in.
+ */
+async function readPopupControls(pip: Page) {
+    return pip.evaluate(() => {
+        const box = (el: Element | null) => {
+            if (!el) return null;
+            const r = el.getBoundingClientRect();
+            return { top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), right: Math.round(r.right) };
+        };
+        const video = document.querySelector('video') as HTMLVideoElement | null;
+        const button = document.querySelector('.documentPipSubtitleAppearanceButton');
+        const osd = document.querySelector('.videoOsdBottom');
+        return {
+            viewport: { width: window.innerWidth, height: window.innerHeight },
+            nativeControls: !!video?.controls,
+            button: box(button),
+            osdPresent: !!osd,
+            osdBox: osd ? box(osd) : null
+        };
+    });
+}
+
 /** Evidence screenshots, only when E2E_PIP_SHOTS_DIR names a directory. */
 async function shoot(page: Page, name: string) {
     const dir = process.env.E2E_PIP_SHOTS_DIR; // allow-direct-env: opt-in evidence capture in an e2e spec
     if (dir) {
         await page.screenshot({ path: `${dir}/${name}.png` });
+    }
+}
+
+async function shootPopup(pip: Page, name: string) {
+    const dir = process.env.E2E_PIP_SHOTS_DIR; // allow-direct-env: opt-in evidence capture in an e2e spec
+    if (dir) {
+        await pip.screenshot({ path: `${dir}/${name}.png` });
     }
 }
 
@@ -197,8 +261,17 @@ for (const [ mainWidth, mainHeight ] of MAIN_WINDOW_SIZES) {
                 expectAnchoredToBottom(during, label);
                 expect(during.controls, `${label}: controls geometry unchanged`).toEqual(before.controls);
                 await assertControlsReachable(page, label);
+                const popup = await readPopupControls(pip);
+                expect(popup.nativeControls, `${label}: popup shows native video controls`).toBe(true);
+                expect(popup.button, `${label}: popup appearance button exists`).not.toBeNull();
+                expect(popup.button!.bottom, `${label}: appearance button inside popup`).toBeLessThanOrEqual(popup.viewport.height);
+                expect(popup.button!.right, `${label}: appearance button inside popup`).toBeLessThanOrEqual(popup.viewport.width);
+                if (popup.osdPresent) {
+                    expect(popup.osdBox?.bottom, `${label}: any OSD in the popup stays bottom-anchored`).toBe(popup.viewport.height);
+                }
                 if (cycle === 1) {
                     await shoot(page, `c301-green-docpip-${mainWidth}x${mainHeight}-during-${width}x${height}`);
+                    await shootPopup(pip, `c301-green-docpip-${mainWidth}x${mainHeight}-popup-${width}x${height}`);
                 }
             }
 
@@ -215,31 +288,34 @@ for (const [ mainWidth, mainHeight ] of MAIN_WINDOW_SIZES) {
 }
 
 // @covers player_controls.picture_in_picture.controls_stay_bottom_anchored_through_video_pip
-test('Video-only PiP keeps controls bottom-anchored and restores the layout exactly', async ({ page, config }) => {
-    await page.addInitScript(() => {
+for (const [ mainWidth, mainHeight ] of MAIN_WINDOW_SIZES) {
+    test(`Video-only PiP keeps controls bottom-anchored and restores the layout exactly (main ${mainWidth}x${mainHeight})`, async ({ page, config }) => {
+        await page.addInitScript(() => {
         // Chrome's video-only PiP is what the player falls back to without the
         // Document PiP API.
-        Object.defineProperty(window, 'documentPictureInPicture', { value: undefined });
+            Object.defineProperty(window, 'documentPictureInPicture', { value: undefined });
+        });
+        await login(page, config.username, config.password);
+        await page.setViewportSize({ width: mainWidth, height: mainHeight });
+        await startPlayback(page, config);
+        const before = await measureLayout(page);
+        expectAnchoredToBottom(before, 'before PiP');
+
+        for (let cycle = 1; cycle <= PIP_CYCLES; cycle++) {
+            await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnPip');
+            await expect.poll(() => page.evaluate(() => !!document.pictureInPictureElement)).toBe(true);
+            const during = await measureLayout(page);
+            expectAnchoredToBottom(during, `cycle ${cycle} during PiP`);
+            expect(during.controls, `cycle ${cycle}: controls geometry unchanged`).toEqual(before.controls);
+            await assertControlsReachable(page, `cycle ${cycle} during PiP`);
+
+            await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnPip');
+            await expect.poll(() => page.evaluate(() => !!document.pictureInPictureElement)).toBe(false);
+            const after = await measureLayout(page);
+            expect(after, `cycle ${cycle}: exiting PiP restores the exact pre-PiP layout`).toEqual(before);
+        }
     });
-    await login(page, config.username, config.password);
-    await startPlayback(page, config);
-    const before = await measureLayout(page);
-    expectAnchoredToBottom(before, 'before PiP');
-
-    for (let cycle = 1; cycle <= PIP_CYCLES; cycle++) {
-        await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnPip');
-        await expect.poll(() => page.evaluate(() => !!document.pictureInPictureElement)).toBe(true);
-        const during = await measureLayout(page);
-        expectAnchoredToBottom(during, `cycle ${cycle} during PiP`);
-        expect(during.controls, `cycle ${cycle}: controls geometry unchanged`).toEqual(before.controls);
-        await assertControlsReachable(page, `cycle ${cycle} during PiP`);
-
-        await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnPip');
-        await expect.poll(() => page.evaluate(() => !!document.pictureInPictureElement)).toBe(false);
-        const after = await measureLayout(page);
-        expect(after, `cycle ${cycle}: exiting PiP restores the exact pre-PiP layout`).toEqual(before);
-    }
-});
+}
 
 // @covers player_controls.picture_in_picture.double_press_enter_race
 test('A double press on the PiP button still ends with the player back in the main window', async ({ page, config }) => {

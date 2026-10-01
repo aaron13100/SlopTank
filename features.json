@@ -418,6 +418,20 @@
           ]
         },
         {
+          "id": "subtitle_controls.track_menu.single_renderer_in_document_pip",
+          "type": "happy",
+          "requiredAssertions": [
+            "exactly_one_renderer_before_during_and_after_document_pip"
+          ]
+        },
+        {
+          "id": "subtitle_controls.track_menu.single_renderer_in_video_pip",
+          "type": "happy",
+          "requiredAssertions": [
+            "exactly_one_renderer_before_during_and_after_video_pip"
+          ]
+        },
+        {
           "id": "subtitle_controls.track_menu.ass_authored_layout_live_appearance_secondary_and_offset",
           "type": "happy",
           "requiredAssertions": [
