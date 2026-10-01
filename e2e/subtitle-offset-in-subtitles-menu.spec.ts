@@ -1,4 +1,4 @@
-// SlopTank modification notice: added by SlopTank on 2026-09-29.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-29, 2026-10-01.
 import {
     clickOsdControl,
     expect,

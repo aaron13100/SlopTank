@@ -1,4 +1,4 @@
-// SlopTank modification notice: added by SlopTank on 2026-09-30.
+// SlopTank modification notice: added or changed by SlopTank on 2026-10-01.
 import path from 'node:path';
 
 import type { Page } from '@playwright/test';

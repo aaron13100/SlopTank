@@ -1,4 +1,4 @@
-// SlopTank modification notice: added by SlopTank on 2026-10-01 (c303).
+// SlopTank modification notice: added or changed by SlopTank on 2026-10-01.
 /**
  * The shared subtitle size baseline of one player: the single value every
  * renderer multiplies by the user's text-size scale. Outside Picture in

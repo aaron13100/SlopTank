@@ -1,4 +1,4 @@
-// SlopTank modification notice: added by SlopTank on 2026-09-30.
+// SlopTank modification notice: added or changed by SlopTank on 2026-10-01.
 /**
  * Pure item model for the in-player Subtitles (CC) action sheet: a settings
  * group (icon, current value, chevron) above a divider and the track group

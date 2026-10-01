@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-25, 2026-09-09, 2026-09-25, 2026-09-27, 2026-09-29.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-25, 2026-09-09, 2026-09-25, 2026-09-27, 2026-09-29, 2026-10-01.
 /**
  * In-player subtitle track and appearance menu controller.
  * @module controllers/playback/video/SubtitleTrackMenu

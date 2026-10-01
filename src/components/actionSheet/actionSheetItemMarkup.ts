@@ -1,4 +1,4 @@
-// SlopTank modification notice: added by SlopTank on 2026-09-30.
+// SlopTank modification notice: added or changed by SlopTank on 2026-10-01.
 /**
  * Pure markup rendering for action sheet rows. Kept apart from the dialog
  * lifecycle in actionSheet.ts so the item model can be tested without the

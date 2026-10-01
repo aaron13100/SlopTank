@@ -1,4 +1,4 @@
-// SlopTank modification notice: added by SlopTank on 2026-10-01 (c303), extracted from plugin.js.
+// SlopTank modification notice: added or changed by SlopTank on 2026-10-01.
 /**
  * ASS/SSA typography overrides for the libass renderer: the user's font,
  * weight and text-size scale applied to an authored document while every

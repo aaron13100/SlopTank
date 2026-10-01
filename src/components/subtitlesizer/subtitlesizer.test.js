@@ -1,4 +1,4 @@
-// SlopTank modification notice: added by SlopTank on 2026-09-30.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-30.
 /**
  * SubtitleSizer renders the same template into the main document and into a
  * foreign document (the Document Picture-in-Picture popup). The v0
