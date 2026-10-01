@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-23, 2026-07-24, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-23, 2026-07-24, 2026-09-09, 2026-10-01.
 /// <reference types="vitest" />
 /// <reference types="vite/client" />
 import { readFile } from 'node:fs/promises';
@@ -26,6 +26,26 @@ function htmlAsString(): Plugin {
     };
 }
 
+/**
+ * The webpack build imports `*.worker.ts` files through worker-loader, which
+ * yields a Worker constructor (components/images/imageLoader.js does
+ * `new Worker()` at module load). jsdom has no Web Worker, so under vitest
+ * the module resolves to an inert Worker-shaped class: it accepts listeners
+ * and messages and never answers. Everything else in the graph stays real.
+ */
+function workerAsInertClass(): Plugin {
+    return {
+        name: 'worker-as-inert-class',
+        enforce: 'pre',
+        load(id) {
+            if (!/\.worker\.[cm]?[jt]s$/.test(id)) {
+                return null;
+            }
+            return 'export default class InertWorker { addEventListener() {} removeEventListener() {} postMessage() {} terminate() {} }';
+        }
+    };
+}
+
 export default defineConfig({
     // Mirror webpack.common.js's DefinePlugin globals so any module in the
     // app graph is loadable under vitest.
@@ -37,7 +57,7 @@ export default defineConfig({
         __USE_SYSTEM_FONTS__: false,
         __WEBPACK_SERVE__: false
     },
-    plugins: [ tsconfigPaths(), htmlAsString() ],
+    plugins: [ tsconfigPaths(), htmlAsString(), workerAsInertClass() ],
     test: {
         include: [ 'src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}' ],
         coverage: {
