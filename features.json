@@ -893,6 +893,55 @@
           ]
         }
       ]
+    },
+    {
+      "id": "player_controls.picture_in_picture",
+      "title": "Playback controls stay anchored at the bottom through Picture in Picture",
+      "description": "Entering Document PiP or video-only PiP, resizing the PiP window and exiting it leaves the main window's playback controls fixed to the bottom with the PiP button reachable, and exiting restores the exact pre-PiP layout, across repeated cycles.",
+      "owner": "web-client",
+      "kind": "user-action",
+      "files": [
+        "src/plugins/htmlVideoPlayer/plugin.js",
+        "e2e/pip-controls-layout.spec.ts"
+      ],
+      "added": "2026-10-01",
+      "paths": [
+        {
+          "id": "player_controls.picture_in_picture.controls_stay_bottom_anchored_through_document_pip",
+          "type": "happy",
+          "requiredAssertions": [
+            "controls_bottom_equals_viewport_bottom",
+            "controls_reachable_by_on_screen_state",
+            "controls_geometry_unchanged_during_pip"
+          ]
+        },
+        {
+          "id": "player_controls.picture_in_picture.controls_stay_bottom_anchored_through_video_pip",
+          "type": "happy",
+          "requiredAssertions": [
+            "controls_bottom_equals_viewport_bottom",
+            "controls_geometry_unchanged_during_pip"
+          ]
+        },
+        {
+          "id": "player_controls.picture_in_picture.double_press_enter_race",
+          "type": "unhappy",
+          "failureClass": "race_condition",
+          "requiredAssertions": [
+            "player_back_in_main_window_after_closing_every_popup",
+            "layout_equals_pre_pip_layout"
+          ]
+        },
+        {
+          "id": "player_controls.picture_in_picture.layout_not_stranded_after_exit",
+          "type": "unhappy",
+          "failureClass": "stranded_ui",
+          "requiredAssertions": [
+            "layout_equals_pre_pip_layout_after_each_exit",
+            "stable_over_three_cycles"
+          ]
+        }
+      ]
     }
   ]
 }
