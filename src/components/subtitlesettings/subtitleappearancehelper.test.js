@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-25, 2026-07-26, 2026-07-31, 2026-08-29, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-25, 2026-07-26, 2026-07-31, 2026-08-29, 2026-09-09, 2026-10-01.
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -6,8 +6,10 @@ import {
     getAssSubtitleVerticalOffsetPercentage,
     getSecondarySubtitleOffset,
     getStyles,
+    getPipSubtitleBaseline,
     getSubtitleFontSize,
-    getSubtitleVerticalPosition
+    getSubtitleVerticalPosition,
+    pipSubtitleFontPx
 } from './subtitleappearancehelper';
 
 function getFontSize(textSize) {
@@ -71,6 +73,35 @@ describe('subtitle appearance sizing', () => {
         [ 1080, 48.6 ]
     ])('sizes a %spx-tall video at 4.5%% of picture height', (videoHeight, expectedFontSize) => {
         expect(getSubtitleFontSize(videoHeight)).toBe(expectedFontSize);
+    });
+
+    // @covers subtitle_controls.appearance_sizing.document_pip_auto_scale
+    it.each([
+        [ 1, 180, 14 ],
+        [ 1, 225, 16.88 ],
+        [ 1, 360, 27 ],
+        [ 1, 650, 48.75 ],
+        [ 1.5, 225, 25.31 ],
+        [ 0.5, 180, 7 ]
+    ])('sizes PiP text at userScale %s in a %spx-tall viewport to %spx', (userScale, pipViewportHeight, expected) => {
+        expect(pipSubtitleFontPx({ userScale, pipViewportHeight })).toBe(expected);
+    });
+
+    // @covers subtitle_controls.appearance_sizing.document_pip_auto_scale
+    it('retains the last valid size for an invalid PiP viewport height', () => {
+        expect(pipSubtitleFontPx({ userScale: 1, pipViewportHeight: 0 })).toBeNull();
+        expect(pipSubtitleFontPx({ userScale: 1, pipViewportHeight: Number.NaN })).toBeNull();
+        expect(getPipSubtitleBaseline(180, 0)).toBe(8.1);
+        expect(getPipSubtitleBaseline(0, 180)).toBeNull();
+    });
+
+    // @covers subtitle_controls.appearance_sizing.document_pip_auto_scale
+    it('never renders PiP text smaller than the normal proportional size', () => {
+        // A tall video in a short viewport (letterbox mismatch): the normal
+        // baseline already exceeds the PiP target, so it is kept.
+        expect(getPipSubtitleBaseline(1000, 180)).toBe(45);
+        expect(getPipSubtitleBaseline(180, 180)).toBe(14);
+        expect(getPipSubtitleBaseline(360, 360)).toBe(27);
     });
 
     // @covers subtitle_controls.appearance_sizing.native_cue_uses_concrete_size

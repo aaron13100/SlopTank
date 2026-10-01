@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-24, 2026-07-25, 2026-07-26, 2026-07-31, 2026-08-09, 2026-08-29, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-24, 2026-07-25, 2026-07-26, 2026-07-31, 2026-08-09, 2026-08-29, 2026-09-09, 2026-10-01.
 /**
  * Subtitle settings visual helper.
  * @module components/subtitleSettings/subtitleAppearanceHelper
@@ -6,6 +6,8 @@
 
 const SUBTITLE_HEIGHT_RATIO = 0.045;
 const SUBTITLE_LINE_HEIGHT_RATIO = 1.35;
+const PIP_SUBTITLE_HEIGHT_RATIO = 0.075;
+const PIP_SUBTITLE_MIN_FONT_PX = 14;
 
 export const TEXT_SIZE_MIN_MULTIPLIER = 0.25;
 export const TEXT_SIZE_MAX_MULTIPLIER = 2;
@@ -242,6 +244,46 @@ export function getSubtitleFontSize(videoHeight) {
     }
 
     return Math.round(videoHeight * SUBTITLE_HEIGHT_RATIO * 100) / 100;
+}
+
+/**
+ * Readable subtitle size for a Picture-in-Picture viewport: the user's text
+ * scale times max(14px, 7.5% of the PiP viewport height). A PiP window is far
+ * smaller than the main player, where the ordinary 4.5% baseline would be
+ * unreadable (about 8px in a 320x180 window).
+ * @param {{ userScale: number, pipViewportHeight: number }} options - The
+ * user's text-size multiplier and the PiP viewport height in CSS pixels.
+ * @returns {number|null} Font size in CSS pixels, or null for an invalid
+ * viewport height so callers retain the last valid size.
+ */
+export function pipSubtitleFontPx({ userScale, pipViewportHeight }) {
+    if (typeof pipViewportHeight !== 'number' || !Number.isFinite(pipViewportHeight) || pipViewportHeight <= 0) {
+        return null;
+    }
+    const scale = typeof userScale === 'number' && Number.isFinite(userScale) && userScale > 0 ? userScale : 1;
+    const px = scale * Math.max(PIP_SUBTITLE_MIN_FONT_PX, PIP_SUBTITLE_HEIGHT_RATIO * pipViewportHeight);
+    return Math.round(px * 100) / 100;
+}
+
+/**
+ * Shared subtitle baseline while Document PiP is open. Every renderer
+ * multiplies the baseline by the user's scale, so the PiP baseline is the
+ * larger of the normal proportional baseline and pipSubtitleFontPx at scale 1:
+ * the rendered size is max(normal, PiP target) for any user scale, which never
+ * shrinks a user who already chose large text and never writes the user's
+ * preference.
+ * @param {number} videoHeight - Rendered video height in CSS pixels.
+ * @param {number} pipViewportHeight - PiP viewport height in CSS pixels.
+ * @returns {number|null} Baseline font size in CSS pixels, or null when the
+ * video height is invalid.
+ */
+export function getPipSubtitleBaseline(videoHeight, pipViewportHeight) {
+    const normal = getSubtitleFontSize(videoHeight);
+    if (normal === null) {
+        return null;
+    }
+    const pip = pipSubtitleFontPx({ userScale: 1, pipViewportHeight });
+    return pip === null ? normal : Math.max(normal, pip);
 }
 
 /**

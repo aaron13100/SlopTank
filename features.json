@@ -563,6 +563,20 @@
           ]
         },
         {
+          "id": "subtitle_controls.appearance_sizing.document_pip_auto_scale",
+          "type": "happy",
+          "requiredAssertions": [
+            "pip_font_size_is_scale_times_max_floor_or_proportional"
+          ]
+        },
+        {
+          "id": "subtitle_controls.appearance_sizing.video_pip_native_cues_unstyleable",
+          "type": "happy",
+          "requiredAssertions": [
+            "video_only_pip_shows_no_page_styleable_native_track"
+          ]
+        },
+        {
           "id": "subtitle_controls.appearance_sizing.position_independent_of_text_size",
           "type": "happy",
           "requiredAssertions": [

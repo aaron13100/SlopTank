@@ -1,5 +1,5 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-24, 2026-07-31, 2026-08-01, 2026-08-09, 2026-08-12, 2026-09-02, 2026-09-09, 2026-09-14, 2026-09-15, 2026-09-29.
-import { test as base, expect } from '@playwright/test';
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-24, 2026-07-31, 2026-08-01, 2026-08-09, 2026-08-12, 2026-09-02, 2026-09-09, 2026-09-14, 2026-09-15, 2026-09-29, 2026-10-01.
+import { test as base, expect, type Locator, type Page } from '@playwright/test';
 
 import permalinkGrammar from '../src/components/router/permalink-grammar-v1.json';
 
@@ -607,6 +607,53 @@ export async function login(page: import('@playwright/test').Page, username: str
     } catch (cause) {
         throw await describeLoginFailure(page, cause as Error);
     }
+}
+
+/**
+ * Open the item's details page, press Play and wait until the video element
+ * is actually playing.
+ *
+ * @param page - Logged-in page.
+ * @param config - Item and server ids from the e2e config.
+ * @returns The player's video element.
+ */
+export async function startPlayback(page: Page, config: { itemId: string; serverId: string }): Promise<Locator> {
+    await page.goto(`/web/#/details?id=${config.itemId}&serverId=${config.serverId}`);
+    await page.locator('.mainDetailButtons .btnPlay:visible').click();
+    await page.waitForURL(VIDEO_ROUTE, { timeout: 60_000 });
+    const video = page.locator('video').first();
+    await expect(video).toBeVisible({ timeout: 20_000 });
+    await expect
+        .poll(async () => video.evaluate((el: HTMLVideoElement) => !el.paused && el.readyState >= 2), { timeout: 30_000 })
+        .toBe(true);
+    return video;
+}
+
+/**
+ * Select the English subtitle track from the OSD menu and park playback,
+ * paused, on a visible cue.
+ *
+ * @param page - Page with the player mounted.
+ * @param video - The player's video element.
+ */
+export async function selectEnglishAndPark(page: Page, video: Locator): Promise<void> {
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnSubtitles');
+    await page.locator('.actionSheetMenuItem', { hasText: 'English' }).first().click();
+    await parkOnCue(video, page.locator('.videoSubtitlesInner:not(.videoSubtitlesPreviewLine)'));
+}
+
+/**
+ * Press the OSD PiP button and return the Document PiP popup page.
+ *
+ * @param page - Page with the player mounted.
+ * @returns The popup that now hosts the video surface.
+ */
+export async function openDocumentPip(page: Page): Promise<Page> {
+    const pipPagePromise = page.context().waitForEvent('page');
+    await clickOsdControl(page, '.videoOsdBottom-maincontrols .btnPip');
+    const pip = await pipPagePromise;
+    await expect(pip.locator('.videoPlayerContainer video')).toBeVisible();
+    return pip;
 }
 
 export { expect };
