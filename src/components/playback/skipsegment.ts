@@ -2,6 +2,7 @@ import { PlaybackManager } from './playbackmanager';
 import { TICKS_PER_MILLISECOND, TICKS_PER_SECOND } from 'constants/time';
 import type { MediaSegmentDto } from '@jellyfin/sdk/lib/generated-client/models/media-segment-dto';
 import type { PlaybackStopInfo } from 'types/playbackStopInfo';
+import type { PlayerPlugin } from 'types/plugin';
 import { PlaybackSubscriber } from 'apps/stable/features/playback/utils/playbackSubscriber';
 import { isInSegment } from 'apps/stable/features/playback/utils/mediaSegments';
 import Events, { type Event } from 'utils/events';
@@ -148,9 +149,21 @@ class SkipSegment extends PlaybackSubscriber {
         }
     }
 
+    /**
+     * Duration in ticks of the media source actually playing. Segments belong
+     * to that source, and an alternate version can differ in length from the
+     * primary item's RunTimeTicks, so the item runtime is only a fallback for
+     * when the source duration is unknown.
+     */
+    private getPlayingDurationTicks(player: PlayerPlugin): number {
+        const sourceTicks = this.playbackManager.duration(player);
+        if (sourceTicks) return sourceTicks;
+        return this.playbackManager.currentItem(player)?.RunTimeTicks ?? Infinity;
+    }
+
     onPromptSkip(e: Event, segment: MediaSegmentDto) {
         if (this.player && segment.EndTicks != null
-            && segment.EndTicks >= this.playbackManager.currentItem(this.player).RunTimeTicks
+            && segment.EndTicks >= this.getPlayingDurationTicks(this.player)
             && this.playbackManager.getNextItem()
             && userSettings.enableNextVideoInfoOverlay()
         ) {
