@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-14, 2026-09-15.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-14, 2026-09-15, 2026-10-02.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -29,6 +29,19 @@ describe('deleteErrorSuffix', () => {
         expect(suffix).toContain('content-mismatch');
         expect(suffix).toContain("Current content for '/media/F1.mp4'");
         expect(suffix).not.toContain('write access');
+    });
+
+    it('surfaces a bare JSON string body, the shape ASP.NET gives Unauthorized("...")', async () => {
+        // Observed live 2026-10-02 (c187): DELETE /Items/{id} by a user who lacks
+        // delete permission answered 401 with the body "Unauthorized access"
+        // (a JSON string). The extractor parsed it, found no title/detail, and
+        // dropped the server's stated reason for a bare "(HTTP 401)".
+        const suffix = await deleteErrorSuffix({
+            status: 401,
+            text: () => Promise.resolve('"Unauthorized access"')
+        });
+
+        expect(suffix).toBe(' (Unauthorized access)');
     });
 
     it('falls back to the HTTP status when the body carries nothing usable', async () => {

@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-14, 2026-09-15.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-14, 2026-09-15, 2026-10-02.
 
 import { BaseItemKind } from '@jellyfin/sdk/lib/generated-client/models/base-item-kind';
 
@@ -70,6 +70,13 @@ export function deleteErrorSuffix(err) {
                 return err.text().then(function (bodyText) {
                     try {
                         const parsed = JSON.parse(bodyText);
+                        // ASP.NET's Unauthorized("msg") and friends answer with a
+                        // bare JSON string; it is the server's stated reason, so
+                        // treat it exactly like the plain-text branch below.
+                        if (typeof parsed === 'string' && parsed) {
+                            return ` (${parsed.slice(0, 300)})`;
+                        }
+
                         const code = parsed && parsed.title;
                         const detail = parsed && parsed.detail;
                         if (code || detail) {
