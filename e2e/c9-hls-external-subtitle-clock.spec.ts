@@ -10,12 +10,13 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { test, expect } from '@playwright/test';
 
 const REQUESTED_START_SECONDS = 6.5;
 const SOURCE_CUE_START_SECONDS = 7;
 const SOURCE_CUE_END_SECONDS = 9;
+const FFMPEG_PATH = process.env.FFMPEG_PATH || '/usr/local/bin/ffmpeg';
 
 type HlsFixture = {
     root: string;
@@ -42,7 +43,7 @@ function createHlsFixture(): HlsFixture {
     const playlistPath = join(root, 'copied-video.m3u8');
     const segmentPattern = join(root, 'segment%d.ts');
 
-    execFileSync('ffmpeg', [
+    execFileSync(FFMPEG_PATH, [
         '-hide_banner', '-loglevel', 'error',
         '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=25:duration=14',
         '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=14',
@@ -50,7 +51,7 @@ function createHlsFixture(): HlsFixture {
         '-g', '100', '-keyint_min', '100', '-sc_threshold', '0',
         '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', sourcePath
     ]);
-    execFileSync('ffmpeg', [
+    execFileSync(FFMPEG_PATH, [
         '-hide_banner', '-loglevel', 'error',
         '-i', sourcePath,
         '-map', '0:v:0', '-map', '0:a:0',
@@ -118,8 +119,9 @@ test.describe('HLS external subtitle source clock', () => {
         });
 
         await page.setContent(`
-            <video id="video" muted playsinline></video>
-            <track id="external" kind="subtitles" srclang="en" label="English" src="/c9-hls/external.vtt" default>
+            <video id="video" muted playsinline>
+                <track id="external" kind="subtitles" srclang="en" label="English" default>
+            </video>
         `);
         await page.addScriptTag({ path: hlsJsPath() });
 
@@ -134,13 +136,20 @@ test.describe('HLS external subtitle source clock', () => {
             (window as unknown as { __c9Hls?: Hls }).__c9Hls = hls;
             hls.loadSource('/c9-hls/copied-video.m3u8?CopyTimestamps=true');
             hls.attachMedia(video);
+            video.querySelector<HTMLTrackElement>('#external')!.src = '/c9-hls/external.vtt';
+            video.textTracks[0].mode = 'hidden';
             hls.on(HlsConstructor.Events.MANIFEST_PARSED, () => {
-                void video.play();
+                video.play().catch(error => {
+                    throw new Error(`HLS fixture playback failed: ${String(error)}`);
+                });
             });
         }, { requestedStartSeconds: REQUESTED_START_SECONDS });
 
         const video = page.locator('#video');
-        await expect.poll(async () => video.evaluate((element: HTMLVideoElement) => element.readyState)).toBeGreaterThanOrEqual(2);
+        await expect.poll(async () => video.evaluate((element: HTMLVideoElement) => element.readyState), {
+            timeout: 30_000,
+            message: 'expected Hls.js to append a decodable video frame'
+        }).toBeGreaterThanOrEqual(2);
         await expect.poll(async () => video.evaluate((element: HTMLVideoElement) => element.currentTime), { timeout: 30_000 })
             .toBeGreaterThan(REQUESTED_START_SECONDS - 0.25);
         await expect.poll(async () => video.evaluate((element: HTMLVideoElement) => ({
