@@ -80,7 +80,8 @@ function detailButton(page: Page) {
 }
 
 function watchlistCard(page: Page, itemId: string) {
-    return page.locator(`[data-id="${itemId}"]`).first();
+    // Cards carry the id in Jellyfin's Guid N-format (no hyphens).
+    return page.locator(`[data-id="${itemId.replace(/-/g, '')}"]`).first();
 }
 
 test.describe('watchlist (My List)', () => {
@@ -125,7 +126,9 @@ test.describe('watchlist (My List)', () => {
         // Server truth through the app's own ApiClient (its current-user
         // restore is async and not part of the feature under test, so the
         // user id is resolved from /Users/Me): the item must be on A's list.
-        const serverTruth = await pageA.evaluate(async id => {
+        // The button's POST is in flight while the optimistic flip shows, so
+        // poll the server state instead of reading it once.
+        const readServerList = () => pageA.evaluate(async () => {
             const api = (window as unknown as {
                 ApiClient: {
                     getUrl(path: string, query?: Record<string, unknown>): string;
@@ -134,9 +137,11 @@ test.describe('watchlist (My List)', () => {
             }).ApiClient;
             const me = await api.ajax({ type: 'GET', url: api.getUrl('Users/Me'), dataType: 'json' }) as { Id: string };
             return await api.ajax({ type: 'GET', url: api.getUrl(`Users/${me.Id}/Items/Watchlist`), dataType: 'json' }) as { TotalRecordCount: number; Items: { Id: string }[] };
-        }, itemId);
-        expect(serverTruth.TotalRecordCount, 'the add must persist server-side').toBe(1);
-        expect(serverTruth.Items[0].Id.replace(/-/g, '')).toBe(itemId.replace(/-/g, ''));
+        });
+        await expect.poll(readServerList, { message: 'the add must persist server-side', timeout: 15_000 }).toEqual(
+            expect.objectContaining({ TotalRecordCount: 1 })
+        );
+        expect((await readServerList()).Items[0].Id.replace(/-/g, '')).toBe(itemId.replace(/-/g, ''));
 
         // Session B is a different user in a different browser context: the
         // same item must read as NOT on B's list.
@@ -174,12 +179,13 @@ test.describe('watchlist (My List)', () => {
             // fresh page load and getCurrentUserId() can still be null; the
             // authenticated /Users/Me is the reliable source.
             const me = await api.ajax({ type: 'GET', url: api.getUrl('Users/Me'), dataType: 'json' }) as { Id: string };
+            const addUrl = api.getUrl(`Users/${me.Id}/Items/${id}/Watchlist`);
             try {
-                await api.ajax({ type: 'POST', url: api.getUrl(`Users/${me.Id}/Items/${id}/Watchlist`) });
+                await api.ajax({ type: 'POST', url: addUrl });
                 return 'ok';
             } catch (error) {
                 const err = error as { status?: number };
-                return `failed status=${String(err?.status)} url=${api.getUrl(`Users/${me.Id}/Items/${id}/Watchlist`)}`;
+                return `failed status=${String(err?.status)} url=${addUrl}`;
             }
         }, itemId);
         expect(seeded, 'seeding the watchlist entry must succeed').toBe('ok');

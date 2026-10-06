@@ -110,6 +110,12 @@ class WatchlistView {
         this.itemsContainer = view.querySelector('.itemsContainer');
         this.itemsContainer.fetchData = getItemsToWatchlistFn();
         this.itemsContainer.getItemsHtml = getItemsHtml;
+
+        // Plain ViewManagerPage views get no framework onResume call (unlike
+        // tabbed pages): the view's own lifecycle events drive the fetch.
+        view.addEventListener('viewshow', () => this.onResume({}));
+        view.addEventListener('viewbeforehide', () => this.onPause());
+        view.addEventListener('viewdestroy', () => this.destroy());
     }
 
     autoFocus() {
