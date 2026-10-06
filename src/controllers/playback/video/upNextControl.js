@@ -1,8 +1,16 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-24.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-10-06.
 /**
  * Owns the 'up next' episode card shown near the end of playback.
  *
  * video/index.js constructs this and injects its dependencies.
+ *
+ * showComingUpNextIfNeeded takes (player, currentItem, currentTimeTicks,
+ * runtimeTicks, [contentEndTicks]): when the caller hands in the
+ * server-computed episode content-end boundary it is authoritative and the
+ * prompt fires as playback crosses it; when it is absent (legacy server,
+ * failed fetch) the historical fixed 30/35/40-second window with the
+ * 10-minute floor applies.
+ *
  * @module controllers/playback/video/upNextControl
  */
 import { TICKS_PER_MINUTE, TICKS_PER_SECOND } from 'constants/time';
@@ -45,8 +53,24 @@ export function createUpNextControl(options) {
         }
     }
 
-    function showComingUpNextIfNeeded(player, currentItem, currentTimeTicks, runtimeTicks) {
+    function showComingUpNextIfNeeded(player, currentItem, currentTimeTicks, runtimeTicks, contentEndTicks) {
         if (runtimeTicks && currentTimeTicks && !comingUpNextDisplayed && !osd.getVisibleMenu() && currentItem.Type === 'Episode' && userSettings.enableNextVideoInfoOverlay()) {
+            const timeRemainingTicks = runtimeTicks - currentTimeTicks;
+
+            // The server-computed content-end boundary (terminal Outro
+            // start, else MaxResumePct of runtime) is authoritative: prompt
+            // as soon as playback crosses it, without the fixed windows or
+            // the 10-minute floor. Only the 20s-remaining sanity guard
+            // stays.
+            if (contentEndTicks > 0) {
+                if (currentTimeTicks >= contentEndTicks && timeRemainingTicks >= (20 * TICKS_PER_SECOND)) {
+                    showComingUpNext(player);
+                }
+                return;
+            }
+
+            // No boundary available (legacy server, failed fetch): the
+            // historical fixed timing.
             let showAtSecondsLeft = 30;
             if (runtimeTicks >= 50 * TICKS_PER_MINUTE) {
                 showAtSecondsLeft = 40;
@@ -54,7 +78,6 @@ export function createUpNextControl(options) {
                 showAtSecondsLeft = 35;
             }
             const showAtTicks = runtimeTicks - showAtSecondsLeft * TICKS_PER_SECOND;
-            const timeRemainingTicks = runtimeTicks - currentTimeTicks;
 
             if (currentTimeTicks >= showAtTicks && runtimeTicks >= (10 * TICKS_PER_MINUTE) && timeRemainingTicks >= (20 * TICKS_PER_SECOND)) {
                 showComingUpNext(player);

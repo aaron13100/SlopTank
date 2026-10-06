@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-28, 2026-08-01, 2026-08-03, 2026-08-09, 2026-08-11, 2026-08-28, 2026-09-08, 2026-09-09, 2026-09-23, 2026-09-24, 2026-09-29.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-28, 2026-08-01, 2026-08-03, 2026-08-09, 2026-08-11, 2026-08-28, 2026-09-08, 2026-09-09, 2026-09-23, 2026-09-24, 2026-09-29, 2026-10-06.
 /**
  * Video OSD controller: the composition root for the video playback page.
  *
@@ -67,6 +67,7 @@ import { createSettingsOverlays } from './settingsOverlays';
 import { createAudioTrackMenu } from './audioTrackMenu';
 import { createUpNextControl } from './upNextControl';
 import { createVideoInputControl } from './videoInputControl';
+import { fetchEpisodeContentEnd } from './episodeContentEnd';
 
 export default function (view) {
     function updateDisplayItem(itemInfo) {
@@ -210,6 +211,27 @@ export default function (view) {
         }
     }
 
+    /**
+     * Fetches the server-computed episode content-end boundary for the item
+     * that just started playing, so showComingUpNextIfNeeded can prompt at
+     * that boundary instead of its fixed legacy timing. Non-episodes and
+     * failed fetches leave it null (the legacy default); the result is
+     * dropped if playback moved on to another item before it arrived.
+     * @param {object} item The now-playing item.
+     */
+    function refreshEpisodeContentEnd(item) {
+        const itemId = item?.Id;
+        episodeContentEndTicks = null;
+        if (item?.Type === 'Episode' && itemId) {
+            const apiClient = ServerConnections.getApiClient(item.ServerId);
+            fetchEpisodeContentEnd(apiClient, itemId).then(result => {
+                if (currentItem?.Id === itemId) {
+                    episodeContentEndTicks = result?.ContentEndTicks ?? null;
+                }
+            });
+        }
+    }
+
     function onPlaybackStart(e, state) {
         // A same-player next-item transition emits no playerchange; a size
         // overlay left open would preview onto the new item.
@@ -219,12 +241,14 @@ export default function (view) {
         const player = this;
         onStateChanged.call(player, e, state);
         upNextControl.reset();
+        refreshEpisodeContentEnd(state.NowPlayingItem);
     }
 
     function onPlaybackStopped(e, state) {
         currentRuntimeTicks = null;
         positionDisplay.setRuntimeTicks(null);
         upNextControl.reset();
+        episodeContentEndTicks = null;
         console.debug('nowplaying event: ' + e.type);
 
         if (state.NextMediaType !== 'Video') {
@@ -320,6 +344,7 @@ export default function (view) {
         Events.on(player, 'beginFetch', onBeginFetch);
         Events.on(player, 'endFetch', onEndFetch);
         upNextControl.reset();
+        episodeContentEndTicks = null;
         osd.resetIdle();
 
         if (player.isFetching) {
@@ -334,6 +359,7 @@ export default function (view) {
         subtitleTrackMenu.closeOverlays();
         episodePlaybackMenu.close();
         upNextControl.reset();
+        episodeContentEndTicks = null;
         const player = currentPlayer;
 
         if (player) {
@@ -366,7 +392,7 @@ export default function (view) {
                 positionDisplay.updateTimeDisplay(currentTime, currentRuntimeTicks, playbackManager.playbackStartTime(player), playbackManager.getPlaybackRate(player), playbackManager.getBufferedRanges(player));
                 const item = currentItem;
                 refreshProgramInfoIfNeeded(player, item);
-                upNextControl.showComingUpNextIfNeeded(player, item, currentTime, currentRuntimeTicks);
+                upNextControl.showComingUpNextIfNeeded(player, item, currentTime, currentRuntimeTicks, episodeContentEndTicks);
             }
         }
     }
@@ -471,6 +497,7 @@ export default function (view) {
     let canonicalizingItemId;
     const self = this;
     let currentRuntimeTicks = 0;
+    let episodeContentEndTicks = null;
     let lastUpdateTime = 0;
     let trickplayResolution = null;
     const trickplayDiscovery = new TrickplayDiscovery();
