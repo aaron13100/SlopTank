@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-08-03, 2026-08-12, 2026-08-27, 2026-09-08, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-08-03, 2026-08-12, 2026-08-27, 2026-09-08, 2026-09-09, 2026-10-06.
 import { ThemeProvider } from '@mui/material/styles';
 import React from 'react';
 import {
@@ -43,6 +43,12 @@ import Music from 'apps/experimental/routes/music';
 import Shows from 'apps/experimental/routes/shows';
 import HomeVideos from 'apps/experimental/routes/homevideos';
 import { loadDynamicModule } from 'utils/dynamicImport';
+
+// Registered in the main bundle on purpose: the legacy detail view's html
+// carries <button is="emby-watchlistbutton"> and its own controller chunk
+// cannot import the element (size-capped file), so the element must already
+// be defined whenever any view's markup is parsed (c188).
+import 'elements/emby-watchlistbutton/emby-watchlistbutton';
 
 const layoutMode = browser.tv ? LayoutMode.Tv : localStorage.getItem(LAYOUT_SETTING_KEY);
 const isExperimentalLayout = !layoutMode || layoutMode === LayoutMode.Experimental;

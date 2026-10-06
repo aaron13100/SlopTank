@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-08-12, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-12, 2026-09-09, 2026-10-06.
 import { LegacyRoute } from '../../../../components/router/LegacyRoute';
 
 export const LEGACY_USER_ROUTES: LegacyRoute[] = [
@@ -7,6 +7,12 @@ export const LEGACY_USER_ROUTES: LegacyRoute[] = [
         pageProps: {
             controller: 'itemDetails/index',
             view: 'itemDetails/index.html'
+        }
+    }, {
+        path: 'watchlist',
+        pageProps: {
+            controller: 'watchlist/watchlist',
+            view: 'watchlist/watchlist.html'
         }
     }, {
         path: 'list',

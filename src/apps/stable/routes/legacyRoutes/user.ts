@@ -38,6 +38,12 @@ export const LEGACY_USER_ROUTES: LegacyRoute[] = [
             view: 'user/controls/index.html'
         }
     }, {
+        path: 'watchlist',
+        pageProps: {
+            controller: 'watchlist/watchlist',
+            view: 'watchlist/watchlist.html'
+        }
+    }, {
         path: 'mypreferencesdisplay',
         pageProps: {
             controller: 'user/display/index',

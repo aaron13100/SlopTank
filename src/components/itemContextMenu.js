@@ -1,9 +1,10 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-02-14, 2026-02-20, 2026-03-12, 2026-07-18, 2026-07-24, 2026-07-31, 2026-08-01, 2026-09-08, 2026-09-09, 2026-09-14, 2026-09-15, 2026-09-21, 2026-09-26.
+// SlopTank modification notice: added or changed by SlopTank on 2026-02-14, 2026-02-20, 2026-03-12, 2026-07-18, 2026-07-24, 2026-07-31, 2026-08-01, 2026-09-08, 2026-09-09, 2026-09-14, 2026-09-15, 2026-09-21, 2026-09-26, 2026-10-06.
 import { BaseItemKind } from '@jellyfin/sdk/lib/generated-client/models/base-item-kind';
 import { getLibraryApi } from '@jellyfin/sdk/lib/utils/api/library-api';
 
 import { AppFeature } from 'constants/appFeature';
 import { toApi } from 'utils/jellyfin-apiclient/compat';
+import { addToWatchlist, isInWatchlist, removeFromWatchlist } from 'utils/watchlist';
 
 import browser from '../scripts/browser';
 import { copy } from '../scripts/clipboard';
@@ -11,15 +12,13 @@ import dom from '../utils/dom';
 import globalize from '../lib/globalize';
 import { ServerConnections } from 'lib/jellyfin-apiclient';
 import actionsheet from './actionSheet/actionSheet';
+import { copyItemLink } from './itemLinkSharing';
 import { appHost } from './apphost';
 import { appRouter } from './router/appRouter';
 import itemHelper, { canEditPlaylist } from './itemHelper';
-import loading from './loading/loading';
 import { playbackManager } from './playback/playbackmanager';
 import { deleteErrorSuffix } from '../scripts/deleteHelper';
-import { buildShareUrl } from './router/permalinkShare';
 import toast from './toast/toast';
-import { getShareOrigin } from '../scripts/settings/webSettings';
 import * as userSettings from '../scripts/settings/userSettings';
 import { loadDynamicModule } from 'utils/dynamicImport';
 
@@ -342,6 +341,27 @@ export async function getCommands(options) {
         });
     }
 
+    // My List (c188): Movies and Series only, matching the feature contract.
+    // The membership check decides which of the pair the menu offers; a
+    // failed check must not guess, so both entries stay off rather than one
+    // of them lying about the current state.
+    if (item.Type === BaseItemKind.Movie || item.Type === BaseItemKind.Series) {
+        try {
+            const inWatchlist = await isInWatchlist(
+                ServerConnections.getApiClient(item.ServerId),
+                user.Id,
+                item.Id
+            );
+            commands.push({
+                name: globalize.translate(inWatchlist ? 'RemoveFromMyList' : 'AddToMyList'),
+                id: inWatchlist ? 'removefromwatchlist' : 'addtowatchlist',
+                icon: inWatchlist ? 'library_remove' : 'library_add'
+            });
+        } catch (error) {
+            console.warn('[itemContextMenu] watchlist membership check failed:', error);
+        }
+    }
+
     if (item.PlaylistItemId && options.playlistId && options.canEditPlaylist) {
         commands.push({
             name: globalize.translate('RemoveFromPlaylist'),
@@ -439,102 +459,6 @@ function getResolveFunction(resolve, commandId, changed, deleted, itemId) {
     };
 }
 
-/**
- * Guards the shared loading spinner while a permalink ensure/publish call is
- * in flight. Ensure's cost scales with the media file's size (tens of
- * seconds for a multi-GB movie; docs/internal PermalinkEvidence hashing) and
- * previously gave no feedback at all while it ran, so a user seeing nothing
- * happen would reasonably invoke Copy Link, Copy Play Link or Share again
- * before the first call finished. Counting overlapping calls keeps the
- * spinner visible for the whole span instead of one call hiding it out from
- * under a sibling call still in flight.
- */
-let pendingLinkPublishCalls = 0;
-
-function beginLinkPublishProgress() {
-    pendingLinkPublishCalls++;
-    if (pendingLinkPublishCalls === 1) {
-        loading.show();
-    }
-}
-
-function endLinkPublishProgress() {
-    pendingLinkPublishCalls = Math.max(0, pendingLinkPublishCalls - 1);
-    if (pendingLinkPublishCalls === 0) {
-        loading.hide();
-    }
-}
-
-/**
- * Asks the server to persist this item's permalink evidence and returns the
- * URL to publish (docs/internal/permalink-url-design.md section 5). Ensure
- * always runs before any URL is constructed, for every item, so a published
- * link is always one the server has bound to evidence -- or an explicitly
- * temporary legacy link carrying the server's own reason.
- *
- * Keeps the shared loading spinner visible for the call's full duration
- * (`beginLinkPublishProgress`/`endLinkPublishProgress`) so Copy Link, Copy
- * Play Link and Share all show progress immediately instead of appearing to
- * do nothing while ensure hashes the file server-side.
- *
- * @param {object} apiClient The legacy api client for the item's server.
- * @param {import('@jellyfin/sdk/lib/api').Api} api The SDK api for the same server.
- * @param {BaseItemDto} item The item being shared.
- * @param {'info'|'watch'} kind Whether the link opens the info page or the player.
- * @returns {Promise<import('./router/permalinkShare').PermalinkShareUrl>} The permanent link, an explicitly temporary one, or the reason no link exists.
- */
-async function publishItemLink(apiClient, api, item, kind) {
-    beginLinkPublishProgress();
-    try {
-        const origin = await getShareOrigin(apiClient.serverAddress());
-        return await buildShareUrl({ api, origin, item, kind });
-    } finally {
-        endLinkPublishProgress();
-    }
-}
-
-/**
- * Copies the item's permanent link, telling the user plainly which of the two
- * they got. A temporary link names the server's own refusal code rather than
- * a generic failure, so the reason is actionable.
- *
- * @param {object} apiClient The legacy api client for the item's server.
- * @param {import('@jellyfin/sdk/lib/api').Api} api The SDK api for the same server.
- * @param {BaseItemDto} item The item being shared.
- * @param {'info'|'watch'} kind Whether the link opens the info page or the player.
- * @param {'CopyLink'|'CopyPlayLink'} stringPrefix The string key family for this command's messages.
- * @returns {Promise<void>} Resolves once the clipboard write and its notification are done.
- */
-async function copyItemLink(apiClient, api, item, kind, stringPrefix) {
-    let link;
-    try {
-        link = await publishItemLink(apiClient, api, item, kind);
-    } catch (error) {
-        console.error('[itemContextMenu] could not build a share link:', error);
-        toast(globalize.translate('PermalinkResolveError', String(error)));
-        return;
-    }
-
-    if (link.status === 'unavailable') {
-        // Nothing to copy: say why instead of putting a link that cannot
-        // resolve on the clipboard.
-        toast(globalize.translate('PermalinkResolveError', link.reason));
-        return;
-    }
-
-    try {
-        await copy(link.url);
-        toast(link.status === 'permanent' ?
-            globalize.translate(`${stringPrefix}Success`) :
-            globalize.translate(`${stringPrefix}TemporarySuccess`, link.reason));
-    } catch (error) {
-        // Clipboard write refused (permissions, insecure context): fall back to
-        // a selectable field rather than losing the link the user asked for.
-        console.warn('[itemContextMenu] clipboard write failed, showing the link instead:', error);
-        prompt(globalize.translate(stringPrefix), link.url);
-    }
-}
-
 function executeCommand(item, id, options) {
     const itemId = item.Id;
     const serverId = item.ServerId;
@@ -544,6 +468,27 @@ function executeCommand(item, id, options) {
     return new Promise(function (resolve, reject) {
         // eslint-disable-next-line sonarjs/max-switch-cases
         switch (id) {
+            case 'addtowatchlist':
+            case 'removefromwatchlist': {
+                // Add and remove are each idempotent server-side, so a retry
+                // after a failed call can never double-apply. Success resolves
+                // as changed, so the calling view refreshes its cards without
+                // a reload; failure keeps the card as it was and says why.
+                const adding = id === 'addtowatchlist';
+                const watchlistCall = adding
+                    ? addToWatchlist(apiClient, options.user.Id, itemId)
+                    : removeFromWatchlist(apiClient, options.user.Id, itemId);
+                watchlistCall.then(getResolveFunction(resolve, id, true), error => {
+                    deleteErrorSuffix(error).then(suffix => {
+                        toast(globalize.translate(
+                            adding ? 'ErrorAddingToWatchlist' : 'ErrorRemovingFromWatchlist'
+                        ) + suffix);
+                    });
+                    reject(error);
+                });
+                break;
+            }
+
             case 'removefromcontinue':
                 // Clear ONLY the resume position (the rail's own data).
                 // markUnplayedItem was used here before and destroyed

@@ -1,3 +1,4 @@
+<!-- SlopTank modification notice: added or changed by SlopTank on 2026-10-06. -->
 <div id="itemDetailPage" data-role="page" class="page libraryPage itemDetailPage noSecondaryNavPage selfBackdropPage" data-backbutton="true">
     <div id="itemBackdrop" class="itemBackdrop"></div>
 
@@ -73,6 +74,12 @@
                     <button is="emby-ratingbutton" type="button" class="button-flat btnUserRating hide detailButton" title="${Rate}">
                         <div class="detailButton-content">
                             <span class="material-icons detailButton-icon favorite" aria-hidden="true"></span>
+                        </div>
+                    </button>
+
+                    <button is="emby-watchlistbutton" type="button" class="button-flat btnWatchlist hide detailButton" title="${AddToMyList}">
+                        <div class="detailButton-content">
+                            <span class="material-icons detailButton-icon btnWatchlistIcon library_add" aria-hidden="true"></span>
                         </div>
                     </button>
 

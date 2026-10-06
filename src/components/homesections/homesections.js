@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-08-27, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-27, 2026-09-09, 2026-10-06.
 import layoutManager from 'components/layoutManager';
 import { getUserViewsQuery } from 'hooks/useUserViews';
 import globalize from 'lib/globalize';
@@ -14,6 +14,7 @@ import { loadLiveTV } from './sections/liveTv';
 import { loadNextUp } from './sections/nextUp';
 import { loadRecentlyAdded } from './sections/recentlyAdded';
 import { loadResume } from './sections/resume';
+import { loadWatchlist } from './sections/watchlist';
 
 import 'elements/emby-button/paper-icon-button-light';
 import 'elements/emby-itemscontainer/emby-itemscontainer';
@@ -169,6 +170,9 @@ function loadSection(page, apiClient, user, userSettings, userViews, allSections
             return loadResume(elem, apiClient, 'HeaderContinueListening', 'Audio', userSettings, options);
         case HomeSectionType.ResumeBook:
             return loadResume(elem, apiClient, 'HeaderContinueReading', 'Book', userSettings, options);
+        case HomeSectionType.Watchlist:
+            loadWatchlist(elem, apiClient, options);
+            break;
         case HomeSectionType.SmallLibraryTiles:
             loadLibraryTiles(elem, userViews, options);
             break;
