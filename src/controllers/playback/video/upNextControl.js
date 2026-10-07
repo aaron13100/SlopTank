@@ -60,10 +60,10 @@ export function createUpNextControl(options) {
             // The server-computed content-end boundary (terminal Outro
             // start, else MaxResumePct of runtime) is authoritative: prompt
             // as soon as playback crosses it, without the fixed windows or
-            // the 10-minute floor. Only the 20s-remaining sanity guard
-            // stays.
+            // the 10-minute floor or a competing remaining-time threshold.
+            // Do not prompt at or after the natural end of playback.
             if (contentEndTicks > 0) {
-                if (currentTimeTicks >= contentEndTicks && timeRemainingTicks >= (20 * TICKS_PER_SECOND)) {
+                if (currentTimeTicks >= contentEndTicks && currentTimeTicks < runtimeTicks) {
                     showComingUpNext(player);
                 }
                 return;
@@ -104,7 +104,7 @@ export function createUpNextControl(options) {
                         nextItem: nextItem
                     });
                     Events.on(currentUpNextDialog, 'hide', onUpNextHidden);
-                }, onUpNextHidden);
+                });
             }
         });
     }

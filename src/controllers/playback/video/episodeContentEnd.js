@@ -42,3 +42,58 @@ export function fetchEpisodeContentEnd(apiClient, itemId) {
         }
     );
 }
+
+/**
+ * Tracks the one in-flight/active boundary request for the current episode
+ * playback. Binding and playbackstart can both observe the same player state;
+ * a new session or item replaces the key, and callers can reject stale results.
+ * @returns {{begin: function(object, string|null): number|null, isCurrent: function(number): boolean, setBoundaryTicks: function(number, (number|null)): boolean, getBoundaryTicks: function(): (number|null), reset: function(): void}}
+ */
+export function createEpisodeContentEndRequestTracker() {
+    let activeRequest = null;
+    let boundaryTicks = null;
+    let generation = 0;
+
+    function reset() {
+        activeRequest = null;
+        boundaryTicks = null;
+        generation++;
+    }
+
+    return {
+        begin(item, playSessionId) {
+            if (item?.Type !== 'Episode' || !item.Id) {
+                reset();
+                return null;
+            }
+
+            const serverId = item.ServerId ?? null;
+            const sessionId = playSessionId ?? null;
+            const sameEpisode = activeRequest?.serverId === serverId && activeRequest?.itemId === item.Id;
+            const samePlayback = sameEpisode && (activeRequest.playSessionId === null || sessionId === null || activeRequest.playSessionId === sessionId);
+
+            if (samePlayback) {
+                if (activeRequest.playSessionId === null && sessionId !== null) {
+                    activeRequest.playSessionId = sessionId;
+                }
+                return null;
+            }
+
+            activeRequest = { serverId, itemId: item.Id, playSessionId: sessionId, generation: ++generation };
+            boundaryTicks = null;
+            return activeRequest.generation;
+        },
+        isCurrent(requestGeneration) {
+            return activeRequest?.generation === requestGeneration;
+        },
+        setBoundaryTicks(requestGeneration, ticks) {
+            if (activeRequest?.generation !== requestGeneration) return false;
+            boundaryTicks = ticks ?? null;
+            return true;
+        },
+        getBoundaryTicks() {
+            return boundaryTicks;
+        },
+        reset
+    };
+}

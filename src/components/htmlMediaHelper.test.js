@@ -1,9 +1,10 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-09-09, 2026-09-24, 2026-09-27.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-09-09, 2026-09-24, 2026-09-27, 2026-10-07.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import debounce from 'lodash-es/debounce';
 import Hls from 'hls.js/dist/hls.js';
 import Events from '../utils/events.ts';
 import { MediaError } from 'types/mediaError';
-import { bindEventsToHlsPlayer, seekOnPlaybackStart } from './htmlMediaHelper';
+import { bindEventsToHlsPlayer, onEndedInternal, seekOnPlaybackStart } from './htmlMediaHelper';
 
 /**
  * Regression coverage for the frozen-video-page bug (t_260722_234509_771):
@@ -24,6 +25,44 @@ beforeEach(() => {
 
 afterEach(() => {
     delete global.Hls;
+    vi.useRealTimers();
+});
+
+describe('htmlMediaHelper: onEndedInternal', () => {
+    it('cancels an old subtitle offset callback before the same player starts another playback', () => {
+        vi.useFakeTimers();
+        const appliedOffsets = [];
+        const applyOffset = function () {
+            // This is the property read that throws in the real player's
+            // debounced callback once onEndedInternal clears these options.
+            const offset = this._currentPlayOptions.transcodingOffsetTicks;
+            appliedOffsets.push(offset);
+            return offset;
+        };
+        const player = {
+            _currentSrc: 'test.mp4',
+            _currentTime: 30,
+            _currentPlayOptions: { transcodingOffsetTicks: 0 },
+            setSubtitleOffset: debounce(applyOffset, 100)
+        };
+        const element = document.createElement('video');
+
+        player.setSubtitleOffset(0);
+        onEndedInternal(player, element, () => undefined);
+
+        expect(player._currentPlayOptions).toBeNull();
+        // Reuse the same player before the old timer would fire. Cancellation
+        // must keep that stale offset from being applied to the new playback.
+        player._currentPlayOptions = { transcodingOffsetTicks: 75 };
+        expect(() => vi.advanceTimersByTime(100)).not.toThrow();
+        expect(appliedOffsets).toEqual([]);
+
+        // Positive control: the same real debounce still applies while a
+        // playback session is active.
+        player.setSubtitleOffset(1);
+        vi.advanceTimersByTime(100);
+        expect(appliedOffsets).toEqual([75]);
+    });
 });
 
 function fatalTimeoutErrorData() {

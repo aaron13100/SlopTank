@@ -418,6 +418,10 @@ export function bindEventsToHlsPlayer(instance, hls, elem, onErrorFn, resolve, r
 }
 
 export function onEndedInternal(instance, elem, onErrorFn) {
+    // A video player can have debounced subtitle-offset work queued while
+    // tracks are initializing. Cancel it before clearing the playback options
+    // that the callback consumes. Other player types do not define this API.
+    instance.setSubtitleOffset?.cancel?.();
     elem.removeEventListener('error', onErrorFn);
 
     resetSrc(elem);

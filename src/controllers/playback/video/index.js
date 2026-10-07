@@ -67,7 +67,7 @@ import { createSettingsOverlays } from './settingsOverlays';
 import { createAudioTrackMenu } from './audioTrackMenu';
 import { createUpNextControl } from './upNextControl';
 import { createVideoInputControl } from './videoInputControl';
-import { fetchEpisodeContentEnd } from './episodeContentEnd';
+import { createEpisodeContentEndRequestTracker, fetchEpisodeContentEnd } from './episodeContentEnd';
 
 export default function (view) {
     function updateDisplayItem(itemInfo) {
@@ -212,24 +212,30 @@ export default function (view) {
     }
 
     /**
-     * Fetches the server-computed episode content-end boundary for the item
-     * that just started playing, so showComingUpNextIfNeeded can prompt at
-     * that boundary instead of its fixed legacy timing. Non-episodes and
-     * failed fetches leave it null (the legacy default); the result is
-     * dropped if playback moved on to another item before it arrived.
+     * Fetches the server-computed episode content-end boundary for the active
+     * item, so showComingUpNextIfNeeded can prompt at that boundary instead
+     * of its fixed legacy timing. Non-episodes and failed fetches leave it
+     * null (the legacy default); the result is dropped if playback moved on
+     * to another item before it arrived.
      * @param {object} item The now-playing item.
      */
-    function refreshEpisodeContentEnd(item) {
+    function refreshEpisodeContentEnd(item, playSessionId) {
         const itemId = item?.Id;
-        episodeContentEndTicks = null;
-        if (item?.Type === 'Episode' && itemId) {
-            const apiClient = ServerConnections.getApiClient(item.ServerId);
-            fetchEpisodeContentEnd(apiClient, itemId).then(result => {
-                if (currentItem?.Id === itemId) {
-                    episodeContentEndTicks = result?.ContentEndTicks ?? null;
-                }
-            });
+        if (item?.Type !== 'Episode' || !itemId) {
+            episodeContentEndRequests.reset();
+            return;
         }
+
+        const requestGeneration = episodeContentEndRequests.begin(item, playSessionId);
+        if (requestGeneration === null) return;
+
+        const apiClient = ServerConnections.getApiClient(item.ServerId);
+        fetchEpisodeContentEnd(apiClient, itemId).then(result => {
+            if (episodeContentEndRequests.isCurrent(requestGeneration)
+                && currentItem?.Id === itemId && currentItem?.ServerId === item.ServerId) {
+                episodeContentEndRequests.setBoundaryTicks(requestGeneration, result?.ContentEndTicks);
+            }
+        });
     }
 
     function onPlaybackStart(e, state) {
@@ -241,14 +247,14 @@ export default function (view) {
         const player = this;
         onStateChanged.call(player, e, state);
         upNextControl.reset();
-        refreshEpisodeContentEnd(state.NowPlayingItem);
+        refreshEpisodeContentEnd(state.NowPlayingItem, state.PlayState?.PlaySessionId);
     }
 
     function onPlaybackStopped(e, state) {
         currentRuntimeTicks = null;
         positionDisplay.setRuntimeTicks(null);
         upNextControl.reset();
-        episodeContentEndTicks = null;
+        episodeContentEndRequests.reset();
         console.debug('nowplaying event: ' + e.type);
 
         if (state.NextMediaType !== 'Video') {
@@ -344,7 +350,11 @@ export default function (view) {
         Events.on(player, 'beginFetch', onBeginFetch);
         Events.on(player, 'endFetch', onEndFetch);
         upNextControl.reset();
-        episodeContentEndTicks = null;
+        // Player binding can happen after playbackstart has already fired, so
+        // seed the boundary from current state even when playback is paused.
+        // The tracker keeps it across a same-session rebind and deduplicates
+        // this observation against playbackstart for the same playback.
+        refreshEpisodeContentEnd(state.NowPlayingItem, state.PlayState?.PlaySessionId);
         osd.resetIdle();
 
         if (player.isFetching) {
@@ -359,7 +369,7 @@ export default function (view) {
         subtitleTrackMenu.closeOverlays();
         episodePlaybackMenu.close();
         upNextControl.reset();
-        episodeContentEndTicks = null;
+        episodeContentEndRequests.reset();
         const player = currentPlayer;
 
         if (player) {
@@ -392,7 +402,7 @@ export default function (view) {
                 positionDisplay.updateTimeDisplay(currentTime, currentRuntimeTicks, playbackManager.playbackStartTime(player), playbackManager.getPlaybackRate(player), playbackManager.getBufferedRanges(player));
                 const item = currentItem;
                 refreshProgramInfoIfNeeded(player, item);
-                upNextControl.showComingUpNextIfNeeded(player, item, currentTime, currentRuntimeTicks, episodeContentEndTicks);
+                upNextControl.showComingUpNextIfNeeded(player, item, currentTime, currentRuntimeTicks, episodeContentEndRequests.getBoundaryTicks());
             }
         }
     }
@@ -497,7 +507,7 @@ export default function (view) {
     let canonicalizingItemId;
     const self = this;
     let currentRuntimeTicks = 0;
-    let episodeContentEndTicks = null;
+    const episodeContentEndRequests = createEpisodeContentEndRequestTracker();
     let lastUpdateTime = 0;
     let trickplayResolution = null;
     const trickplayDiscovery = new TrickplayDiscovery();

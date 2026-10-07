@@ -750,15 +750,27 @@ export class HtmlVideoPlayer {
         }
     }
 
-    setSubtitleOffset = debounce(this._setSubtitleOffset, 100);
+    setSubtitleOffset = debounce((offset) => {
+        // A caller can still hold this player after stop while the video
+        // controller tears down its subtitle-sync overlay. Do not schedule
+        // stale offset work against a completed playback.
+        if (this._currentPlayOptions) {
+            this._setSubtitleOffset(offset);
+        }
+    }, 100);
 
     /**
      * @private
      */
     _setSubtitleOffset(offset) {
+        const currentPlayOptions = this._currentPlayOptions;
+        if (!currentPlayOptions) {
+            return;
+        }
+
         const offsetValue = parseFloat(offset);
         const appliedTrackIndices = new Set();
-        const transcodingOffset = (this._currentPlayOptions.transcodingOffsetTicks || 0) / 10000000;
+        const transcodingOffset = (currentPlayOptions.transcodingOffsetTicks || 0) / 10000000;
 
         this.#currentAssRenderers.forEach((renderer, index) => {
             if (!renderer) {

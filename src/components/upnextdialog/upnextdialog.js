@@ -1,3 +1,4 @@
+// SlopTank modification notice: changed by SlopTank on 2026-10-07.
 import dom from '../../utils/dom';
 import { playbackManager } from '../playback/playbackmanager';
 import Events from '../../utils/events.ts';
@@ -13,6 +14,7 @@ import '../../elements/emby-button/emby-button';
 import '../../styles/flexstyles.scss';
 
 const transitionEndEventName = dom.whichTransitionEvent();
+const dialogOwners = new WeakMap();
 
 function getHtml() {
     let html = '';
@@ -113,8 +115,12 @@ async function onStartNowClick() {
     }
 }
 
-async function init(instance, options) {
-    instance.showStaticNextText = await showStaticNextText(options.nextItem);
+function init(instance, options) {
+    // Render the card before reading autoplay preferences. A slow or failed
+    // user lookup must not leave playback's Up Next state set while the card
+    // remains empty or hidden.
+    instance.showStaticNextText = true;
+    dialogOwners.set(options.parent, instance);
 
     options.parent.innerHTML = getHtml();
 
@@ -126,21 +132,52 @@ async function init(instance, options) {
 
     options.parent.querySelector('.btnHide').addEventListener('click', instance.hide.bind(instance));
     options.parent.querySelector('.btnStartNow').addEventListener('click', onStartNowClick.bind(instance));
+
+    showStaticNextText(options.nextItem).then(showStaticText => {
+        if (instance.options !== options) return;
+
+        instance.showStaticNextText = showStaticText;
+        if (showStaticText) {
+            clearCountdownTextTimeout(instance);
+            setNextVideoText.call(instance);
+        } else {
+            startComingUpNextHideTimer(instance);
+        }
+    }).catch(error => {
+        if (instance.options !== options) return;
+
+        // The visible static card is a safe fallback if user preferences are
+        // temporarily unavailable. Keep useful response context while
+        // avoiding logging the error object, which may contain credentials.
+        console.warn('Up Next autoplay preferences unavailable', {
+            status: error?.status ?? error?.statusCode,
+            message: error?.message || error?.statusText || (typeof error === 'string' ? error : undefined),
+            itemId: options.nextItem?.Id,
+            serverId: options.nextItem?.ServerId
+        });
+    });
 }
 
 function clearHideAnimationEventListeners(instance, elem) {
-    const fn = instance._onHideAnimationComplete;
+    const resolve = instance._hideTransitionResolve;
 
-    if (fn) {
-        dom.removeEventListener(elem, transitionEndEventName, fn, {
+    if (resolve) {
+        dom.removeEventListener(elem, transitionEndEventName, resolve, {
             once: true
         });
+        instance._hideTransitionResolve = null;
+        resolve({ cancelled: true, target: elem });
     }
+
+    instance._onHideAnimationComplete = null;
 }
 
 function onHideAnimationComplete(e) {
     const instance = this;
     const elem = e.target;
+    const parent = instance.options?.parent;
+
+    if (!parent || dialogOwners.get(parent) !== instance) return;
 
     elem.classList.add('hide');
 
@@ -171,7 +208,10 @@ async function hideComingUpNext() {
     const fn = onHideAnimationComplete.bind(instance);
     instance._onHideAnimationComplete = fn;
 
+    let resolveTransition;
     const transitionEvent = await new Promise((resolve) => {
+        resolveTransition = resolve;
+        instance._hideTransitionResolve = resolve;
         dom.addEventListener(elem, transitionEndEventName, resolve, {
             once: true
         });
@@ -182,7 +222,13 @@ async function hideComingUpNext() {
         elem.classList.add('upNextDialog-hidden');
     });
 
-    instance._onHideAnimationComplete(transitionEvent);
+    if (instance._hideTransitionResolve === resolveTransition) {
+        instance._hideTransitionResolve = null;
+    }
+
+    if (transitionEvent?.cancelled || dialogOwners.get(elem) !== instance) return;
+
+    instance._onHideAnimationComplete?.(transitionEvent);
 }
 
 function getTimeRemainingMs(instance) {
@@ -222,7 +268,7 @@ async function showStaticNextText(nextItem) {
 class UpNextDialog {
     constructor(options) {
         this.options = options;
-        this.showStaticNextText = false; // default to showing countdown text
+        this.showStaticNextText = true; // stay static until autoplay preference lookup completes
 
         init(this, options);
     }
@@ -250,7 +296,17 @@ class UpNextDialog {
         await hideComingUpNext.bind(this)();
     }
     destroy() {
-        hideComingUpNext.call(this);
+        const elem = this.options?.parent;
+        if (elem) {
+            const shouldTriggerHide = !elem.classList.contains('upNextDialog-hidden') || Boolean(this._onHideAnimationComplete);
+
+            clearCountdownTextTimeout(this);
+            clearHideAnimationEventListeners(this, elem);
+            elem.classList.add('upNextDialog-hidden', 'hide');
+
+            if (dialogOwners.get(elem) === this) dialogOwners.delete(elem);
+            if (shouldTriggerHide) Events.trigger(this, 'hide');
+        }
 
         this.options = null;
         this.showStaticNextText = false;

@@ -5,8 +5,10 @@
  * The prompt must fire at the server-computed episode content-end boundary
  * (terminal Outro start, else MaxResumePct of runtime) when one is available:
  * that boundary is authoritative, so the fixed 30/35/40-second timing and the
- * 10-minute floor do not apply in that branch, while the 20-seconds-remaining
- * sanity guard does. When no boundary is available (legacy server, fetch
+ * 10-minute floor do not apply in that branch. Sparse updates or a seek may
+ * cross the former 20-seconds-remaining threshold before the next observation.
+ * The prompt is suppressed at or after natural end. When no boundary is
+ * available (legacy server, fetch
  * failure) the prompt keeps exactly the historical fixed-timing behavior.
  *
  * Driven through createUpNextControl with plain adapter object literals in
@@ -120,11 +122,35 @@ describe('showComingUpNextIfNeeded content-end boundary', () => {
         expect(promptShown()).toBe(true);
     }, 15_000);
 
-    it('does not prompt at the boundary when less than 20 seconds remain', async () => {
-        const boundary = RUNTIME_TICKS - 15 * TICKS_PER_SECOND;
+    it('prompts on the first sparse update after crossing the old 20-second guard', async () => {
+        const boundary = RUNTIME_TICKS - 24 * TICKS_PER_SECOND;
         const { upNext, promptShown, nextItemRequests } = createUpNext();
 
-        upNext.showComingUpNextIfNeeded(player, episode, boundary, RUNTIME_TICKS, boundary);
+        // A timeupdate jump of 5 seconds leaves only 19 seconds, so a
+        // competing remaining-time guard would incorrectly suppress it.
+        upNext.showComingUpNextIfNeeded(player, episode, boundary + 5 * TICKS_PER_SECOND, RUNTIME_TICKS, boundary);
+        await settleUntil(promptShown, SETTLED_BUDGET_MS);
+
+        expect(promptShown()).toBe(true);
+        expect(nextItemRequests()).toBe(1);
+    }, 15_000);
+
+    it('prompts after a seek beyond the old 20-second window but before natural end', async () => {
+        const boundary = RUNTIME_TICKS - 100 * TICKS_PER_SECOND;
+        const { upNext, promptShown, nextItemRequests } = createUpNext();
+
+        upNext.showComingUpNextIfNeeded(player, episode, RUNTIME_TICKS - TICKS_PER_SECOND, RUNTIME_TICKS, boundary);
+        await settleUntil(promptShown, SETTLED_BUDGET_MS);
+
+        expect(promptShown()).toBe(true);
+        expect(nextItemRequests()).toBe(1);
+    }, 15_000);
+
+    it('does not prompt at or after natural end even when the boundary was crossed', async () => {
+        const boundary = RUNTIME_TICKS - 100 * TICKS_PER_SECOND;
+        const { upNext, promptShown, nextItemRequests } = createUpNext();
+
+        upNext.showComingUpNextIfNeeded(player, episode, RUNTIME_TICKS, RUNTIME_TICKS, boundary);
         await settleUntil(promptShown, SETTLED_BUDGET_MS);
 
         expect(promptShown()).toBe(false);

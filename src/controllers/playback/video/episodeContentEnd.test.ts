@@ -14,7 +14,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { fetchEpisodeContentEnd } from './episodeContentEnd';
+import { createEpisodeContentEndRequestTracker, fetchEpisodeContentEnd } from './episodeContentEnd';
 
 /** Plain apiClient literal that answers every ajax call with ajaxResult. */
 function recordedApiClient(ajaxResult: Promise<unknown>) {
@@ -66,5 +66,97 @@ describe('fetchEpisodeContentEnd', () => {
         const apiClient = recordedApiClient(Promise.reject(new Error('network error')));
 
         await expect(fetchEpisodeContentEnd(apiClient, 'episode-1')).resolves.toBeNull();
+    });
+});
+
+describe('createEpisodeContentEndRequestTracker', () => {
+    const episode = { Type: 'Episode', ServerId: 'server-1', Id: 'episode-1' };
+
+    it('deduplicates bind and playbackstart observations for the same episode session', () => {
+        const tracker = createEpisodeContentEndRequestTracker();
+        const bindRequest = tracker.begin(episode, 'play-session-1');
+
+        expect(bindRequest).not.toBeNull();
+        expect(tracker.setBoundaryTicks(bindRequest!, 2_010_000_000)).toBe(true);
+        expect(tracker.begin(episode, 'play-session-1')).toBeNull();
+        expect(tracker.isCurrent(bindRequest!)).toBe(true);
+        expect(tracker.getBoundaryTicks()).toBe(2_010_000_000);
+    });
+
+    it('preserves the computed boundary across a same-session player rebind', () => {
+        const tracker = createEpisodeContentEndRequestTracker();
+        const initialBindRequest = tracker.begin(episode, 'play-session-1');
+
+        expect(initialBindRequest).not.toBeNull();
+        expect(tracker.setBoundaryTicks(initialBindRequest!, 2_010_000_000)).toBe(true);
+
+        // bindToPlayer can run again for the same player/session. It must
+        // deduplicate the fetch without erasing the boundary already in use.
+        expect(tracker.begin(episode, 'play-session-1')).toBeNull();
+        expect(tracker.getBoundaryTicks()).toBe(2_010_000_000);
+    });
+
+    it('starts a fresh request and clears the boundary for a new session of the same episode', () => {
+        const tracker = createEpisodeContentEndRequestTracker();
+        const firstSession = tracker.begin(episode, 'play-session-1');
+
+        expect(firstSession).not.toBeNull();
+        expect(tracker.setBoundaryTicks(firstSession!, 2_010_000_000)).toBe(true);
+
+        const secondSession = tracker.begin(episode, 'play-session-2');
+
+        expect(secondSession).not.toBeNull();
+        expect(tracker.isCurrent(firstSession!)).toBe(false);
+        expect(tracker.isCurrent(secondSession!)).toBe(true);
+        expect(tracker.getBoundaryTicks()).toBeNull();
+        expect(tracker.setBoundaryTicks(firstSession!, 2_010_000_000)).toBe(false);
+    });
+
+    it('deduplicates a session id becoming available after the bind observation', () => {
+        const tracker = createEpisodeContentEndRequestTracker();
+        const bindRequest = tracker.begin(episode, null);
+
+        expect(bindRequest).not.toBeNull();
+        expect(tracker.begin(episode, 'play-session-1')).toBeNull();
+        expect(tracker.isCurrent(bindRequest!)).toBe(true);
+    });
+
+    it('replaces the active request for another episode or playback session and rejects stale results', () => {
+        const tracker = createEpisodeContentEndRequestTracker();
+        const firstRequest = tracker.begin(episode, 'play-session-1');
+        const secondRequest = tracker.begin({ ...episode, Id: 'episode-2' }, 'play-session-2');
+
+        expect(secondRequest).not.toBeNull();
+        expect(tracker.isCurrent(firstRequest!)).toBe(false);
+        expect(tracker.isCurrent(secondRequest!)).toBe(true);
+        expect(tracker.getBoundaryTicks()).toBeNull();
+        expect(tracker.setBoundaryTicks(firstRequest!, 2_010_000_000)).toBe(false);
+
+        const replayRequest = tracker.begin(episode, 'play-session-3');
+        expect(replayRequest).not.toBeNull();
+        expect(tracker.isCurrent(secondRequest!)).toBe(false);
+        expect(tracker.isCurrent(replayRequest!)).toBe(true);
+        expect(tracker.getBoundaryTicks()).toBeNull();
+    });
+
+    it('allows the same playback key to be fetched again after stop or release reset', () => {
+        const tracker = createEpisodeContentEndRequestTracker();
+        const firstRequest = tracker.begin(episode, 'play-session-1');
+
+        tracker.reset();
+
+        const replayRequest = tracker.begin(episode, 'play-session-1');
+        expect(replayRequest).not.toBeNull();
+        expect(tracker.isCurrent(firstRequest!)).toBe(false);
+        expect(tracker.isCurrent(replayRequest!)).toBe(true);
+        expect(tracker.getBoundaryTicks()).toBeNull();
+    });
+
+    it('clears the active episode request for non-episode state', () => {
+        const tracker = createEpisodeContentEndRequestTracker();
+        const request = tracker.begin(episode, 'play-session-1');
+
+        expect(tracker.begin({ ...episode, Type: 'Series' }, 'play-session-1')).toBeNull();
+        expect(tracker.isCurrent(request!)).toBe(false);
     });
 });
