@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-10-06.
+// SlopTank modification notice: added or changed by SlopTank on 2026-10-07.
 /**
  * Up Next prompt timing (c189).
  *
@@ -45,7 +45,7 @@ const POLL_INTERVAL_MS = 100;
  * real UpNextDialog construction needs a live server connection.
  */
 function pendingNextItem() {
-    return new Promise(() => {});
+    return new Promise(() => undefined);
 }
 
 function createUpNext({ overlayEnabled = true } = {}) {
@@ -66,9 +66,7 @@ function createUpNext({ overlayEnabled = true } = {}) {
             visibleMenu.current = menu;
         }
     };
-    const view = {
-        querySelector: () => null
-    };
+    const view = document.createElement('div');
     userSettings.enableNextVideoInfoOverlay(overlayEnabled);
     const upNext = createUpNextControl({ view, playback, osd });
     return {
