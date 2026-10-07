@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-10-07.
+// SlopTank modification notice: added or changed by SlopTank on 2026-10-07, 2026-10-08.
 import dom from '../../utils/dom';
 import { playbackManager } from '../playback/playbackmanager';
 import Events from '../../utils/events.ts';
