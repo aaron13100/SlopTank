@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-10-06.
+// SlopTank modification notice: added or changed by SlopTank on 2026-10-07.
 /**
  * Fetches the server-computed episode content-end boundary used to time the
  * Up Next prompt.

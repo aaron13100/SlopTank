@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-10-06.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-10-07.
 /**
  * Owns the 'up next' episode card shown near the end of playback.
  *

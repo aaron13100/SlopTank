@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-10-04, 2026-10-07.
 import { describe, expect, it } from 'vitest';
 import { createPlaybackStreamInfo } from './playbackStreamInfo';
 

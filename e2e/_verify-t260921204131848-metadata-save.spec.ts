@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-10-06, 2026-10-07.
 import { expect } from '@playwright/test';
 import { login, onScreenState, test } from './fixtures';
 
@@ -87,8 +88,9 @@ test('The Pitt series metadata save reaches a terminal outcome (never-ending spi
     const surfaced = (await alertText.textContent()) ?? '';
     const toastShown = await savedToast.isVisible().catch(() => false);
     const editorClosed = !(await form.isVisible().catch(() => false));
+    const successOutcome = toastShown ? 'saved-toast' : 'editor-closed';
     const verdict = {
-        outcome: surfaced ? 'surfaced-error' : (toastShown ? 'saved-toast' : 'editor-closed'),
+        outcome: surfaced ? 'surfaced-error' : successOutcome,
         surfacedError: surfaced || null,
         toastShown,
         editorClosed

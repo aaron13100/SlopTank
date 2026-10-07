@@ -1,4 +1,4 @@
-// SlopTank modification notice: added by SlopTank on 2026-10-04.
+// SlopTank modification notice: added or changed by SlopTank on 2026-10-04, 2026-10-07.
 /**
  * Real Chromium/MSE coverage for the HLS source-clock contract.
  *

@@ -1,4 +1,4 @@
-// SlopTank modification notice: added by SlopTank on 2026-10-01.
+// SlopTank modification notice: added or changed by SlopTank on 2026-10-01, 2026-10-07.
 import { test } from '@playwright/test';
 import { writeFileSync } from 'node:fs';
 import { login } from './fixtures';
@@ -90,7 +90,7 @@ test('login waterfall: every request until home is usable', async ({ page }) => 
             timing: timing && timing.startTime > 0 ? timing : null,
             serverWaitMs: rs !== null && rq !== null ? Math.round((rs - rq) * 10) / 10 : null,
             transferMs: re !== null && rs !== null ? Math.round((re - rs) * 10) / 10 : null,
-            durationMs: re !== null ? re : null,
+            durationMs: re,
             bodyBytes: sizes ? sizes.responseBodySize : null,
             headerBytes: sizes ? sizes.responseHeadersSize : null,
             contentEncoding: enc,

@@ -1,4 +1,4 @@
-// SlopTank modification notice: added by SlopTank on 2026-10-01.
+// SlopTank modification notice: added or changed by SlopTank on 2026-10-01, 2026-10-07.
 /**
  * Skip-button suppression vs. the media source actually playing (c296).
  *
