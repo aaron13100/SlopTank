@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-07-24, 2026-08-01, 2026-09-09, 2026-09-24, 2026-09-27.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-07-24, 2026-08-01, 2026-09-09, 2026-09-24, 2026-09-27, 2026-10-07.
 import appSettings from '../scripts/settings/appSettings' ;
 import browser from '../scripts/browser';
 import Events from '../utils/events.ts';
