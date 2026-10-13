@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-08-11, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-11, 2026-09-09, 2026-10-14.
 import { importModule } from '@uupaa/dynamic-import-polyfill';
 import './viewManager/viewContainer.scss';
 import Dashboard from '../utils/dashboard';
@@ -129,7 +129,22 @@ function parseHtml(html, hasScript) {
 
     const wrapper = document.createElement('div');
     wrapper.innerHTML = html;
-    return wrapper.querySelector('div[data-role="page"]');
+    const page = wrapper.querySelector('div[data-role="page"]');
+    if (hasScript && page) {
+        // Standalone-authored plugin pages carry their script AFTER the
+        // page div (the server used to serve that document as the whole
+        // page). Only the page div survives into the view manager, so a
+        // sibling script would be dropped and the page would render inert
+        // in the dashboard app; fold trailing scripts into the view, where
+        // the jQuery insertion path evaluates them in the app context.
+        for (const child of Array.from(wrapper.children)) {
+            if (child.tagName === 'SCRIPT') {
+                page.appendChild(child);
+            }
+        }
+    }
+
+    return page;
 }
 
 function normalizeNewView(options, isPluginpage) {

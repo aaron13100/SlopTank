@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-24, 2026-08-03, 2026-08-29, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-24, 2026-08-03, 2026-08-29, 2026-09-09, 2026-10-14.
 const { merge } = require('webpack-merge');
 const path = require('path');
 
@@ -24,7 +24,7 @@ module.exports = merge(common, {
     mode: 'development',
     entry: {
         ...common.entry,
-        'serviceworker': './serviceworker.js'
+        'serviceworker': './src/serviceworker.js'
     },
     devtool: 'eval-cheap-module-source-map',
     module: {
