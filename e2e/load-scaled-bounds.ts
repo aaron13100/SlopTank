@@ -4,9 +4,13 @@
 // no quiet period: the live Jellyfin server, nightly encodes and queue work
 // share its cores, so a fixed wall-clock bound reports contention as breakage.
 // A bound passed through loadScaledMs is a hang bound and may stretch with the
-// machine. Product latency budgets are never scaled -- they measure the
-// product against a stated budget, and stretching them would hide the very
-// regression they exist to catch.
+// machine. Product latency budgets follow the same 2026-09-22 no-quiet-box
+// rule: no test may carry a fixed quiet-host wall-clock bound. They keep a
+// fixed BASELINE (the regression signal, asserted as-is when 1-min loadavg is
+// at or under ncpu) and the runtime bound is baseline x clamp(load1/ncpu, 1,
+// 20), so scaling reflects measured contention instead of hiding regressions
+// behind a stretched constant (see _login-budget-probe.spec.ts and
+// playback-start-latency.spec.ts for the two landed budget instances).
 
 import os from 'node:os';
 
