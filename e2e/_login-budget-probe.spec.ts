@@ -4,12 +4,21 @@
 // warm repeat visit. Cold-Chrome launch cost is logged separately and is NOT
 // part of the budget (real viewers run a warm browser; the cold number
 // measures this box's Avast-taxed process spawn, tracked as its own line).
-// Budget is load-conditional per the goal: 1s on a quiet box, 3s under load.
+// Budget is load-scaled per the owner's 2026-09-22 premise change: there is no
+// quiet box on this machine and nothing may depend on one, so the 1s goal
+// baseline is judged at 1000ms x clamp(load1/ncpu, 1, 20) with load1 read at
+// test start -- the same formula the queue runner's load-scaled deadlines and
+// the playback spec's load-scaled ceiling use (t_260915_191039_171).
 import os from 'node:os';
 import { test, expect } from '@playwright/test';
 
-const QUIET_BUDGET_MS = 1_000;
-const LOADED_BUDGET_MS = 3_000;
+const BUDGET_BASELINE_MS = 1_000;
+const NCPU = os.cpus().length;
+
+/** 1000ms x clamp(load1/ncpu, 1, 20): the goal baseline scaled by measured load. */
+function scaledBudgetMs(load1: number): number {
+    return BUDGET_BASELINE_MS * Math.min(Math.max(load1 / NCPU, 1), 20);
+}
 const USERNAME = process.env.E2E_USERNAME as string;
 const PASSWORD = process.env.E2E_PASSWORD as string;
 
@@ -54,7 +63,7 @@ async function timedLogin(page: import('@playwright/test').Page) {
 
 test('login submit-to-home timing, cold and warm', async ({ page, browser }) => {
     const load1 = os.loadavg()[0];
-    const budget = load1 < 3 ? QUIET_BUDGET_MS : LOADED_BUDGET_MS;
+    const budget = scaledBudgetMs(load1);
     const timingLines: string[] = [];
     const t0base = Date.now();
     page.on('response', (r) => {

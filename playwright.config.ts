@@ -44,15 +44,28 @@ export default defineConfig({
             // explicitly via --project=lgpl-probes and excluded from every
             // ordinary regression run here.
             //
-            // _verify-t<taskid>-*.spec.ts files are one-off diagnostics a
+            // _verify-<task><taskid>-*.spec.ts files are one-off diagnostics a
             // queue task writes to check its own not-yet-shipped fix
             // (env-injected fixture, no standing default is meaningful);
             // they belong to that task's own manual verification, not the
             // standing suite. Run them directly with their task's env vars
             // set. Once a task's fix ships, promote the behavior it proves
             // into a real named regression spec instead of leaving the
-            // one-off in the standing run.
-            testIgnore: [ /lgpl-replacement-probes/, /_verify-t\d+-/ ]
+            // one-off in the standing run. The prefix is a task LETTER plus
+            // the numeric id (t260904..., c268, c207, ...), so the pattern
+            // covers any letter (t_260915_191039_171: a c-prefixed verify
+            // spec crashed suite collection because only "t" was ignored).
+            //
+            // _login-waterfall-probe.spec.ts is standalone by design: it
+            // throws at import unless WATERFALL_OUT points at its raw JSON
+            // output path, so it is excluded by exact filename. The other
+            // underscore probes (e.g. _login-budget-probe.spec.ts) still
+            // run in the standing suite.
+            testIgnore: [
+                /lgpl-replacement-probes/,
+                /_verify-[a-z]\d+-/,
+                /_login-waterfall-probe\.spec\.ts$/
+            ]
         },
         {
             name: 'lgpl-probes',
