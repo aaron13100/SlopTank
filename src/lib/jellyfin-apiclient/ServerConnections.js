@@ -2,7 +2,7 @@
 // NOTE: This is used for jsdoc return type
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { Api } from '@jellyfin/sdk';
-import { Credentials, ApiClient } from 'jellyfin-apiclient';
+import { Credentials } from 'jellyfin-apiclient';
 
 import { appHost } from 'components/apphost';
 import appSettings from 'scripts/settings/appSettings';
@@ -14,6 +14,7 @@ import { invalidateBootstrapCurrentUser } from 'utils/bootstrapCurrentUser';
 import { queryClient } from 'utils/query/queryClient';
 
 import ConnectionManager from './connectionManager';
+import CookieSessionApiClient from './CookieSessionApiClient';
 
 const normalizeImageOptions = options => {
     if (!options.quality && (options.maxWidth || options.width || options.maxHeight || options.height || options.fillWidth || options.fillHeight)) {
@@ -73,7 +74,7 @@ class ServerConnections extends ConnectionManager {
             Object.defineProperty(apiClient, 'enableAutomaticBitrateDetection', {
                 configurable: true,
                 get: () => false,
-                set: () => undefined
+                set: () => { /* Preserve the site's disabled automatic bitrate probe. */ }
             });
         });
     }
@@ -81,7 +82,7 @@ class ServerConnections extends ConnectionManager {
     initApiClient(server) {
         console.debug('creating ApiClient singleton');
 
-        const apiClient = new ApiClient(
+        const apiClient = new CookieSessionApiClient(
             server,
             appHost.appName(),
             appHost.appVersion(),

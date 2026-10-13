@@ -27,6 +27,7 @@ import { loadDynamicModule } from 'utils/dynamicImport';
 import { getBrandingOptionsQuery } from 'utils/query/brandingOptions';
 import { queryClient } from 'utils/query/queryClient';
 import { toApi } from 'utils/jellyfin-apiclient/compat';
+import { ajax } from '../../../utils/fetch';
 
 const enableFocusTransform = !browser.slow && !browser.edge;
 
@@ -223,6 +224,92 @@ export default function (view, params) {
         return '/web/home';
     }
 
+    function showExternalLoginError(detail) {
+        const target = view.querySelector('.externalLoginError');
+        target.textContent = detail;
+        target.classList.remove('hide');
+    }
+
+    async function finishExternalLogin(apiClient) {
+        const serverUrl = apiClient.serverAddress();
+        if (new URL(serverUrl).origin !== window.location.origin) {
+            showExternalLoginError('External sign-in returned to a different server origin (EXTERNAL_COOKIE_ORIGIN_MISMATCH).');
+            return;
+        }
+
+        try {
+            // Bare, same-origin transport: the HttpOnly cookie is the only
+            // credential, and the real server checks it on every request.
+            const user = await ajax({
+                type: 'GET',
+                url: apiClient.getUrl('/Users/Me'),
+                dataType: 'json'
+            });
+            if (!user?.Id) {
+                showExternalLoginError('External sign-in returned no local user (EXTERNAL_COOKIE_USER_MISSING).');
+                return;
+            }
+
+            await ServerConnections.completeExternalCookieLogin(apiClient, user);
+            Dashboard.onServerChanged(user.Id, null, apiClient);
+            Dashboard.navigate(getTargetUrl());
+        } catch (error) {
+            const detail = error?.status ? `HTTP ${error.status}` : error?.code || error?.message || 'NO_RESPONSE';
+            showExternalLoginError(`External sign-in could not establish a local session (${detail}).`);
+            console.error('[LoginPage] external cookie session refused', error);
+        } finally {
+            loading.hide();
+        }
+    }
+
+    async function loadExternalProviders(apiClient) {
+        const target = view.querySelector('.externalLoginProviders');
+        target.replaceChildren();
+        target.classList.add('hide');
+
+        try {
+            const discovery = await apiClient.getJSON(apiClient.getUrl('/Auth/External/Providers'));
+            if (discovery.schemaVersion !== 1 || !Array.isArray(discovery.providers)) {
+                showExternalLoginError('The server returned an unsupported external-provider list (DISCOVERY_SCHEMA).');
+                return;
+            }
+
+            for (const provider of discovery.providers) {
+                if (typeof provider.id !== 'string' || !provider.id || typeof provider.displayName !== 'string') {
+                    showExternalLoginError('The server returned an invalid external provider (DISCOVERY_PROVIDER).');
+                    return;
+                }
+
+                const button = document.createElement('button');
+                button.setAttribute('is', 'emby-button');
+                button.type = 'button';
+                button.className = 'raised block externalLoginButton';
+                button.textContent = `${globalize.translate('ButtonSignIn')}: ${provider.displayName}`;
+                button.addEventListener('click', () => {
+                    const beginUrl = apiClient.getUrl(`/Auth/External/Begin/${encodeURIComponent(provider.id)}`, {
+                        appName: appHost.appName(),
+                        appVersion: appHost.appVersion(),
+                        deviceId: appHost.deviceId(),
+                        deviceName: appHost.deviceName()
+                    });
+                    window.location.assign(beginUrl);
+                });
+                target.appendChild(button);
+            }
+
+            if (discovery.providers.length) {
+                target.classList.remove('hide');
+            }
+        } catch (error) {
+            if (error?.status === 404) {
+                return;
+            }
+            const detail = error?.status ? `HTTP ${error.status}` : error?.code || error?.message || 'NO_RESPONSE';
+            showExternalLoginError(`External sign-in providers could not be loaded (${detail}).`);
+            console.error('[LoginPage] external provider discovery failed', error);
+        }
+    }
+
     function showVisualForm() {
         view.querySelector('.visualLoginForm').classList.remove('hide');
         view.querySelector('.manualLoginForm').classList.add('hide');
@@ -300,6 +387,16 @@ export default function (view, params) {
         }
 
         const apiClient = getApiClient();
+
+        if (params.extAuthError) {
+            showExternalLoginError(`External sign-in was refused (${params.extAuthError}). Use local sign-in or ask an administrator to check the provider.`);
+        }
+        if (params.extAuthResult) {
+            void finishExternalLogin(apiClient);
+            return;
+        }
+
+        void loadExternalProviders(apiClient);
 
         apiClient.getQuickConnect('Enabled')
             .then(enabled => {

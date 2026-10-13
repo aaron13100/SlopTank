@@ -2,7 +2,6 @@
 import { AUTHORIZATION_HEADER } from '@jellyfin/sdk/lib/constants';
 import { getAuthorizationHeader } from '@jellyfin/sdk/lib/utils';
 import { MINIMUM_VERSION } from '@jellyfin/sdk/lib/versions';
-import { ApiClient } from 'jellyfin-apiclient';
 
 import events from 'utils/events';
 import { ajax } from 'utils/fetch';
@@ -14,9 +13,19 @@ import { queryClient } from 'utils/query/queryClient';
 
 import { ConnectionMode } from './connectionMode';
 import { ConnectionState } from './connectionState';
+import CookieSessionApiClient from './CookieSessionApiClient';
 import { compareVersions } from './utils/compareVersions';
 
 const DEFAULT_CONNECTION_TIMEOUT = 20000;
+
+class ExternalCookieLoginError extends Error {
+    constructor(code, message) {
+        super(message);
+        this.name = 'ExternalCookieLoginError';
+        this.code = code;
+        this.hint = 'Return to this server and start the provider login again.';
+    }
+}
 
 function getServerAddress(server, mode) {
     switch (mode) {
@@ -142,7 +151,7 @@ export default class ConnectionManager {
             let apiClient = self.getApiClient(server.Id);
 
             if (!apiClient) {
-                apiClient = new ApiClient(serverUrl, appName, appVersion, deviceName, deviceId);
+                apiClient = new CookieSessionApiClient(serverUrl, appName, appVersion, deviceName, deviceId);
 
                 self._apiClients.push(apiClient);
 
@@ -187,6 +196,7 @@ export default class ConnectionManager {
             if (saveCredentials) {
                 server.UserId = result.User.Id;
                 server.AccessToken = result.AccessToken;
+                server.ExternalCookieSession = false;
             } else {
                 server.UserId = null;
                 server.AccessToken = null;
@@ -230,6 +240,27 @@ export default class ConnectionManager {
             });
         }
 
+        /** Complete an external login using only the server's HttpOnly cookie. */
+        self.completeExternalCookieLogin = async (apiClient, user) => {
+            const serverUrl = apiClient.serverAddress();
+            if (new URL(serverUrl).origin !== window.location.origin || !user?.Id) {
+                throw new ExternalCookieLoginError('EXTERNAL_COOKIE_ORIGIN_OR_USER_INVALID',
+                    'The external session must be completed on its own server origin with a resolved user.');
+            }
+
+            const server = apiClient.serverInfo();
+            server.UserId = user.Id;
+            server.AccessToken = null;
+            server.ExternalCookieSession = true;
+            credentialProvider.addOrUpdateServer(credentialProvider.credentials().Servers, server);
+            credentialProvider.credentials(credentialProvider.credentials());
+
+            invalidateBootstrapCurrentUser(apiClient);
+            apiClient.enableExternalCookieSession(user.Id);
+            afterConnected(apiClient);
+            await onLocalUserSignIn(server, serverUrl, user);
+        };
+
         function validateAuthentication(server, serverUrl) {
             return ajax({
                 type: 'GET',
@@ -263,6 +294,31 @@ export default class ConnectionManager {
                     return Promise.resolve();
                 }
             );
+        }
+
+        function validateExternalCookieAuthentication(server, serverUrl) {
+            if (new URL(serverUrl).origin !== window.location.origin) {
+                server.ExternalCookieSession = false;
+                server.UserId = null;
+                return Promise.resolve();
+            }
+
+            return ajax({
+                type: 'GET',
+                url: `${serverUrl}/Users/Me`,
+                dataType: 'json'
+            }).then(user => {
+                if (!user?.Id) {
+                    throw new ExternalCookieLoginError('EXTERNAL_COOKIE_USER_MISSING',
+                        'The server returned no user for the external cookie session.');
+                }
+                server.UserId = user.Id;
+                server.ExternalCookieSession = true;
+            }).catch(error => {
+                console.debug('[ConnectionManager] external cookie session validation failed', error);
+                server.ExternalCookieSession = false;
+                server.UserId = null;
+            });
         }
 
         function getImageUrl(localUser) {
@@ -317,7 +373,7 @@ export default class ConnectionManager {
             for (let i = 0, length = self._apiClients.length; i < length; i++) {
                 const apiClient = self._apiClients[i];
 
-                if (apiClient.accessToken()) {
+                if (apiClient.accessToken() || apiClient.isExternalCookieSession?.()) {
                     promises.push(logoutOfServer(apiClient));
                 }
             }
@@ -333,6 +389,7 @@ export default class ConnectionManager {
                     server.UserId = null;
                     server.AccessToken = null;
                     server.ExchangeToken = null;
+                    server.ExternalCookieSession = false;
                 }
             });
         };
@@ -585,8 +642,17 @@ export default class ConnectionManager {
             if (options.enableAutoLogin === false) {
                 server.UserId = null;
                 server.AccessToken = null;
+                server.ExternalCookieSession = false;
             } else if (server.AccessToken && verifyLocalAuthentication) {
-                void validateAuthentication(server, serverUrl).then(function () {
+                void validateAuthentication(server, serverUrl).then(async function () {
+                    if (!server.AccessToken) {
+                        await validateExternalCookieAuthentication(server, serverUrl);
+                    }
+                    onSuccessfulConnection(server, systemInfo, connectionMode, serverUrl, false, resolve, options);
+                });
+                return;
+            } else if (verifyLocalAuthentication) {
+                void validateExternalCookieAuthentication(server, serverUrl).then(() => {
                     onSuccessfulConnection(server, systemInfo, connectionMode, serverUrl, false, resolve, options);
                 });
                 return;
@@ -611,7 +677,8 @@ export default class ConnectionManager {
             result.ApiClient.setSystemInfo(systemInfo);
             result.SystemInfo = systemInfo;
 
-            result.State = server.AccessToken && options.enableAutoLogin !== false ? ConnectionState.SignedIn : ConnectionState.ServerSignIn;
+            result.State = (server.AccessToken || (server.ExternalCookieSession && server.UserId)) && options.enableAutoLogin !== false ?
+                ConnectionState.SignedIn : ConnectionState.ServerSignIn;
 
             result.Servers.push(server);
 
@@ -620,6 +687,9 @@ export default class ConnectionManager {
 
             result.ApiClient.updateServerInfo(server, serverUrl);
             result.ApiClient.setAuthenticationInfo(server.AccessToken, server.UserId);
+            if (server.ExternalCookieSession && server.UserId) {
+                result.ApiClient.enableExternalCookieSession(server.UserId);
+            }
 
             const resolveActions = function () {
                 resolve(result);
@@ -768,7 +838,7 @@ export default class ConnectionManager {
     /**
      * Gets the ApiClient for a given BaseItem or ServerId.
      * @param {import('@jellyfin/sdk/lib/generated-client').BaseItemDto | string | undefined} item
-     * @returns {ApiClient}
+     * @returns {CookieSessionApiClient}
      */
     getApiClient(item) {
         if (!item) {

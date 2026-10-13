@@ -4,6 +4,14 @@ const path = require('path');
 
 const common = require('./webpack.common');
 
+// Browser verification checks types separately with build:check. Avoid
+// running a second full-project checker and production notice inventory in
+// this isolated, disk-backed dev preview under the contended host load.
+if (process.env.SLOPTANK_DEV_UI_VERIFY === '1') {
+    common.plugins = common.plugins.filter(plugin =>
+        !['ForkTsCheckerWebpackPlugin', 'ThirdPartyNoticesPlugin'].includes(plugin.constructor.name));
+}
+
 module.exports = merge(common, {
     // CleanWebpackPlugin runs when the dev server starts. Keep its output path
     // separate so `npm run serve` can never erase the deployed production build.
@@ -38,7 +46,8 @@ module.exports = merge(common, {
             }
         },
         devMiddleware: {
-            publicPath: '/web/'
+            publicPath: '/web/',
+            writeToDisk: process.env.SLOPTANK_DEV_WRITE_TO_DISK === '1'
         },
         headers: {
             'Service-Worker-Allowed': '/'
