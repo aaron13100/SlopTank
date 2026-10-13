@@ -52,6 +52,73 @@ import { includesAny } from '../../utils/container.ts';
 import { isHls } from '../../utils/mediaSource.ts';
 import { loadDynamicModule } from 'utils/dynamicImport';
 import { copyDocumentStyles } from '../../utils/documentPipStyles';
+import {
+    completePlaybackStartupTrace,
+    failPlaybackStartupTrace,
+    recordPlaybackStartupTrace
+} from '../../components/playback/playbackStartupTrace';
+
+const startupTraceIdsByElement = new WeakMap();
+const startupTraceListeners = new WeakSet();
+const STARTUP_MEDIA_EVENTS = [
+    'loadstart', 'loadedmetadata', 'canplay', 'playing', 'waiting', 'stalled',
+    'seeked', 'error', 'abort'
+];
+
+function matchingVideoResourceTiming(element) {
+    try {
+        const currentSource = element.currentSrc?.split(/[?#]/, 1)[0];
+        const performanceApi = globalThis.performance;
+        const getEntriesByType = performanceApi?.['getEntriesByType'];
+        if (typeof getEntriesByType !== 'function') return {};
+        const entries = getEntriesByType.call(performanceApi, 'resource');
+        const entry = entries.slice(-100).reverse().find(resource => resource.name.split(/[?#]/, 1)[0] === currentSource);
+        return entry ? {
+            resourceDurationMs: Number.isFinite(entry.duration) ? entry.duration : undefined,
+            resourceTransferSize: Number.isFinite(entry.transferSize) ? entry.transferSize : undefined
+        } : {};
+    } catch {
+        return {};
+    }
+}
+
+function bindStartupTraceMediaEvents(element) {
+    if (startupTraceListeners.has(element)) return;
+    startupTraceListeners.add(element);
+    for (const eventName of STARTUP_MEDIA_EVENTS) {
+        element.addEventListener(eventName, () => {
+            const attemptId = startupTraceIdsByElement.get(element);
+            const fields = {
+                event: eventName,
+                requestKind: 'video',
+                httpStatus: 'unknown',
+                ...matchingVideoResourceTiming(element)
+            };
+            if (eventName === 'error' && Number.isInteger(element.error?.code)) {
+                fields.mediaErrorCode = element.error.code;
+            }
+            if (eventName === 'error' && element.error?.code > 1) {
+                failPlaybackStartupTrace(attemptId, 'error', fields);
+            } else {
+                recordPlaybackStartupTrace(attemptId, eventName, fields, element);
+            }
+        });
+    }
+}
+
+function tracePlayerOperation(attemptId, stage, operation) {
+    if (!attemptId) return Promise.resolve().then(operation);
+    recordPlaybackStartupTrace(attemptId, stage, { outcome: 'begin' });
+    return Promise.resolve().then(operation).then(result => {
+        recordPlaybackStartupTrace(attemptId, stage, { outcome: 'resolved' });
+        return result;
+    }, error => {
+        failPlaybackStartupTrace(attemptId, stage, {
+            httpStatus: Number.isInteger(error?.status) ? error.status : undefined
+        });
+        throw error;
+    });
+}
 
 /**
  * Returns resolved URL.
@@ -541,6 +608,7 @@ export class HtmlVideoPlayer {
     }
 
     async play(options) {
+        const startupTraceId = options.startupTraceId;
         this.#started = false;
         this.#timeUpdated = false;
         this.#firstVideoFramePresented = false;
@@ -554,11 +622,15 @@ export class HtmlVideoPlayer {
         // survive into the next item.
         this.clearSubtitleAppearancePreview();
 
-        const elem = await this.createMediaElement(options);
+        const elem = await tracePlayerOperation(startupTraceId, 'create-media-element', () => this.createMediaElement(options));
+        if (elem) {
+            startupTraceIdsByElement.set(elem, startupTraceId);
+            bindStartupTraceMediaEvents(elem);
+        }
         this.#applyAspectRatio(options.aspectRatio || this.getAspectRatio());
 
-        await this.updateVideoUrl(options);
-        return this.setCurrentSrc(elem, options);
+        await tracePlayerOperation(startupTraceId, 'update-video-url', () => this.updateVideoUrl(options));
+        return tracePlayerOperation(startupTraceId, 'set-current-src', () => this.setCurrentSrc(elem, options));
     }
 
     /**
@@ -1227,6 +1299,7 @@ export class HtmlVideoPlayer {
             this.#firstVideoFramePresented = true;
             this.#videoFrameCallbackId = undefined;
             Events.trigger(this, 'firstvideoframe');
+            completePlaybackStartupTrace(startupTraceIdsByElement.get(elem), 'firstvideoframe', elem);
         };
 
         if (typeof elem.requestVideoFrameCallback === 'function') {
@@ -1266,9 +1339,11 @@ export class HtmlVideoPlayer {
                 if (elem.seeking) {
                     elem.addEventListener('seeked', () => {
                         Events.trigger(this, 'videoready');
+                        completePlaybackStartupTrace(startupTraceIdsByElement.get(elem), 'videoready', elem);
                     }, { once: true });
                 } else {
                     Events.trigger(this, 'videoready');
+                    completePlaybackStartupTrace(startupTraceIdsByElement.get(elem), 'videoready', elem);
                 }
             }
         };
@@ -2807,6 +2882,7 @@ export class HtmlVideoPlayer {
                 videoElement.addEventListener('click', this.onClick);
                 videoElement.addEventListener('dblclick', this.onDblClick);
                 videoElement.addEventListener('waiting', this.onWaiting);
+                bindStartupTraceMediaEvents(videoElement);
                 if (options.backdropUrl) {
                     videoElement.poster = options.backdropUrl;
                 }
@@ -2860,6 +2936,7 @@ export class HtmlVideoPlayer {
             const videoElement = dlg.querySelector('video');
             this.#videoDialog = dlg;
             this.#mediaElement = videoElement;
+            bindStartupTraceMediaEvents(videoElement);
             this.observeSubtitleSize(videoElement);
             if (options.backdropUrl) {
                 // update backdrop image

@@ -21,6 +21,14 @@ import Events from '../../utils/events.ts';
 import loading from '../loading/loading';
 import { MediaError } from 'types/mediaError';
 import { PlaybackManagerError, PlaybackManagerErrorCode } from './playbackManagerError';
+import {
+    beginPlaybackStartupTrace,
+    cancelPlaybackStartupTrace,
+    failPlaybackStartupTrace,
+    recordPlaybackStartupTrace,
+    resumePlaybackStartupTrace,
+    suspendPlaybackStartupTrace
+} from './playbackStartupTrace';
 
 function normalizePlayOptions(playOptions) {
     playOptions.fullscreen = playOptions.fullscreen !== false;
@@ -35,8 +43,28 @@ function truncatePlayOptions(playOptions) {
         subtitleStreamIndex: playOptions.subtitleStreamIndex,
         startPositionTicks: playOptions.startPositionTicks,
         alreadyOnVideoOsd: playOptions.alreadyOnVideoOsd,
-        skipAutomaticBitrateDetection: playOptions.skipAutomaticBitrateDetection
+        skipAutomaticBitrateDetection: playOptions.skipAutomaticBitrateDetection,
+        startupTraceId: playOptions.startupTraceId
     };
+}
+
+function isVideoStartup(options) {
+    return options.mediaType === 'Video'
+        || options.items?.[options.startIndex || 0]?.MediaType === 'Video';
+}
+
+function traceOperation(attemptId, stage, operation) {
+    if (!attemptId) return Promise.resolve().then(operation);
+    recordPlaybackStartupTrace(attemptId, stage, { outcome: 'begin' });
+    return Promise.resolve().then(operation).then(result => {
+        recordPlaybackStartupTrace(attemptId, stage, { outcome: 'resolved' });
+        return result;
+    }, error => {
+        failPlaybackStartupTrace(attemptId, stage, {
+            httpStatus: Number.isInteger(error?.status) ? error.status : undefined
+        });
+        throw error;
+    });
 }
 
 /**
@@ -88,16 +116,26 @@ export function createPlaybackSession(context) {
 
         const apiClient = context.serverConnections.getApiClient(firstItem.ServerId);
 
-        return context.items.getIntros(firstItem, apiClient, options).then(function (introsResult) {
+        return traceOperation(options.startupTraceId, 'intro-lookup', () => context.items.getIntros(firstItem, apiClient, options)).then(function (introsResult) {
             const introItems = introsResult.Items;
             let introPlayOptions;
 
             firstItem.playOptions = truncatePlayOptions(options);
 
             if (introItems.length) {
-                introPlayOptions = {
-                    fullscreen: firstItem.playOptions.fullscreen
-                };
+                suspendPlaybackStartupTrace(options.startupTraceId);
+                for (const introItem of introItems) {
+                    introItem.playOptions = {
+                        fullscreen: firstItem.playOptions.fullscreen,
+                        startupTraceId: introItem.MediaType === 'Video' ? beginPlaybackStartupTrace({
+                            itemId: introItem.Id,
+                            serverId: introItem.ServerId,
+                            apiClient,
+                            stage: 'player-choice'
+                        }) : undefined
+                    };
+                }
+                introPlayOptions = introItems[0].playOptions;
             } else {
                 introPlayOptions = firstItem.playOptions;
             }
@@ -198,6 +236,9 @@ export function createPlaybackSession(context) {
 
         // Normalize defaults to simplfy checks throughout the process
         normalizePlayOptions(playOptions);
+        if (item.MediaType === 'Video' && playOptions.startupTraceId) {
+            resumePlaybackStartupTrace(playOptions.startupTraceId);
+        }
 
         if (playOptions.isFirstItem) {
             playOptions.isFirstItem = false;
@@ -214,11 +255,11 @@ export function createPlaybackSession(context) {
             loading.show();
         }
 
-        return runInterceptors(item, playOptions)
+        return traceOperation(playOptions.startupTraceId, 'preplay-interceptors', () => runInterceptors(item, playOptions))
             .catch(onInterceptorRejection)
-            .then(() => playOptions.skipAutomaticBitrateDetection ?
+            .then(() => traceOperation(playOptions.startupTraceId, 'bitrate', () => playOptions.skipAutomaticBitrateDetection ?
                 context.streams.getSavedMaxStreamingBitrate(apiClient, mediaType) :
-                context.streams.detectBitrate(apiClient, item, mediaType))
+                context.streams.detectBitrate(apiClient, item, mediaType)))
             .then((bitrate) => {
                 return context.launcher.playAfterBitrateDetect(bitrate, item, playOptions, onPlaybackStartedFn, prevSource)
                     .catch(onPlaybackRejection);
@@ -234,6 +275,7 @@ export function createPlaybackSession(context) {
         const player = manager._currentPlayer;
 
         if (player) {
+            cancelPlaybackStartupTrace(player.streamInfo?.startupTraceId || player._currentPlayOptions?.startupTraceId, 'cancelled');
             destroyPlayer(player);
             context.registry.removeCurrentPlayer(player);
         }
@@ -247,6 +289,24 @@ export function createPlaybackSession(context) {
 
     async function play(options) {
         normalizePlayOptions(options);
+
+        if (!options.startupTraceId && isVideoStartup(options)) {
+            const firstItem = options.items?.[options.startIndex || 0];
+            const serverId = firstItem?.ServerId || options.serverId;
+            let apiClient;
+            try {
+                apiClient = serverId ? context.serverConnections.getApiClient(serverId) : undefined;
+            } catch {
+                apiClient = undefined;
+            }
+            options.startupTraceId = beginPlaybackStartupTrace({
+                itemId: firstItem?.Id,
+                serverId,
+                apiClient,
+                stage: options.ids ? 'item-fetch' : 'translate-items'
+            });
+        }
+        const startupTraceId = options.startupTraceId;
 
         if (manager._currentPlayer) {
             if (options.enableRemotePlayers === false && !manager._currentPlayer.isLocalPlayer) {
@@ -269,15 +329,15 @@ export function createPlaybackSession(context) {
                 throw new PlaybackManagerError(PlaybackManagerErrorCode.MissingServerId, 'serverId required!');
             }
 
-            items = (await context.items.getItemsForPlayback(options.serverId, {
+            items = (await traceOperation(startupTraceId, 'item-fetch', () => context.items.getItemsForPlayback(options.serverId, {
                 Ids: options.ids.join(',')
-            })).Items;
+            }))).Items;
         }
 
         // Prepare the list of items
-        items = await context.items.translateItemsForPlayback(items, options);
+        items = await traceOperation(startupTraceId, 'translate-items', () => context.items.translateItemsForPlayback(items, options));
         // Add any additional parts for movies or episodes
-        items = await context.items.getAdditionalParts(items);
+        items = await traceOperation(startupTraceId, 'additional-parts', () => context.items.getAdditionalParts(items));
         // Adjust the start index for additional parts added to the queue
         if (options.startIndex) {
             let adjustedStartIndex = 0;

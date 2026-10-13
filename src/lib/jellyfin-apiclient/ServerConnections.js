@@ -12,6 +12,7 @@ import Events from 'utils/events.ts';
 import { toApi } from 'utils/jellyfin-apiclient/compat';
 import { invalidateBootstrapCurrentUser } from 'utils/bootstrapCurrentUser';
 import { queryClient } from 'utils/query/queryClient';
+import { flushPendingPlaybackStartupTraces } from 'components/playback/playbackStartupTrace';
 
 import ConnectionManager from './connectionManager';
 
@@ -51,6 +52,12 @@ class ServerConnections extends ConnectionManager {
             }
         });
 
+        Events.on(this, 'localusersignedin', (_e, user) => {
+            if (!user?.ServerId) return;
+            void flushPendingPlaybackStartupTraces(this.getApiClient(user.ServerId));
+        });
+
+
         Events.on(this, 'apiclientcreated', (_e, apiClient) => {
             apiClient.getMaxBandwidth = getMaxBandwidth;
             apiClient.normalizeImageOptions = normalizeImageOptions;
@@ -70,10 +77,13 @@ class ServerConnections extends ConnectionManager {
             // gated by appSettings.enableAutomaticBitrateDetection
             // (in-network Video never detects; remote playback is unchanged
             // and simply probes fresh instead of using this cache).
+            let enableAutomaticBitrateDetection = false;
             Object.defineProperty(apiClient, 'enableAutomaticBitrateDetection', {
                 configurable: true,
-                get: () => false,
-                set: () => undefined
+                get: () => enableAutomaticBitrateDetection,
+                set: () => {
+                    enableAutomaticBitrateDetection = false;
+                }
             });
         });
     }
