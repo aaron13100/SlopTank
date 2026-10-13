@@ -28,6 +28,22 @@ import { resolvePlaybackMediaStreams } from './mediaStreams';
 import { getMediaError } from 'utils/mediaError';
 import { isServerItem } from './playbackMediaSource';
 import { enableLocalPlaylistManagement } from './playerRegistry';
+import { failPlaybackStartupTrace, recordPlaybackStartupTrace } from './playbackStartupTrace';
+
+function traceOperation(attemptId, stage, operation) {
+    if (!attemptId) return Promise.resolve().then(operation);
+    recordPlaybackStartupTrace(attemptId, stage, { outcome: 'begin' });
+    return Promise.resolve().then(operation).then(result => {
+        recordPlaybackStartupTrace(attemptId, stage, { outcome: 'resolved' });
+        return result;
+    }, error => {
+        failPlaybackStartupTrace(attemptId, stage, {
+            httpStatus: Number.isInteger(error?.status) ? error.status : undefined,
+            requestKind: stage === 'playback-info' ? 'playback-info' : undefined
+        });
+        throw error;
+    });
+}
 
 /**
  * Creates the playback launcher operations.
@@ -41,14 +57,16 @@ export function createPlaybackLauncher(context) {
         return context.streamInfo.setStreamUrls(items, deviceProfile, options.maxBitrate, apiClient, options.startPosition).then(function () {
             loading.hide();
 
-            return player.play({
+            const playerOptions = {
                 items,
                 startPositionTicks: options.startPosition || 0,
                 mediaSourceId,
                 audioStreamIndex: options.audioStreamIndex,
                 subtitleStreamIndex: options.subtitleStreamIndex,
-                startIndex: options.startIndex
-            });
+                startIndex: options.startIndex,
+                startupTraceId: options.startupTraceId
+            };
+            return traceOperation(options.startupTraceId, 'player-play', () => player.play(playerOptions));
         });
     }
 
@@ -175,7 +193,9 @@ export function createPlaybackLauncher(context) {
     function playAfterBitrateDetect(maxBitrate, item, playOptions, onPlaybackStartedFn, prevSource) {
         const startPosition = playOptions.startPositionTicks;
 
+        recordPlaybackStartupTrace(playOptions.startupTraceId, 'player-choice', { outcome: 'begin' });
         const player = context.registry.getPlayer(item, playOptions);
+        recordPlaybackStartupTrace(playOptions.startupTraceId, 'player-choice', { outcome: player ? 'resolved' : 'rejected' });
         const activePlayer = manager._currentPlayer;
 
         let promise;
@@ -189,6 +209,7 @@ export function createPlaybackLauncher(context) {
         }
 
         if (!player) {
+            failPlaybackStartupTrace(playOptions.startupTraceId, 'player-choice');
             return promise.then(() => {
                 context.session.cancelPlayback();
                 loading.hide();
@@ -202,8 +223,9 @@ export function createPlaybackLauncher(context) {
                 const streamInfo = context.streamInfo.createStreamInfoFromUrlItem(item);
                 streamInfo.fullscreen = playOptions.fullscreen;
                 streamInfo.alreadyOnVideoOsd = playOptions.alreadyOnVideoOsd;
+                streamInfo.startupTraceId = playOptions.startupTraceId;
                 context.state.getPlayerData(player).isChangingStream = false;
-                return player.play(streamInfo).then(() => {
+                return traceOperation(playOptions.startupTraceId, 'player-play', () => player.play(streamInfo)).then(() => {
                     loading.hide();
                     onPlaybackStartedFn();
                     context.lifecycle.onPlaybackStarted(player, playOptions, streamInfo);
@@ -249,9 +271,12 @@ export function createPlaybackLauncher(context) {
         const isLiveTv = [BaseItemKind.TvChannel, BaseItemKind.LiveTvChannel].includes(item.Type);
         const getMediaStreams = isLiveTv ?
             Promise.resolve([]) :
-            resolvePlaybackMediaStreams(apiClient, item, mediaSourceId);
+            traceOperation(playOptions.startupTraceId, 'media-streams', () => resolvePlaybackMediaStreams(apiClient, item, mediaSourceId));
 
-        return Promise.all([promise, player.getDeviceProfile(item), apiClient.getCurrentUser(), getMediaStreams]).then(function (responses) {
+        const deviceProfilePromise = traceOperation(playOptions.startupTraceId, 'device-profile', () => player.getDeviceProfile(item));
+        const userPromise = traceOperation(playOptions.startupTraceId, 'current-user', () => apiClient.getCurrentUser());
+
+        return Promise.all([promise, deviceProfilePromise, userPromise, getMediaStreams]).then(function (responses) {
             const deviceProfile = responses[1];
             const user = responses[2];
             const mediaStreams = responses[3];
@@ -269,7 +294,8 @@ export function createPlaybackLauncher(context) {
                 enableDirectPlay: null,
                 enableDirectStream: null,
                 allowVideoStreamCopy: null,
-                allowAudioStreamCopy: null
+                allowAudioStreamCopy: null,
+                startupTraceId: playOptions.startupTraceId
             };
 
             if (player && !enableLocalPlaylistManagement(player)) {
@@ -296,7 +322,7 @@ export function createPlaybackLauncher(context) {
                 mediaSourceId ||= item.Id;
             }
 
-            return context.mediaSource.getPlaybackMediaSource(player, apiClient, deviceProfile, item, mediaSourceId, options).then(async (mediaSource) => {
+            return traceOperation(playOptions.startupTraceId, 'playback-info', () => context.mediaSource.getPlaybackMediaSource(player, apiClient, deviceProfile, item, mediaSourceId, options)).then(async (mediaSource) => {
                 if (trackOptions.DefaultSecondarySubtitleStreamIndex != null) {
                     mediaSource.DefaultSecondarySubtitleStreamIndex = trackOptions.DefaultSecondarySubtitleStreamIndex;
                 }
@@ -320,6 +346,15 @@ export function createPlaybackLauncher(context) {
                 streamInfo.aspectRatio = playOptions.aspectRatio;
                 streamInfo.fullscreen = playOptions.fullscreen;
                 streamInfo.alreadyOnVideoOsd = playOptions.alreadyOnVideoOsd;
+                streamInfo.startupTraceId = playOptions.startupTraceId;
+                recordPlaybackStartupTrace(playOptions.startupTraceId, 'stream-info', {
+                    outcome: 'resolved',
+                    mediaSourceId: mediaSource.Id,
+                    container: mediaSource.Container,
+                    playMethod: streamInfo.playMethod,
+                    audioStreamIndex: mediaSource.DefaultAudioStreamIndex,
+                    subtitleStreamIndex: mediaSource.DefaultSubtitleStreamIndex
+                });
 
                 const playerData = context.state.getPlayerData(player);
 
@@ -327,11 +362,12 @@ export function createPlaybackLauncher(context) {
                 playerData.maxStreamingBitrate = maxBitrate;
                 playerData.streamInfo = streamInfo;
 
-                return player.play(streamInfo).then(function () {
+                return traceOperation(playOptions.startupTraceId, 'player-play', () => player.play(streamInfo)).then(function () {
                     loading.hide();
                     onPlaybackStartedFn();
                     context.lifecycle.onPlaybackStarted(player, playOptions, streamInfo, mediaSource);
                 }, function (err) {
+                    failPlaybackStartupTrace(playOptions.startupTraceId, 'player-play');
                     // TODO: Improve this because it will report playback start on a failure
                     onPlaybackStartedFn();
                     context.lifecycle.onPlaybackStarted(player, playOptions, streamInfo, mediaSource);

@@ -20,6 +20,12 @@ import { appRouter } from '../../../components/router/appRouter';
 import { getParameterByName } from '../../../utils/url.ts';
 import { permalinkStartSecondsToTicks } from '../../../components/router/permalinkId.ts';
 import { readReloadResumeSnapshot } from '../../../components/playback/playbackReloadSnapshot';
+import {
+    beginPlaybackStartupTrace,
+    cancelPlaybackStartupTrace,
+    failPlaybackStartupTrace,
+    recordPlaybackStartupTrace
+} from '../../../components/playback/playbackStartupTrace';
 
 /**
  * Module-scoped (not per-createPermalinkResume-instance) in-flight guard,
@@ -107,18 +113,29 @@ export function createPermalinkResume({ setPermalinkPreparing, canonicalizeVideo
             null;
 
         const apiClient = ServerConnections.getApiClient(serverId);
-        setPermalinkPreparing(true);
+        const startupTraceId = beginPlaybackStartupTrace({
+            itemId: id,
+            serverId,
+            apiClient,
+            stage: 'item-fetch'
+        });
+        setPermalinkPreparing(true, startupTraceId);
 
+        let itemFetched = false;
         permalinkResumePromise = apiClient.getItem(apiClient.getCurrentUserId(), id).then((item) => {
+            itemFetched = true;
+            recordPlaybackStartupTrace(startupTraceId, 'item-fetch', { outcome: 'resolved' });
             canonicalizeVideoRoute(item);
 
             if (playbackManager.getCurrentPlayer() || !playbackManager.canPlay(item)) {
-                setPermalinkPreparing(false);
+                cancelPlaybackStartupTrace(startupTraceId, 'superseded');
+                setPermalinkPreparing(false, startupTraceId);
                 return;
             }
 
             return playbackManager.play({
                 items: [item],
+                startupTraceId,
                 startPositionTicks: requestedStartTicks ?? reloadSnapshot?.positionTicks ?? (item.UserData?.PlaybackPositionTicks || 0),
                 fullscreen: true,
                 alreadyOnVideoOsd: true,
@@ -141,7 +158,10 @@ export function createPermalinkResume({ setPermalinkPreparing, canonicalizeVideo
                 return playbackManager.unpause(player);
             }
         }).catch((error) => {
-            setPermalinkPreparing(false);
+            failPlaybackStartupTrace(startupTraceId, itemFetched ? 'playback-start' : 'item-fetch', {
+                httpStatus: Number.isInteger(error?.status) ? error.status : undefined
+            });
+            setPermalinkPreparing(false, startupTraceId);
             console.error('failed to resume item from permalink: ', error);
             appRouter.goHome();
         }).finally(() => {

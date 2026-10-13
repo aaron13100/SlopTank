@@ -68,6 +68,7 @@ import { createAudioTrackMenu } from './audioTrackMenu';
 import { createUpNextControl } from './upNextControl';
 import { createVideoInputControl } from './videoInputControl';
 import { createEpisodeContentEndRequestTracker, fetchEpisodeContentEnd } from './episodeContentEnd';
+import { cancelPlaybackStartupTrace, recordPlaybackStartupTrace } from '../../../components/playback/playbackStartupTrace';
 
 export default function (view) {
     function updateDisplayItem(itemInfo) {
@@ -245,6 +246,10 @@ export default function (view) {
         episodePlaybackMenu.close();
         console.debug('nowplaying event: ' + e.type);
         const player = this;
+        const nextItem = state.NowPlayingItem;
+        if (currentItem?.MediaType === 'Video' && currentItem.Id !== nextItem?.Id) {
+            cancelPlaybackStartupTrace(currentItem.playOptions?.startupTraceId, 'item-switch');
+        }
         onStateChanged.call(player, e, state);
         upNextControl.reset();
         refreshEpisodeContentEnd(state.NowPlayingItem, state.PlayState?.PlaySessionId);
@@ -279,13 +284,18 @@ export default function (view) {
         view.querySelector('.osdMediaStatus').classList.add('hide');
     }
 
-    function setPermalinkPreparing(isPreparing) {
+    function setPermalinkPreparing(isPreparing, startupTraceId) {
+        recordPlaybackStartupTrace(startupTraceId, isPreparing ? 'osd-preparing' : 'osd-ready', {
+            outcome: isPreparing ? 'visible' : 'hidden'
+        });
         view.classList.toggle('videoOsd-isPreparing', isPreparing);
         view.toggleAttribute('aria-busy', isPreparing);
         view.querySelector('.videoOsdLoading').classList.toggle('hide', !isPreparing);
     }
 
     function onVideoReady() {
+        const startupTraceId = this.streamInfo?.startupTraceId || this._currentPlayOptions?.startupTraceId;
+        recordPlaybackStartupTrace(startupTraceId, 'osd-ready', { outcome: 'hidden' });
         setPermalinkPreparing(false);
     }
 
