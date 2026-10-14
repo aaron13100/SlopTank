@@ -7,6 +7,6 @@ module.exports = merge(common, {
     mode: 'production',
     entry: {
         ...common.entry,
-        'serviceworker': './src/serviceworker.js'
+        'serviceworker': './serviceworker.js'
     }
 });

@@ -24,7 +24,7 @@ module.exports = merge(common, {
     mode: 'development',
     entry: {
         ...common.entry,
-        'serviceworker': './src/serviceworker.js'
+        'serviceworker': './serviceworker.js'
     },
     devtool: 'eval-cheap-module-source-map',
     module: {
