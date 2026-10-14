@@ -1,8 +1,8 @@
 // SlopTank modification notice: added or changed by SlopTank on 2026-09-14, 2026-09-15.
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { deleteErrorSuffix } from './deleteHelper';
+import { DELETE_FAILURE_MESSAGE_KEYS, deleteErrorSuffix, describeDeleteError } from './deleteHelper';
 
 /**
  * Regression coverage for the misleading delete-failure message (c47): the
@@ -46,14 +46,54 @@ describe('deleteErrorSuffix', () => {
     it('degrades to empty for an empty rejection', async () => {
         expect(await deleteErrorSuffix(null)).toBe('');
     });
+});
 
-    it('never ships a write-access guess in the delete-failure strings', () => {
-        const strings = JSON.parse(
-            readFileSync(resolve(__dirname, '../strings/en-us.json'), 'utf8'));
+const STRINGS_DIR = resolve(__dirname, '../strings');
+const MAPPED_KEYS = Object.values(DELETE_FAILURE_MESSAGE_KEYS);
 
-        for (const key of ['ErrorDeletingItem', 'ErrorDeletingLyrics']) {
-            expect(strings[key], key).toBeDefined();
-            expect(strings[key], key).not.toContain('write access');
+function readStrings(file) {
+    return JSON.parse(readFileSync(resolve(STRINGS_DIR, file), 'utf8'));
+}
+
+/**
+ * The framing text is shown in front of the server's reason in every locale,
+ * so no locale may carry the old write-access guess under a key the code
+ * actually reads. Retired keys must stay retired: they still carry the guess
+ * in translated locales that are not edited here.
+ */
+describe('delete-failure message keys', () => {
+    it('carry no write-access guess in any locale', () => {
+        const files = readdirSync(STRINGS_DIR).filter(file => file.endsWith('.json'));
+        expect(files.length).toBeGreaterThan(1);
+
+        for (const file of files) {
+            const strings = readStrings(file);
+            for (const key of MAPPED_KEYS) {
+                if (strings[key] !== undefined) {
+                    expect(strings[key], `${file}: ${key}`).not.toMatch(/write.?access/i);
+                }
+            }
         }
+    });
+
+    it('are all defined in en-us.json', () => {
+        const strings = readStrings('en-us.json');
+
+        for (const key of MAPPED_KEYS) {
+            expect(strings[key], key).toBeDefined();
+        }
+    });
+
+    it('do not reuse a retired key', () => {
+        for (const key of MAPPED_KEYS) {
+            expect(['ErrorDeletingItem', 'ErrorDeletingLyrics'], key).not.toContain(key);
+        }
+    });
+
+    it('rejects an unknown kind with a TypeError naming it', async () => {
+        await expect(async () => describeDeleteError(null, 'nonsense'))
+            .rejects.toThrow(TypeError);
+        await expect(async () => describeDeleteError(null, 'nonsense'))
+            .rejects.toThrow(/nonsense/);
     });
 });
