@@ -1,8 +1,8 @@
 // SlopTank modification notice: added or changed by SlopTank on 2026-09-14, 2026-09-15, 2026-10-02.
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { deleteErrorSuffix } from './deleteHelper';
+import { DELETE_FAILURE_MESSAGE_KEYS, deleteErrorSuffix, describeDeleteError } from './deleteHelper';
 
 /**
  * Regression coverage for the misleading delete-failure message (c47): the
@@ -59,14 +59,53 @@ describe('deleteErrorSuffix', () => {
     it('degrades to empty for an empty rejection', async () => {
         expect(await deleteErrorSuffix(null)).toBe('');
     });
+});
 
-    it('never ships a write-access guess in the delete-failure strings', () => {
-        const strings = JSON.parse(
-            readFileSync(resolve(__dirname, '../strings/en-us.json'), 'utf8'));
+/**
+ * Locale coverage for the delete-failure framing (c187): the old keys still
+ * carry a write-access guess in the non-en-us locales, so the framing must
+ * resolve through keys no locale defines with such a guess, in any file.
+ */
+describe('delete-failure message keys', () => {
+    const stringsDir = resolve(__dirname, '../strings');
+    const localeFiles = readdirSync(stringsDir).filter(name => name.endsWith('.json'));
+    const mappedKeys = Object.values(DELETE_FAILURE_MESSAGE_KEYS);
 
-        for (const key of ['ErrorDeletingItem', 'ErrorDeletingLyrics']) {
-            expect(strings[key], key).toBeDefined();
-            expect(strings[key], key).not.toContain('write access');
+    function readLocale(name) {
+        return JSON.parse(readFileSync(resolve(stringsDir, name), 'utf8'));
+    }
+
+    it('never resolves to a write-access guess in any locale', () => {
+        expect(localeFiles).toContain('en-us.json');
+
+        for (const file of localeFiles) {
+            const strings = readLocale(file);
+            for (const key of mappedKeys) {
+                if (strings[key] !== undefined) {
+                    expect(strings[key], `${file}: ${key}`).not.toMatch(/write.?access/i);
+                }
+            }
         }
+    });
+
+    it('defines every mapped key in en-us.json', () => {
+        const strings = readLocale('en-us.json');
+
+        for (const key of mappedKeys) {
+            expect(strings[key], `en-us.json: ${key}`).toBeDefined();
+        }
+    });
+
+    it('does not map to the legacy keys that carry the guess', () => {
+        for (const key of mappedKeys) {
+            expect(['ErrorDeletingItem', 'ErrorDeletingLyrics'], key).not.toContain(key);
+        }
+    });
+
+    it('rejects an unknown kind with a TypeError naming it', async () => {
+        await expect(async () => describeDeleteError(null, 'nonsense'))
+            .rejects.toThrow(TypeError);
+        await expect(async () => describeDeleteError(null, 'nonsense'))
+            .rejects.toThrow(/nonsense/);
     });
 });
