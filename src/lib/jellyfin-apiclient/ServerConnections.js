@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09, 2026-09-15.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09, 2026-09-15, 2026-10-13, 2026-10-16.
 // NOTE: This is used for jsdoc return type
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { Api } from '@jellyfin/sdk';

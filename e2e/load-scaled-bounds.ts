@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-28.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-28, 2026-10-13, 2026-10-16.
 
 // Hang bounds in e2e specs are scaled by measured load because this host has
 // no quiet period: the live Jellyfin server, nightly encodes and queue work

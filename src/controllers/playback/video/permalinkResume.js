@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-09-27.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-09-27, 2026-10-13, 2026-10-16.
 /**
  * Resume-from-permalink playback: opening (or reloading) a video page URL
  * that carries `?id=&serverId=` re-fetches the item and resumes playback at

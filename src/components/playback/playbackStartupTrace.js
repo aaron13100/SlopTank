@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-10-12.
+// SlopTank modification notice: added or changed by SlopTank on 2026-10-13, 2026-10-16.
 /**
  * Owns the bounded, reload-surviving video-startup trace, its session storage,
  * and its authenticated Jellyfin client-log upload boundary.

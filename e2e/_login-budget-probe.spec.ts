@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-15.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-15, 2026-10-13, 2026-10-16.
 // Goal probe (owner-set 2026-09-15): login budget applies to the window a
 // user feels -- submitting credentials to the home screen rendered -- plus a
 // warm repeat visit. Cold-Chrome launch cost is logged separately and is NOT

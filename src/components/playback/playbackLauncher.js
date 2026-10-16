@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-24.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-10-13, 2026-10-16.
 /**
  * Starts one resolved item on its player once the bitrate is known.
  *
