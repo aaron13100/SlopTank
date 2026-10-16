@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-09-27.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-09-27, 2026-10-16.
 /**
  * CLI contract tests for scripts/run-in-index-snapshot.sh.
  *
@@ -82,8 +82,8 @@ function git(cwd, args) {
  * fully independent git repository and working tree; nothing done to it
  * touches the real, shared worktree.
  *
- * --no-hardlinks: the real repo lives on an external volume
- * (/Volumes/2025_Black) while the throwaway clone lives under the OS temp
+ * --no-hardlinks: the real repo may live on an external volume while
+ * the throwaway clone lives under the OS temp
  * dir (typically the internal disk), so --local's default hardlinked
  * objects fail with "Cross-device link"; copying the (packed, so modest)
  * object store instead is the correct fix, not a workaround.

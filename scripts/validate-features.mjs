@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-09-09, 2026-09-24, 2026-09-27.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-09-09, 2026-09-24, 2026-09-27, 2026-10-16.
 // scripts/validate-features.mjs - Pre-commit + CI gate for feature path coverage
 //
-// Ported from ~/.claude/templates/quality-gates/shared/scripts/validate-features.js
+// Ported from a shared quality-gates template (validate-features.js)
 // to ESM. package.json has no "type": "module" here (webpack/babel own the
 // app bundle), so this file uses the .mjs extension to opt into ESM per-file,
 // the same convention scripts/developerToolchain.test.mjs already uses in
@@ -201,7 +201,7 @@ if (staged) {
 } else {
     if (!fs.existsSync(featuresPath)) {
         console.error(`features.json not found at ${featuresPath}`);
-        console.error('Create features.json at the project root. See ~/.claude/docs/features-json-guide.md');
+        console.error('Create features.json at the project root.');
         process.exit(2);
     }
     featuresSource = fs.readFileSync(featuresPath, 'utf8');
