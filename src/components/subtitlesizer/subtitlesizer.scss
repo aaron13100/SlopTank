@@ -1,4 +1,4 @@
-/* SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-07-24, 2026-07-25, 2026-09-09. */
+/* SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-07-24, 2026-07-25, 2026-09-09, 2026-11-01. */
 @use '../../styles/mixins' as *;
 
 .subtitleSizer {
@@ -13,8 +13,10 @@
     margin-right: auto;
     padding: 1em 1.25em 1.25em;
     overflow-y: auto;
-    background: rgba(28, 28, 28, 0.8);
-    border-radius: 0.3em;
+    background: rgba(28, 28, 28, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 0.6em;
+    box-shadow: 0 0.6em 2em rgba(0, 0, 0, 0.5);
     color: #fff;
     position: relative;
 }
@@ -44,7 +46,8 @@
 }
 
 .subtitleSizerValue,
-.subtitlePositionValue {
+.subtitlePositionValue,
+.subtitleBackgroundValue {
     color: #ddd;
     font-size: 0.95em;
 }
@@ -59,7 +62,8 @@
 }
 
 .subtitleSizerSliderContainer,
-.subtitlePositionSliderContainer {
+.subtitlePositionSliderContainer,
+.subtitleBackgroundSliderContainer {
     width: 100%;
     height: 1.4em;
     border-radius: 0.3em;
@@ -71,8 +75,42 @@
     gap: 0.75em;
 }
 
+.subtitleSizerSelectField {
+    min-width: 0;
+    margin-bottom: 0;
+}
+
 @media (max-width: 30em) {
     .subtitleSizerSelectGrid {
         grid-template-columns: 1fr;
     }
+}
+
+.subtitleBackgroundColor {
+    width: 3.5em;
+    height: 2em;
+    padding: 0.15em;
+    border: 1px solid #888;
+    border-radius: 0.3em;
+    background: #333;
+    cursor: pointer;
+}
+
+.subtitleBackgroundScale {
+    display: flex;
+    justify-content: space-between;
+    color: #bbb;
+    font-size: 0.8em;
+}
+
+.subtitleBackgroundAssNote {
+    color: #ccc;
+    font-size: 0.85em;
+    margin-top: 0.5em;
+}
+
+.subtitleBackgroundColor:disabled,
+.subtitleBackgroundOpacity:disabled {
+    opacity: 0.45;
+    cursor: default;
 }

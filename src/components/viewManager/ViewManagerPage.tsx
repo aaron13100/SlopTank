@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-08-03, 2026-08-11, 2026-08-12, 2026-09-08, 2026-09-09, 2026-09-23.
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-03, 2026-08-11, 2026-08-12, 2026-09-08, 2026-09-09, 2026-09-23, 2026-11-01.
 import { Action } from 'history';
 import { FunctionComponent, useEffect } from 'react';
 import { useLocation, useNavigationType } from 'react-router-dom';
@@ -160,9 +160,9 @@ const ViewManagerPage: FunctionComponent<ViewManagerPageProps> = ({
                 }
             };
 
-            // A route change that is only a re-spelling of the URL already on
-            // screen -- a GUID route replaced by the canonical permalink for
-            // the very item it is showing -- must not rebuild the view.
+            // A route change handed off to the view already on screen -- a
+            // canonical permalink or the next item in the mounted player --
+            // must not rebuild the view.
             // viewContainer.loadView dispatches `viewbeforehide` on the
             // outgoing view, and the video OSD stops playback on that event,
             // so tidying the address bar would end the movie.

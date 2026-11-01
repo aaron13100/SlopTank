@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-07-24, 2026-07-25, 2026-09-09, 2026-09-30.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-07-24, 2026-07-25, 2026-09-09, 2026-09-30, 2026-11-01.
 /**
  * In-player subtitle appearance overlay. Size and vertical position are
  * adjusted with live sliders; font family and weight are adjusted with
@@ -10,6 +10,8 @@
 
 import {
     getTextSizeMultiplier,
+    getBackgroundControls,
+    getBackgroundColor,
     VERTICAL_POSITION_BOTTOM,
     VERTICAL_POSITION_DEFAULT,
     VERTICAL_POSITION_STEP,
@@ -66,6 +68,10 @@ export default class SubtitleSizer {
 
         this.slider = parent.querySelector('.subtitleSizerSlider');
         this.positionSlider = parent.querySelector('.subtitlePositionSlider');
+        this.backgroundColor = parent.querySelector('.subtitleBackgroundColor');
+        this.backgroundOpacity = parent.querySelector('.subtitleBackgroundOpacity');
+        this.backgroundValue = parent.querySelector('.subtitleBackgroundValue');
+        this.backgroundAssNote = parent.querySelector('.subtitleBackgroundAssNote');
         this.fontSelect = parent.querySelector('.subtitleFontSelect');
         this.weightSelect = parent.querySelector('.subtitleWeightSelect');
         this.valueLabel = parent.querySelector('.subtitleSizerValue');
@@ -83,6 +89,7 @@ export default class SubtitleSizer {
         // callback work in any other document.
         upgradeSlider(this.slider);
         upgradeSlider(this.positionSlider);
+        upgradeSlider(this.backgroundOpacity);
         upgradeSelect(this.fontSelect);
         upgradeSelect(this.weightSelect);
 
@@ -91,7 +98,7 @@ export default class SubtitleSizer {
             // TV layout; like the controls below, the close button cannot
             // rely on that callback firing in a foreign document.
             this.closeButton.classList.add('show-focus');
-            [ this.slider, this.positionSlider, this.fontSelect, this.weightSelect ]
+            [ this.slider, this.positionSlider, this.backgroundOpacity, this.backgroundColor, this.fontSelect, this.weightSelect ]
                 .forEach(control => {
                     control.classList.add('focusable');
                 });
@@ -99,10 +106,17 @@ export default class SubtitleSizer {
             setTimeout(() => {
                 this.slider.enableKeyboardDragging?.();
                 this.positionSlider.enableKeyboardDragging?.();
+                this.backgroundOpacity.enableKeyboardDragging?.();
             }, 0);
         }
 
         const appearanceSettings = this.settings.getSubtitleAppearanceSettings();
+        this.backgroundOriginal = appearanceSettings.textBackground;
+        this.backgroundAdjusted = false;
+        const background = getBackgroundControls(this.backgroundOriginal, this.ownerDocument);
+        this.backgroundColor.value = background.color;
+        this.backgroundOpacity.value = String(background.opacity);
+        this.updateBackgroundValue();
         const initialMultiplier = getTextSizeMultiplier(
             appearanceSettings.textSize);
         this.slider.value = String(Math.round(initialMultiplier * 100));
@@ -125,6 +139,10 @@ export default class SubtitleSizer {
         this.slider.addEventListener('change', this.onSliderChange);
         this.positionSlider.addEventListener('input', this.onPositionInput);
         this.positionSlider.addEventListener('change', this.onPositionChange);
+        this.backgroundColor.addEventListener('input', this.onBackgroundInput);
+        this.backgroundColor.addEventListener('change', this.onBackgroundChange);
+        this.backgroundOpacity.addEventListener('input', this.onBackgroundInput);
+        this.backgroundOpacity.addEventListener('change', this.onBackgroundChange);
         this.fontSelect.addEventListener('change', this.onAppearanceSelectChange);
         this.weightSelect.addEventListener('change', this.onAppearanceSelectChange);
         this.closeButton.addEventListener('click', this.onCloseClick);
@@ -145,6 +163,11 @@ export default class SubtitleSizer {
             VerticalPosition: 'LabelSubtitleVerticalPosition',
             Font: 'LabelFont',
             TextWeight: 'LabelTextWeight',
+            BackgroundColor: 'LabelTextBackgroundColor',
+            BackgroundOpacity: 'LabelSubtitleBackgroundOpacity',
+            Transparent: 'SubtitleBackgroundTransparent',
+            Solid: 'SubtitleBackgroundSolid',
+            BackgroundAssNote: 'SubtitleBackgroundAssNote',
             Default: 'Default',
             Typewriter: 'Typewriter',
             Print: 'Print',
@@ -188,6 +211,28 @@ export default class SubtitleSizer {
         this.onInteract?.();
     };
 
+    onBackgroundInput = () => {
+        this.backgroundAdjusted = true;
+        this.updateBackgroundValue();
+        this.beginPreview();
+        this.onInteract?.();
+    };
+
+    onBackgroundChange = () => {
+        this.onBackgroundInput();
+        this.persist({ textBackground: this.currentBackground() });
+    };
+
+    currentBackground() {
+        return this.backgroundAdjusted ?
+            getBackgroundColor(this.backgroundColor.value, this.backgroundOpacity.value) :
+            this.backgroundOriginal;
+    }
+
+    updateBackgroundValue() {
+        this.backgroundValue.textContent = `${this.backgroundOpacity.value}%`;
+    }
+
     onAppearanceSelectChange = event => {
         this.beginPreview();
         const field = event.target === this.fontSelect ? 'font' : 'textWeight';
@@ -211,6 +256,7 @@ export default class SubtitleSizer {
 
     onRenderPathChange = () => {
         this.applyCapability();
+        this.beginPreview();
     };
 
     /**
@@ -247,6 +293,8 @@ export default class SubtitleSizer {
             verticalPosition: this.positionSlider.value,
             font: this.fontSelect.value,
             textWeight: this.weightSelect.value,
+            textBackground: this.player.getSubtitleRenderingInfo().path === 'ass' ?
+                'transparent' : this.currentBackground(),
             sampleText: this.translate('SubtitleSizePreviewSample')
         });
     }
@@ -285,6 +333,10 @@ export default class SubtitleSizer {
             }
         }
 
+        const isAss = info.path === 'ass';
+        this.backgroundColor.disabled = isAss;
+        this.backgroundOpacity.disabled = isAss;
+        this.backgroundAssNote.classList.toggle('hide', !isAss);
         this.message.textContent = messageText || '';
         this.message.classList.toggle('hide', !messageText);
         this.controls.classList.toggle('hide', !!messageText);
@@ -307,6 +359,10 @@ export default class SubtitleSizer {
         this.slider.removeEventListener('change', this.onSliderChange);
         this.positionSlider.removeEventListener('input', this.onPositionInput);
         this.positionSlider.removeEventListener('change', this.onPositionChange);
+        this.backgroundColor.removeEventListener('input', this.onBackgroundInput);
+        this.backgroundColor.removeEventListener('change', this.onBackgroundChange);
+        this.backgroundOpacity.removeEventListener('input', this.onBackgroundInput);
+        this.backgroundOpacity.removeEventListener('change', this.onBackgroundChange);
         this.fontSelect.removeEventListener('change', this.onAppearanceSelectChange);
         this.weightSelect.removeEventListener('change', this.onAppearanceSelectChange);
         this.player.clearSubtitleAppearancePreview();

@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-23, 2026-07-24, 2026-07-31, 2026-08-03, 2026-08-11, 2026-08-12, 2026-08-29, 2026-09-04, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-23, 2026-07-24, 2026-07-31, 2026-08-03, 2026-08-11, 2026-08-12, 2026-08-29, 2026-09-04, 2026-09-09, 2026-11-01.
 import { CollectionType } from '@jellyfin/sdk/lib/generated-client/models/collection-type';
 
 import { setBackdropTransparency } from '../backdrop/backdrop';
@@ -14,7 +14,7 @@ import { toApi } from 'utils/jellyfin-apiclient/compat';
 import { queryClient } from 'utils/query/queryClient';
 import { getRememberedPermalinkAlias } from './permalinkSession';
 import { buildPermalinkPath } from './permalinkId';
-import { isVideoOsdMounted } from 'components/playback/videoOsdPresence';
+import { isVideoOsdMounted, retargetVideoView } from 'components/playback/videoOsdPresence';
 
 /** Pages of "no return" (when "Go back" should behave differently, probably quitting the application). */
 const START_PAGE_PATHS = ['/web/home', '/web/login', '/web/selectserver'];
@@ -583,15 +583,27 @@ export class AppRouter {
 
         // An item change while the player is already showing (next/previous
         // episode, autoplay, queue jump) must not grow the history stack:
-        // replace the entry so Back always exits the player instead of
-        // stepping back through previously played episodes.
+        // retarget the mounted view and replace the entry so Back exits the
+        // player instead of stepping through previously played episodes.
+        // A normal navigation rebuilds the view and stops the active player.
         //
         // Asked of the mounted view rather than of the address: the player has
         // two addresses (`/web/video` before canonicalization, `/w/<alias>`
         // after), and listing them here is what left the navigation toolbar
         // stranded over a playing movie when the second one appeared.
         if (isVideoOsdMounted()) {
-            return this.replace(path);
+            const target = `/web/${path}`;
+            // The permalink rewrite can follow before React processes this
+            // intermediate route. Update the view identity now so either
+            // route's handoff still refers to the view actually on screen.
+            if (!retargetVideoView(target)) {
+                return this.replace(path);
+            }
+            this.canonicalizeAddressBar(target, {
+                canonicalizedFrom: '/web/video',
+                permalinkTarget: undefined
+            });
+            return Promise.resolve();
         }
 
         return this.show(path);

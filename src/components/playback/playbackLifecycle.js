@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-24.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-11-01.
 /**
  * Owns playback start, stop, error and player-handoff transitions and the
  * events they fire: reporting playback start/stop to the server, starting
@@ -164,7 +164,7 @@ export function createPlaybackLifecycle(context) {
         const newPlayer = nextItem ? context.registry.getPlayer(nextItem.item, nextItemPlayOptions) : null;
 
         if (newPlayer !== player) {
-            context.session.destroyPlayer(player);
+            context.session.destroyPlayer(player, { preserveFullscreen: !!newPlayer && nextMediaType === MediaType.Video });
             context.registry.removeCurrentPlayer(player);
         }
     }
@@ -313,7 +313,7 @@ export function createPlaybackLifecycle(context) {
             promise = activePlayer.stop(false);
         } else {
             // If we're switching players, tear down the current one
-            promise = activePlayer.stop(true);
+            promise = activePlayer.stop(true, { preserveFullscreen: newItem.MediaType === MediaType.Video });
         }
 
         return promise.then(function () {

@@ -1,3 +1,4 @@
+/* SlopTank modification notice: added or changed by SlopTank on 2026-11-01. */
 .subtitleappearance-fullpreview {
     position: fixed;
     width: 100%;
@@ -23,4 +24,21 @@
 .subtitleappearance-fullpreview-text {
     display: inline-block;
     max-width: 70%;
+}
+
+.subtitleBackgroundSettings {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0.5em 0;
+}
+
+#inputTextBackgroundColor {
+    width: 3.5em;
+    height: 2em;
+    padding: 0.15em;
+    border: 1px solid #888;
+    border-radius: 0.3em;
+    background: #333;
+    cursor: pointer;
 }

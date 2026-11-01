@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-10-13, 2026-10-16.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-10-13, 2026-10-16, 2026-11-01.
 /**
  * Owns a play request end to end: resolve the items to play, prepend intros,
  * run pre-play interceptors, settle the streaming bitrate, then hand the
@@ -283,8 +283,8 @@ export function createPlaybackSession(context) {
         Events.trigger(manager, 'playbackcancelled');
     }
 
-    function destroyPlayer(player) {
-        player.destroy();
+    function destroyPlayer(player, options) {
+        player.destroy(options);
     }
 
     async function play(options) {

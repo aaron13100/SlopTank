@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-08-09, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-08-09, 2026-09-09, 2026-11-01.
 import { AppFeature } from 'constants/appFeature';
 import globalize from '../../lib/globalize';
 import { ServerConnections } from 'lib/jellyfin-apiclient';
@@ -38,7 +38,9 @@ function getSubtitleAppearanceObject(context) {
         textWeight: context.querySelector('#selectTextWeight').value,
         dropShadow: context.querySelector('#selectDropShadow').value,
         font: context.querySelector('#selectFont').value,
-        textBackground: context.querySelector('#inputTextBackground').value,
+        textBackground: context._backgroundAdjusted ?
+            subtitleAppearanceHelper.getBackgroundColor(context.querySelector('#inputTextBackgroundColor').value, context.querySelector('#sliderTextBackgroundOpacity').value) :
+            context._backgroundOriginal,
         textColor: layoutManager.tv ? context.querySelector('#selectTextColor').value : context.querySelector('#inputTextColor').value,
         verticalPosition: context.querySelector('#sliderVerticalPosition').value
     };
@@ -67,7 +69,12 @@ function loadForm(context, user, userSettings, appearanceSettings, apiClient) {
             getTextSizeMultiplier(appearanceSettings.textSize) * 100));
         context.querySelector('#selectTextWeight').value = appearanceSettings.textWeight || 'normal';
         context.querySelector('#selectDropShadow').value = appearanceSettings.dropShadow || '';
-        context.querySelector('#inputTextBackground').value = appearanceSettings.textBackground || 'transparent';
+        context._backgroundOriginal = appearanceSettings.textBackground;
+        context._backgroundAdjusted = false;
+        const background = subtitleAppearanceHelper.getBackgroundControls(appearanceSettings.textBackground, context.ownerDocument);
+        context.querySelector('#inputTextBackgroundColor').value = background.color;
+        context.querySelector('#sliderTextBackgroundOpacity').value = String(background.opacity);
+        context.querySelector('#textBackgroundOpacityValue').textContent = `${background.opacity}%`;
         context.querySelector('#selectTextColor').value = appearanceSettings.textColor || '#ffffff';
         context.querySelector('#inputTextColor').value = appearanceSettings.textColor || '#ffffff';
         context.querySelector('#selectFont').value = appearanceSettings.font || '';
@@ -214,7 +221,18 @@ function embed(options, self) {
     options.element.querySelector('#selectFont').addEventListener('change', onAppearanceFieldChange);
     options.element.querySelector('#selectTextColor').addEventListener('change', onAppearanceFieldChange);
     options.element.querySelector('#inputTextColor').addEventListener('change', onAppearanceFieldChange);
-    options.element.querySelector('#inputTextBackground').addEventListener('change', onAppearanceFieldChange);
+    const backgroundColor = options.element.querySelector('#inputTextBackgroundColor');
+    const backgroundOpacity = options.element.querySelector('#sliderTextBackgroundOpacity');
+    const onBackgroundChange = event => {
+        options.element._backgroundAdjusted = true;
+        options.element.querySelector('#textBackgroundOpacityValue').textContent = `${backgroundOpacity.value}%`;
+        onAppearanceFieldChange(event);
+    };
+    backgroundColor.addEventListener('input', onBackgroundChange);
+    backgroundColor.addEventListener('change', onBackgroundChange);
+    backgroundOpacity.addEventListener('input', onBackgroundChange);
+    backgroundOpacity.addEventListener('change', onBackgroundChange);
+    backgroundOpacity.getBubbleHtml = (_, value) => '<h1 class="sliderBubbleText">' + Math.round(value) + '%</h1>';
 
     if (options.enableSaveButton) {
         options.element.querySelector('.btnSave').classList.remove('hide');
@@ -242,6 +260,9 @@ function embed(options, self) {
             setTimeout(() => {
                 sliderVerticalPosition.classList.add('focusable');
                 sliderVerticalPosition.enableKeyboardDragging();
+                backgroundOpacity.classList.add('focusable');
+                backgroundOpacity.enableKeyboardDragging();
+                backgroundColor.classList.add('focusable');
             }, 0);
 
             // Replace color picker

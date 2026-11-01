@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-28, 2026-08-01, 2026-08-03, 2026-08-09, 2026-08-11, 2026-08-28, 2026-09-08, 2026-09-09, 2026-09-23, 2026-09-24, 2026-09-29, 2026-10-07, 2026-10-13, 2026-10-16.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-28, 2026-08-01, 2026-08-03, 2026-08-09, 2026-08-11, 2026-08-28, 2026-09-08, 2026-09-09, 2026-09-23, 2026-09-24, 2026-09-29, 2026-10-07, 2026-10-13, 2026-10-16, 2026-11-01.
 /**
  * Video OSD controller: the composition root for the video playback page.
  *
@@ -614,6 +614,7 @@ export default function (view) {
         button: view.querySelector('.btnEpisodes'),
         panel: view.querySelector('.episodePlaybackMenu'),
         canPlay: item => playbackManager.canPlay(item),
+        getPlaybackPositionTicks: () => currentPlayer ? playbackManager.getCurrentTicks(currentPlayer) : NaN,
         loadEpisodes: item => {
             const apiClient = ServerConnections.getApiClient(item.ServerId);
             return getTvShowsApi(toApi(apiClient)).getEpisodes({

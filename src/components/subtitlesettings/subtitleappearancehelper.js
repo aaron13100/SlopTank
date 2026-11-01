@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-24, 2026-07-25, 2026-07-26, 2026-07-31, 2026-08-09, 2026-08-29, 2026-09-09, 2026-10-01.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-24, 2026-07-25, 2026-07-26, 2026-07-31, 2026-08-09, 2026-08-29, 2026-09-09, 2026-10-01, 2026-11-01.
 /**
  * Subtitle settings visual helper.
  * @module components/subtitleSettings/subtitleAppearanceHelper
@@ -376,7 +376,7 @@ function getTextStyles(settings, preview, subtitleFontSize) {
             break;
     }
 
-    const background = settings.textBackground || 'transparent';
+    const background = settings.textBackground || 'rgba(0, 0, 0, 0.5)';
     if (background) {
         list.push({ name: 'background-color', value: background });
     }
@@ -489,3 +489,58 @@ export function applyStyles(elements, appearanceSettings) {
 // "Failed to initialize ASS renderer" on every ASS subtitle selection.
 // Consumers use `import * as subtitleAppearanceHelper`, whose namespace object
 // cannot drift from the named exports, so the mismatch is now unrepresentable.
+
+/**
+ * Resolve a saved CSS background for the color and opacity controls. The
+ * original setting remains untouched until a control is adjusted.
+ * @param {string|undefined} value - Saved CSS color.
+ * @param {Document} ownerDocument - Document hosting the controls.
+ * @returns {{color: string, opacity: number}} Control values.
+ */
+export function getBackgroundControls(value, ownerDocument) {
+    const fallback = { color: '#000000', opacity: 50 };
+    const canvas = ownerDocument.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const context = canvas.getContext('2d');
+    if (!context) {
+        return fallback;
+    }
+
+    // Canvas normalizes standard CSS colors without premultiplying their RGB
+    // channels, so even fully transparent colors retain their chosen hue.
+    context.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    context.fillStyle = value || 'rgba(0, 0, 0, 0.5)';
+    const normalized = context.fillStyle;
+    if (/^#[\da-f]{6}$/i.test(normalized)) {
+        return { color: normalized, opacity: 100 };
+    }
+    if (/^#[\da-f]{8}$/i.test(normalized)) {
+        return { color: normalized.slice(0, 7), opacity: Math.round(parseInt(normalized.slice(7), 16) / 255 * 100) };
+    }
+    const rgba = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)$/i.exec(normalized);
+    if (rgba) {
+        const color = '#' + rgba.slice(1, 4).map(channel => Number(channel).toString(16).padStart(2, '0')).join('');
+        return { color, opacity: Math.round(Number(rgba[4] ?? 1) * 100) };
+    }
+
+    // Some browsers serialize newer CSS color spaces without converting them
+    // to RGB. Resolve those through the canvas as a last resort.
+    context.fillRect(0, 0, 1, 1);
+    const [ red, green, blue, alpha ] = context.getImageData(0, 0, 1, 1).data;
+    const color = '#' + [ red, green, blue ].map(channel => channel.toString(16).padStart(2, '0')).join('');
+    return { color, opacity: Math.round(alpha / 255 * 100) };
+}
+
+/**
+ * Serialize adjusted controls as the existing CSS color setting.
+ * @param {string} color - Six-digit hexadecimal color.
+ * @param {number|string} opacity - Opacity percentage.
+ * @returns {string} CSS rgba color.
+ */
+export function getBackgroundColor(color, opacity) {
+    const validColor = typeof color === 'string' && /^#[a-f\d]{6}$/i.test(color) ? color : '#000000';
+    const channels = validColor.slice(1).match(/[a-f\d]{2}/gi).map(channel => parseInt(channel, 16));
+    const numericOpacity = opacity == null || opacity === '' ? NaN : Number(opacity);
+    const safeOpacity = Number.isFinite(numericOpacity) ? Math.max(0, Math.min(100, numericOpacity)) : 50;
+    return `rgba(${channels.join(', ')}, ${safeOpacity / 100})`;
+}

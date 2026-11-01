@@ -1,8 +1,14 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-08-01, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-01, 2026-09-09, 2026-11-01.
 /**
  * In-player series episode list controller.
  * @module controllers/playback/video/EpisodePlaybackMenu
  */
+
+const STATUS_PRESENTATION = {
+    watched: { icon: 'check_circle', label: 'Watched' },
+    partial: { icon: 'play_circle', label: 'ButtonResume' },
+    unwatched: { icon: 'visibility', label: 'Unwatched' }
+};
 
 /**
  * Clamp a resume percentage to the progress-bar contract.
@@ -10,20 +16,34 @@
  * @returns {number} Integer percentage from 0 through 100.
  */
 function getProgressPercent(item) {
-    if (item.UserData?.Played) return 100;
+    const userData = item.UserData;
+    if (userData?.Played) return 100;
 
-    const reported = Number(item.UserData?.PlayedPercentage);
+    const position = Number(userData?.PlaybackPositionTicks);
+    const runtime = Number(item.RunTimeTicks);
+    if (Number.isFinite(position) && position > 0 && Number.isFinite(runtime) && runtime > 0) {
+        return Math.max(1, Math.round(Math.min(Math.max(position / runtime * 100, 0), 100)));
+    }
+
+    const reported = Number(userData?.PlayedPercentage);
     if (Number.isFinite(reported)) {
         return Math.round(Math.min(Math.max(reported, 0), 100));
     }
 
-    const position = Number(item.UserData?.PlaybackPositionTicks);
-    const runtime = Number(item.RunTimeTicks);
-    if (Number.isFinite(position) && Number.isFinite(runtime) && runtime > 0) {
-        return Math.round(Math.min(Math.max(position / runtime * 100, 0), 100));
+    return 0;
+}
+
+/**
+ * @param {Object} item - Episode item with season metadata.
+ * @returns {string} Stable grouping key for its season.
+ */
+function getSeasonKey(item) {
+    if (item.SeasonId != null && String(item.SeasonId) !== '') return `id:${item.SeasonId}`;
+    if (item.ParentIndexNumber != null && String(item.ParentIndexNumber) !== '') {
+        return `number:${item.ParentIndexNumber}`;
     }
 
-    return 0;
+    return 'unknown';
 }
 
 /**
@@ -37,6 +57,7 @@ export default class EpisodePlaybackMenu {
      * @param {HTMLElement} options.panel - Episode list overlay.
      * @param {Function} options.canPlay - Returns whether an item is playable.
      * @param {Function} options.loadEpisodes - Loads series episode items.
+     * @param {Function} [options.getPlaybackPositionTicks] - Reads current playback position in ticks.
      * @param {Function} options.onInteract - Keeps the OSD awake after input.
      * @param {Function} options.playEpisode - Starts the selected episode.
      * @param {Function} options.reportError - Surfaces an operation error.
@@ -47,6 +68,7 @@ export default class EpisodePlaybackMenu {
         this.panel = options.panel;
         this.canPlay = options.canPlay;
         this.loadEpisodes = options.loadEpisodes;
+        this.getPlaybackPositionTicks = options.getPlaybackPositionTicks;
         this.onOpen = options.onOpen || options.onInteract;
         this.onClose = options.onClose || options.onInteract;
         this.onOutsideDismiss = options.onOutsideDismiss || options.onInteract;
@@ -54,14 +76,19 @@ export default class EpisodePlaybackMenu {
         this.reportError = options.reportError;
         this.translate = options.translate;
         this.list = this.panel.querySelector('.episodePlaybackMenu-list');
+        this.seasonSelect = this.panel.querySelector('.episodePlaybackMenu-seasonSelect');
         this.closeButton = this.panel.querySelector('.episodePlaybackMenu-closeButton');
         this.currentItemId = null;
+        this.currentSeasonKey = null;
+        this.selectedSeasonKey = null;
         this.episodes = [];
+        this.seasons = [];
         this.updateId = 0;
         this.destroyed = false;
 
         this.button.addEventListener('click', this.onButtonClick);
         this.closeButton.addEventListener('click', this.onCloseClick);
+        this.seasonSelect?.addEventListener('change', this.onSeasonChange);
         this.list.addEventListener('click', this.onListClick);
         document.addEventListener('keydown', this.onDocumentKeyDown, { capture: true });
         document.addEventListener('pointerdown', this.onDocumentPointerDown, { capture: true });
@@ -76,12 +103,23 @@ export default class EpisodePlaybackMenu {
         this.close();
     };
 
+    onSeasonChange = () => {
+        if (!this.seasonSelect) return;
+
+        this.selectedSeasonKey = this.seasonSelect.value;
+        this.render();
+        this.list.scrollTop = 0;
+
+        if (this.selectedSeasonKey === this.currentSeasonKey) this.centerCurrentEpisode();
+        this.seasonSelect.focus({ preventScroll: true });
+    };
+
     onListClick = event => {
         const button = event.target.closest('.episodePlaybackMenu-item');
-        if (!button || button.disabled) return;
+        if (!button || button.getAttribute('aria-disabled') === 'true') return;
 
         const item = this.episodes.find(episode => episode.Id === button.dataset.itemId);
-        if (!item) return;
+        if (!item || item.Id === this.currentItemId) return;
 
         this.close();
         this.playEpisode(item).catch(error => {
@@ -134,6 +172,10 @@ export default class EpisodePlaybackMenu {
             if (this.episodes.length <= 1) return;
 
             this.currentItemId = item.Id;
+            const currentEpisode = this.episodes.find(episode => episode.Id === item.Id);
+            this.currentSeasonKey = getSeasonKey(currentEpisode || item);
+            this.populateSeasons();
+            this.selectSeason(this.currentSeasonKey);
             this.render();
             this.button.classList.remove('hide');
         } catch (error) {
@@ -144,17 +186,24 @@ export default class EpisodePlaybackMenu {
     }
 
     /**
-     * Reveal the list and move focus to its first playable row.
+     * Reveal the list, select the playing episode's season, and center its row.
      * @returns {void}
      */
     open() {
         if (this.button.classList.contains('hide') || this.episodes.length <= 1) return;
 
+        this.selectSeason(this.currentSeasonKey);
+        this.refreshCurrentEpisodeProgress();
+        this.render();
         this.panel.classList.remove('hide');
         this.button.setAttribute('aria-expanded', 'true');
         this.onOpen();
-        const target = this.list.querySelector('.episodePlaybackMenu-item:not([disabled])');
-        (target || this.closeButton).focus();
+
+        if (!this.focusCurrentEpisode()) {
+            const target = this.list.querySelector('.episodePlaybackMenu-item:not([aria-disabled="true"])');
+            if (target) this.focusAndCenter(target);
+            else this.closeButton.focus({ preventScroll: true });
+        }
     }
 
     /**
@@ -173,7 +222,7 @@ export default class EpisodePlaybackMenu {
 
     /**
      * Whether the episode list is currently visible.
-     * @returns {boolean} True while the list overlay is open.
+     * @returns {boolean} True while the episode list overlay is open.
      */
     hasOpenOverlay() {
         return !this.panel.classList.contains('hide');
@@ -189,6 +238,7 @@ export default class EpisodePlaybackMenu {
         this.close();
         this.button.removeEventListener('click', this.onButtonClick);
         this.closeButton.removeEventListener('click', this.onCloseClick);
+        this.seasonSelect?.removeEventListener('change', this.onSeasonChange);
         this.list.removeEventListener('click', this.onListClick);
         document.removeEventListener('keydown', this.onDocumentKeyDown, { capture: true });
         document.removeEventListener('pointerdown', this.onDocumentPointerDown, { capture: true });
@@ -197,34 +247,137 @@ export default class EpisodePlaybackMenu {
     setUnavailable() {
         this.close();
         this.currentItemId = null;
+        this.currentSeasonKey = null;
+        this.selectedSeasonKey = null;
         this.episodes = [];
+        this.seasons = [];
         this.list.replaceChildren();
+        this.seasonSelect?.replaceChildren();
         this.button.classList.add('hide');
         this.button.setAttribute('aria-expanded', 'false');
     }
 
+    populateSeasons() {
+        const seasonMap = new Map();
+        for (const episode of this.episodes) {
+            const key = getSeasonKey(episode);
+            const existing = seasonMap.get(key);
+            if (existing) {
+                if (existing.number == null && episode.ParentIndexNumber != null) {
+                    existing.number = episode.ParentIndexNumber;
+                }
+                continue;
+            }
+
+            seasonMap.set(key, {
+                key,
+                number: episode.ParentIndexNumber
+            });
+        }
+
+        this.seasons = Array.from(seasonMap.values());
+        const fragment = document.createDocumentFragment();
+        for (const season of this.seasons) {
+            const option = document.createElement('option');
+            option.value = season.key;
+            option.textContent = season.number == null ?
+                `${this.translate('Season')} ?` :
+                `${this.translate('Season')} ${season.number}`;
+            fragment.append(option);
+        }
+        this.seasonSelect?.replaceChildren(fragment);
+    }
+
+    selectSeason(preferredKey) {
+        const selected = this.seasons.find(season => season.key === preferredKey) || this.seasons[0];
+        this.selectedSeasonKey = selected?.key || null;
+        if (this.seasonSelect) this.seasonSelect.value = this.selectedSeasonKey || '';
+    }
+
     render() {
         const fragment = document.createDocumentFragment();
-        for (const episode of this.episodes) fragment.append(this.createEpisodeButton(episode));
+        for (const episode of this.episodes) {
+            if (getSeasonKey(episode) === this.selectedSeasonKey) {
+                fragment.append(this.createEpisodeButton(episode));
+            }
+        }
         this.list.replaceChildren(fragment);
+    }
+
+    focusCurrentEpisode() {
+        const current = this.list.querySelector('.episodePlaybackMenu-item[aria-current="true"]');
+        if (!current) return false;
+
+        this.focusAndCenter(current);
+        return true;
+    }
+
+    focusAndCenter(element) {
+        element.focus({ preventScroll: true });
+        this.centerElement(element);
+    }
+
+    centerElement(element) {
+        const listBounds = this.list.getBoundingClientRect();
+        const elementBounds = element.getBoundingClientRect();
+        const elementCenter = elementBounds.top - listBounds.top + elementBounds.height / 2;
+        const nextScrollTop = this.list.scrollTop + elementCenter - this.list.clientHeight / 2;
+        this.list.scrollTop = Math.max(0, Math.min(nextScrollTop, this.list.scrollHeight - this.list.clientHeight));
+    }
+
+    centerCurrentEpisode() {
+        const current = this.list.querySelector('.episodePlaybackMenu-item[aria-current="true"]');
+        if (!current) return;
+
+        this.centerElement(current);
+    }
+
+    refreshCurrentEpisodeProgress() {
+        if (typeof this.getPlaybackPositionTicks !== 'function') return;
+
+        const currentTicks = this.getPlaybackPositionTicks();
+        if (!Number.isFinite(currentTicks) || currentTicks < 0) return;
+
+        const currentIndex = this.episodes.findIndex(episode => episode.Id === this.currentItemId);
+        if (currentIndex < 0) return;
+
+        const currentEpisode = this.episodes[currentIndex];
+        const runtime = Number(currentEpisode.RunTimeTicks);
+        if (!Number.isFinite(runtime) || runtime <= 0) return;
+
+        const playedPercentage = Math.min(currentTicks / runtime * 100, 100);
+        this.episodes[currentIndex] = {
+            ...currentEpisode,
+            UserData: {
+                ...currentEpisode.UserData,
+                PlaybackPositionTicks: currentTicks,
+                PlayedPercentage: playedPercentage
+            }
+        };
     }
 
     createEpisodeButton(item) {
         const isCurrent = item.Id === this.currentItemId;
+        const played = Boolean(item.UserData?.Played);
         const progress = getProgressPercent(item);
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'episodePlaybackMenu-item';
         button.dataset.itemId = item.Id;
-        button.disabled = isCurrent;
-        if (isCurrent) button.setAttribute('aria-current', 'true');
+        if (isCurrent) {
+            button.setAttribute('aria-current', 'true');
+            button.setAttribute('aria-disabled', 'true');
+        }
 
         const heading = document.createElement('span');
         heading.className = 'episodePlaybackMenu-heading';
+        const episodeNumber = document.createElement('span');
+        episodeNumber.className = 'episodePlaybackMenu-number';
+        episodeNumber.textContent = item.IndexNumber == null ? '-' : String(item.IndexNumber).padStart(2, '0');
         const title = document.createElement('span');
         title.className = 'episodePlaybackMenu-title';
-        title.textContent = this.getEpisodeTitle(item);
-        heading.append(title);
+        title.textContent = item.Name || this.translate('Episode');
+        heading.append(episodeNumber, title);
 
         if (isCurrent) {
             const current = document.createElement('span');
@@ -239,36 +392,42 @@ export default class EpisodePlaybackMenu {
 
         const status = document.createElement('span');
         status.className = 'episodePlaybackMenu-status';
-        const watched = document.createElement('span');
-        watched.className = 'episodePlaybackMenu-watchedState';
-        watched.textContent = this.translate(item.UserData?.Played ? 'Watched' : 'Unwatched');
-        const progressText = document.createElement('span');
-        progressText.className = 'episodePlaybackMenu-progressText';
-        progressText.textContent = `${progress}%`;
-        status.append(watched, progressText);
+        let statusType = 'unwatched';
+        if (played) statusType = 'watched';
+        else if (progress > 0) statusType = 'partial';
+        const presentation = STATUS_PRESENTATION[statusType];
+        status.classList.add(`episodePlaybackMenu-status--${statusType}`);
+        const statusIcon = document.createElement('span');
+        statusIcon.className = 'episodePlaybackMenu-statusIcon material-icons';
+        statusIcon.setAttribute('aria-hidden', 'true');
+        statusIcon.textContent = presentation.icon;
+        const statusText = document.createElement('span');
+        statusText.className = 'episodePlaybackMenu-watchedState';
+        statusText.textContent = this.translate(presentation.label);
+        status.append(statusIcon, statusText);
 
-        const progressBar = document.createElement('span');
-        progressBar.className = 'episodePlaybackMenu-progress';
-        progressBar.setAttribute('role', 'progressbar');
-        progressBar.setAttribute('aria-label', `${this.translate('ButtonResume')} ${progress}%`);
-        progressBar.setAttribute('aria-valuemin', '0');
-        progressBar.setAttribute('aria-valuemax', '100');
-        progressBar.setAttribute('aria-valuenow', String(progress));
-        const progressValue = document.createElement('span');
-        progressValue.className = 'episodePlaybackMenu-progressValue';
-        progressValue.style.width = `${progress}%`;
-        progressBar.append(progressValue);
+        if (!played && progress > 0) {
+            const progressText = document.createElement('span');
+            progressText.className = 'episodePlaybackMenu-progressText';
+            progressText.textContent = `${progress}%`;
+            status.append(progressText);
 
-        button.append(heading, summary, status, progressBar);
+            const progressBar = document.createElement('span');
+            progressBar.className = 'episodePlaybackMenu-progress';
+            progressBar.setAttribute('role', 'progressbar');
+            progressBar.setAttribute('aria-label', `${this.translate('ButtonResume')} ${progress}%`);
+            progressBar.setAttribute('aria-valuemin', '0');
+            progressBar.setAttribute('aria-valuemax', '100');
+            progressBar.setAttribute('aria-valuenow', String(progress));
+            const progressValue = document.createElement('span');
+            progressValue.className = 'episodePlaybackMenu-progressValue';
+            progressValue.style.width = `${progress}%`;
+            progressBar.append(progressValue);
+            button.append(heading, summary, status, progressBar);
+            return button;
+        }
+
+        button.append(heading, summary, status);
         return button;
-    }
-
-    getEpisodeTitle(item) {
-        const season = item.ParentIndexNumber;
-        const episode = item.IndexNumber;
-        const index = season != null && episode != null ?
-            `S${season}:E${episode}` :
-            `${this.translate('Episode')} ${episode ?? '?'}`;
-        return `${index} - ${item.Name || this.translate('Episode')}`;
     }
 }

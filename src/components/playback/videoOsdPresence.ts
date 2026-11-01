@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-08-12, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-12, 2026-09-09, 2026-11-01.
 /**
  * Tracks whether the video OSD is on screen, so the app chrome can follow the
  * view rather than the URL.
@@ -26,6 +26,24 @@
 
 let mountedCount = 0;
 const listeners = new Set<() => void>();
+let retargetVisibleVideoView: ((url: string) => boolean) | undefined;
+
+/**
+ * Registers the view container's synchronous video view retarget operation.
+ * @param handler Retargets only the currently visible video view.
+ */
+export function registerVideoViewRetarget(handler: (url: string) => boolean): void {
+    retargetVisibleVideoView = handler;
+}
+
+/**
+ * Retargets the visible video view if the view container can identify it.
+ * @param url The new view URL.
+ * @returns Whether the visible video view was retargeted.
+ */
+export function retargetVideoView(url: string): boolean {
+    return retargetVisibleVideoView?.(url) ?? false;
+}
 
 function notifyListeners(): void {
     listeners.forEach(listener => {

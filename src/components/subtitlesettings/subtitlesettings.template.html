@@ -1,4 +1,4 @@
-<!-- SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-23, 2026-07-25, 2026-07-26, 2026-09-09. -->
+<!-- SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-23, 2026-07-25, 2026-07-26, 2026-09-09, 2026-11-01. -->
 <form style="margin:0 auto;">
     <div class="verticalSection">
         <h2 class="sectionTitle">
@@ -114,8 +114,20 @@
             </select>
         </div>
 
-        <div class="inputContainer hide">
-            <input is="emby-input" id="inputTextBackground" label="${LabelTextBackgroundColor}" type="text" />
+        <div class="subtitleBackgroundSettings">
+            <label for="inputTextBackgroundColor">${LabelTextBackgroundColor}</label>
+            <input id="inputTextBackgroundColor" type="color" />
+        </div>
+        <div class="sliderContainer-settings">
+            <div class="subtitleBackgroundSettings">
+                <label for="sliderTextBackgroundOpacity">${LabelSubtitleBackgroundOpacity}</label>
+                <output id="textBackgroundOpacityValue" for="sliderTextBackgroundOpacity">50%</output>
+            </div>
+            <div class="sliderContainer">
+                <input is="emby-slider" id="sliderTextBackgroundOpacity" type="range" min="0" max="100" step="1" value="50" />
+            </div>
+            <div class="subtitleBackgroundSettings fieldDescription"><span>${SubtitleBackgroundTransparent}</span><span>${SubtitleBackgroundSolid}</span></div>
+            <div class="fieldDescription">${SubtitleBackgroundAssNote}</div>
         </div>
 
         <div class="selectContainer">

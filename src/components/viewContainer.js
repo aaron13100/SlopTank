@@ -1,7 +1,8 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-08-11, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-11, 2026-09-09, 2026-11-01.
 import { importModule } from '@uupaa/dynamic-import-polyfill';
 import './viewManager/viewContainer.scss';
 import Dashboard from '../utils/dashboard';
+import { registerVideoViewRetarget } from './playback/videoOsdPresence';
 
 const getMainAnimatedPages = () => {
     return document.querySelector('.mainAnimatedPages');
@@ -183,6 +184,13 @@ function afterAnimate(allPages, newPageIndex) {
 
 export function setOnBeforeChange(fn) {
     onBeforeChange = fn;
+    registerVideoViewRetarget((url) => {
+        const view = allPages[selectedPageIndex];
+        if (!view || !document.documentElement.contains(view) || view.getAttribute('data-type') !== 'video-osd') {
+            return false;
+        }
+        return retargetCurrentView(url);
+    });
 }
 
 /**

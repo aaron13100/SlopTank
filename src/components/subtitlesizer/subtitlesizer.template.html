@@ -1,4 +1,4 @@
-<!-- SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-07-25, 2026-07-26, 2026-09-09, 2026-09-27. -->
+<!-- SlopTank modification notice: added or changed by SlopTank on 2026-07-23, 2026-07-25, 2026-07-26, 2026-09-09, 2026-09-27, 2026-11-01. -->
 <div class="subtitleSizer">
     <div class="subtitleSizerContainer">
         <button type="button" is="paper-icon-button-light" class="paper-icon-button-light subtitleSizer-closeButton" title="${Close}"><span class="material-icons close" aria-hidden="true"></span></button>
@@ -23,20 +23,41 @@
                     <input is="emby-slider" id="subtitlePositionSlider" type="range" step="0.25" min="-20" max="-5" value="-5" class="subtitlePositionSlider" data-slider-keep-progress="true" />
                 </div>
             </div>
+            <div class="subtitleSizerField">
+                <div class="subtitleSizerFieldHeader">
+                    <label for="subtitleBackgroundColor">${BackgroundColor}</label>
+                    <input id="subtitleBackgroundColor" class="subtitleBackgroundColor" type="color" />
+                </div>
+            </div>
+            <div class="subtitleSizerField">
+                <div class="subtitleSizerFieldHeader">
+                    <label for="subtitleBackgroundOpacity">${BackgroundOpacity}</label>
+                    <output class="subtitleBackgroundValue" for="subtitleBackgroundOpacity">50%</output>
+                </div>
+                <div class="sliderContainer subtitleBackgroundSliderContainer">
+                    <input is="emby-slider" id="subtitleBackgroundOpacity" class="subtitleBackgroundOpacity" type="range" min="0" max="100" step="1" value="50" data-slider-keep-progress="true" />
+                </div>
+                <div class="subtitleBackgroundScale"><span>${Transparent}</span><span>${Solid}</span></div>
+                <div class="subtitleBackgroundAssNote hide">${BackgroundAssNote}</div>
+            </div>
             <div class="subtitleSizerSelectGrid">
-                <select is="emby-select" class="subtitleFontSelect" label="${Font}">
-                    <option value="">${Default}</option>
-                    <option value="typewriter">${Typewriter}</option>
-                    <option value="print">${Print}</option>
-                    <option value="console">${Console}</option>
-                    <option value="cursive">${Cursive}</option>
-                    <option value="casual">${Casual}</option>
-                    <option value="smallcaps">${SmallCaps}</option>
-                </select>
-                <select is="emby-select" class="subtitleWeightSelect" label="${TextWeight}">
-                    <option value="normal">${Normal}</option>
-                    <option value="bold">${Bold}</option>
-                </select>
+                <div class="selectContainer subtitleSizerSelectField">
+                    <select is="emby-select" class="subtitleFontSelect" label="${Font}">
+                        <option value="">${Default}</option>
+                        <option value="typewriter">${Typewriter}</option>
+                        <option value="print">${Print}</option>
+                        <option value="console">${Console}</option>
+                        <option value="cursive">${Cursive}</option>
+                        <option value="casual">${Casual}</option>
+                        <option value="smallcaps">${SmallCaps}</option>
+                    </select>
+                </div>
+                <div class="selectContainer subtitleSizerSelectField">
+                    <select is="emby-select" class="subtitleWeightSelect" label="${TextWeight}">
+                        <option value="normal">${Normal}</option>
+                        <option value="bold">${Bold}</option>
+                    </select>
+                </div>
             </div>
         </div>
     </div>

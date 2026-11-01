@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-03-12, 2026-07-18, 2026-07-19, 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-25, 2026-07-26, 2026-07-31, 2026-08-09, 2026-08-29, 2026-09-08, 2026-09-09, 2026-09-27, 2026-09-30, 2026-10-01, 2026-10-07, 2026-10-08, 2026-10-13, 2026-10-16.
+// SlopTank modification notice: added or changed by SlopTank on 2026-03-12, 2026-07-18, 2026-07-19, 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-25, 2026-07-26, 2026-07-31, 2026-08-09, 2026-08-29, 2026-09-08, 2026-09-09, 2026-09-27, 2026-09-30, 2026-10-01, 2026-10-07, 2026-10-08, 2026-10-13, 2026-10-16, 2026-11-01.
 import DOMPurify from 'dompurify';
 import debounce from 'lodash-es/debounce';
 import ResizeObserver from 'resize-observer-polyfill';
@@ -1116,7 +1116,7 @@ export class HtmlVideoPlayer {
         }
     }
 
-    stop(destroyPlayer) {
+    stop(destroyPlayer, options) {
         const elem = this.#mediaElement;
         const src = this.#currentSrc;
 
@@ -1131,13 +1131,13 @@ export class HtmlVideoPlayer {
         this.destroyCustomTrack(elem);
 
         if (destroyPlayer) {
-            this.destroy();
+            this.destroy(options);
         }
 
         return Promise.resolve();
     }
 
-    destroy() {
+    destroy(options) {
         this.setSubtitleOffset.cancel();
         this.clearSubtitleAppearancePreview();
         this.exitDocumentPictureInPicture();
@@ -1185,6 +1185,12 @@ export class HtmlVideoPlayer {
         if (dlg) {
             this.#videoDialog = null;
             dlg.parentNode.removeChild(dlg);
+        }
+
+        // Document fullscreen belongs to the continuing video session, not
+        // the player being replaced. Do not request it if it was not active.
+        if (options?.preserveFullscreen) {
+            return;
         }
 
         if (Screenfull.isEnabled) {
