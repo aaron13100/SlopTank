@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-30, 2026-10-01.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-30, 2026-10-01, 2026-11-02.
 /**
  * SubtitleSizer renders the same template into the main document and into a
  * foreign document (the Document Picture-in-Picture popup). The v0
@@ -52,8 +52,15 @@ describe('SubtitleSizer in a foreign document', () => {
 
         const sliders = foreign.querySelectorAll('input[is="emby-slider"]');
         const selects = foreign.querySelectorAll('select[is="emby-select"]');
-        expect(sliders.length).toBe(2);
-        expect(selects.length).toBe(2);
+        expect(Array.from(sliders, slider => slider.id)).toEqual([
+            'subtitleSizerSlider', 'subtitlePositionSlider', 'subtitleBackgroundOpacity'
+        ]);
+        expect(Array.from(selects, select => select.className)).toEqual([
+            expect.stringContaining('subtitleFontSelect'),
+            expect.stringContaining('subtitleWeightSelect')
+        ]);
+        expect(foreign.querySelector('.subtitleBackgroundColor').value).toBe('#000000');
+        expect(foreign.querySelector('.subtitleBackgroundOpacity').value).toBe('50');
         for (const slider of sliders) {
             expect(slider.classList.contains('mdl-slider')).toBe(true);
             expect(slider.parentElement.querySelector('.mdl-slider-background-flex')).not.toBeNull();

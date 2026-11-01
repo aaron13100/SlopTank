@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-24.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-11-02.
 /**
  * Builds the playable stream descriptor and stream URLs for an item.
  *
@@ -291,6 +291,7 @@ export function createPlaybackStreamInfo(context) {
             } else if (mediaSource.SupportsDirectPlay || mediaSource.SupportsDirectStream) {
                 directOptions = {
                     Static: true,
+                    Container: mediaSourceContainer,
                     mediaSourceId: mediaSource.Id,
                     deviceId: apiClient.deviceId(),
                     ApiKey: apiClient.accessToken()
@@ -305,7 +306,9 @@ export function createPlaybackStreamInfo(context) {
                 }
 
                 const prefix = type === 'Video' ? 'Videos' : 'Audio';
-                mediaUrl = apiClient.getUrl(prefix + '/' + item.Id + '/stream.' + mediaSourceContainer, directOptions);
+                // Keep authenticated streams out of extension-based CDN caching,
+                // which can discard Range before the file proves uncacheable.
+                mediaUrl = apiClient.getUrl(prefix + '/' + item.Id + '/stream', directOptions);
 
                 playMethod = mediaSource.SupportsDirectPlay ? 'DirectPlay' : 'DirectStream';
             } else if (mediaSource.SupportsTranscoding) {
