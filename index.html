@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Meet SlopTank: a media server for your own movies and shows, with a browser player and a library that stays on your computer.">
+    <meta name="theme-color" content="#172c28">
+    <title>SlopTank | Your library. Your evening.</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="library-preview.css">
+    <link rel="stylesheet" href="sections.css">
+    <link rel="stylesheet" href="responsive.css">
+</head>
+<body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header wrap">
+        <a class="wordmark" href="#" aria-label="SlopTank home"><span class="brand-mark" aria-hidden="true">s</span>SlopTank</a>
+        <nav aria-label="Main navigation">
+            <a href="#watching">The experience</a>
+            <a href="#setup">Setup</a>
+            <a class="nav-release" href="#release">Release status <span aria-hidden="true">&#8599;</span></a>
+        </nav>
+    </header>
+    <main id="main">
+        <section class="hero wrap" aria-labelledby="hero-title">
+            <div class="hero-copy">
+                <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>A media server for your own collection</p>
+                <h1 id="hero-title">Your library.<br>Your evening.</h1>
+                <p class="hero-description">Give your movies and shows a home. Browse your collection, pick up an episode, and settle in with a player built around watching.</p>
+                <div class="hero-actions">
+                    <a class="button" href="#setup">Meet SlopTank <span aria-hidden="true">&#8595;</span></a>
+                    <a class="text-link" href="#release">First release in preparation <span aria-hidden="true">&#8594;</span></a>
+                </div>
+                <p class="hero-footnote">Runs on your computer. Watch through a web browser.<br>Built on the open-source Jellyfin foundation.</p>
+            </div>
+            <figure class="library-figure">
+                <div class="library-preview" role="img" aria-label="Illustration of a SlopTank library with an abstract mountain film, a continue watching row, and an episode marked watched.">
+                    <div class="preview-top"><span class="preview-brand">sloptank</span><span class="preview-tabs">Home <span>Movies</span> <span>Shows</span></span><span class="preview-avatar">A</span></div>
+                    <div class="feature-art"><span class="art-sun"></span><span class="mountain mountain-back"></span><span class="mountain mountain-front"></span><div class="feature-copy"><span class="preview-kicker">YOUR MOVIE COLLECTION</span><strong>A little escape.</strong><span class="preview-play"><span aria-hidden="true">&#9654;</span> Resume</span></div></div>
+                    <div class="preview-library"><div class="preview-row-title"><strong>Continue watching</strong><span>View all <span aria-hidden="true">&#8594;</span></span></div><div class="poster-row"><div class="poster poster-coast"><span class="poster-number">01</span><span class="poster-caption">Along the coast</span><span class="preview-progress"><i></i></span></div><div class="poster poster-night"><span class="poster-number">02</span><span class="poster-caption">After the lights</span><span class="preview-progress"><i></i></span></div><div class="poster poster-studio"><span class="poster-number">03</span><span class="poster-caption">Studio afternoons</span><span class="watched-label">&#10003; Watched</span></div></div></div>
+                </div>
+                <figcaption>Illustrative library. SlopTank does not include movies or shows.</figcaption>
+            </figure>
+        </section>
+        <section id="watching" class="watching-section" aria-labelledby="watching-title">
+            <div class="wrap watching-layout">
+                <div><p class="eyebrow">Made for the moment you press play</p><h2 id="watching-title">Less searching.<br>More watching.</h2></div>
+                <div class="watching-details">
+                    <article><span class="detail-number">01</span><div><h3>Find your next episode</h3><p>Browse seasons in the player, see your progress, and keep track of episodes you have watched.</p></div></article>
+                    <article><span class="detail-number">02</span><div><h3>Make subtitles comfortable</h3><p>Adjust subtitle appearance, including the background color and transparency, to suit the picture and your preferences.</p></div></article>
+                    <article><span class="detail-number">03</span><div><h3>Keep your collection together</h3><p>Your media stays in folders you choose. SlopTank brings the titles, seasons, and playback controls into one browser experience.</p></div></article>
+                </div>
+            </div>
+        </section>
+        <section id="setup" class="setup-section wrap" aria-labelledby="setup-title">
+            <div class="section-heading"><div><p class="eyebrow">From your folders to your screen</p><h2 id="setup-title">A familiar place<br>for your collection.</h2></div><p>Install the server on the computer that holds your media. The guided setup helps you create your account and add your library.</p></div>
+            <ol class="setup-steps">
+                <li><span class="step-index">1</span><h3>Install SlopTank</h3><p>The server runs on the computer with access to your movies and shows. Supported systems and the download will be listed with the first release.</p></li>
+                <li><span class="step-index">2</span><h3>Make it yours</h3><p>Create your administrator account and choose the folders you want to add. Advanced setup options stay available when you need them.</p></li>
+                <li><span class="step-index">3</span><h3>Open your library</h3><p>Let SlopTank scan your folders, then browse and watch through the web player. Your server computer needs to stay on while you watch.</p></li>
+            </ol>
+            <div class="setup-note"><strong>You bring the collection.</strong><p>SlopTank is server software, not a streaming subscription or a source of films. Add media you are entitled to use. Remote access requires additional network setup.</p></div>
+        </section>
+        <section id="release" class="release-section wrap" aria-labelledby="release-title">
+            <div class="release-panel"><div><p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>Release status</p><h2 id="release-title">The first public release<br>is in preparation.</h2><p>We are finishing the installation experience and stable media links before opening downloads. The released installer, supported systems, and setup instructions will appear here together.</p></div><div class="release-links"><span class="release-state">Downloads are not available yet</span><a class="button button-light" href="https://github.com/aaron13100/SlopTank-server">Explore the server source <span aria-hidden="true">&#8599;</span></a><a class="text-link" href="https://github.com/aaron13100/SlopTank">Web client source <span aria-hidden="true">&#8599;</span></a></div></div>
+        </section>
+        <section class="questions wrap" aria-labelledby="questions-title">
+            <p class="eyebrow">A few useful details</p><h2 id="questions-title">Before you get started.</h2>
+            <details><summary>What is a media server?</summary><p>It is an application that organizes and serves media stored on a computer. SlopTank runs on that computer, while its web player lets you browse and watch the library from a browser.</p></details>
+            <details><summary>Does it come with anything to watch?</summary><p>No. You supply your own movies and shows. The artwork on this page is an illustration, not an included catalogue.</p></details>
+            <details><summary>How is SlopTank related to Jellyfin?</summary><p>SlopTank is a fork of Jellyfin. It builds on Jellyfin's media-server and web-client code, with changes to the browsing and playback experience. Jellyfin is a separate project; this is not its official website.</p></details>
+            <details><summary>Where can I find source and licence information?</summary><p>The <a href="https://github.com/aaron13100/SlopTank-server">server repository</a> and <a href="https://github.com/aaron13100/SlopTank">web-client repository</a> include source, licence files, and project notices. Release-specific source and notices will accompany the public download.</p></details>
+        </section>
+    </main>
+    <footer class="site-footer wrap"><a class="wordmark" href="#"><span class="brand-mark" aria-hidden="true">s</span>SlopTank</a><p>Your media. A place to watch it.</p><a href="https://jellyfin.org/">With thanks to Jellyfin <span aria-hidden="true">&#8599;</span></a></footer>
+</body>
+</html>

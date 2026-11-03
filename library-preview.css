@@ -1,0 +1,248 @@
+/* Original illustrative library artwork; no real media assets. */
+.library-figure {
+    transform: rotate(-2deg);
+    padding: 27px 17px 0 8px;
+}
+
+.library-preview {
+    background: #142723;
+    border: 7px solid #fffef9;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 24px 50px -20px #24352e52;
+    color: #f8f6e9;
+    user-select: none;
+}
+
+.preview-top {
+    height: 48px;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    gap: 21px;
+    font-size: 7px;
+}
+
+.preview-brand {
+    font-size: 14px;
+    font-weight: 750;
+    letter-spacing: -.7px;
+}
+
+.preview-tabs {
+    display: flex;
+    gap: 13px;
+    align-items: center;
+    color: #f4f6ee;
+}
+
+.preview-tabs span {
+    opacity: .5;
+}
+
+.preview-avatar {
+    margin-left: auto;
+    background: #e8a489;
+    color: #23382f;
+    border-radius: 50%;
+    height: 20px;
+    width: 20px;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 8px;
+}
+
+.feature-art {
+    height: 220px;
+    position: relative;
+    background: #a9c8c8;
+    overflow: hidden;
+}
+
+.art-sun {
+    position: absolute;
+    top: 28px;
+    right: 50px;
+    background: #e8bb8b;
+    border-radius: 50%;
+    height: 74px;
+    width: 74px;
+}
+
+.mountain {
+    position: absolute;
+    width: 100%;
+    height: 230px;
+    clip-path: polygon(0 80%,30% 0,45% 39%,59% 18%,100% 100%,0 100%);
+    right: -100px;
+    top: 34px;
+    background: #537f74;
+}
+
+.mountain-front {
+    background: #31574e;
+    top: 110px;
+    right: -15px;
+    transform: scaleX(-1);
+}
+
+.feature-art::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg,#122b297d,transparent 65%),linear-gradient(0deg,#142723,transparent 70%);
+}
+
+.feature-copy {
+    position: absolute;
+    z-index: 1;
+    left: 24px;
+    bottom: 29px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.preview-kicker {
+    font-size: 7px;
+    letter-spacing: .15em;
+    opacity: .8;
+}
+
+.feature-copy strong {
+    font-size: 34px;
+    line-height: 1.1;
+    letter-spacing: -1.8px;
+    font-weight: 570;
+}
+
+.preview-play {
+    padding: 7px 12px;
+    border-radius: 4px;
+    font-size: 8px;
+    background: #f9f4df;
+    color: #213c31;
+    font-weight: 700;
+}
+
+.preview-play span {
+    font-size: 6px;
+    margin-right: 5px;
+}
+
+.preview-library {
+    padding: 12px 22px 25px;
+}
+
+.preview-row-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.preview-row-title strong {
+    font-size: 11px;
+    font-weight: 550;
+    letter-spacing: -.2px;
+}
+
+.preview-row-title>span {
+    font-size: 6px;
+    opacity: .55;
+}
+
+.poster-row {
+    display: grid;
+    grid-template-columns: repeat(3,1fr);
+    gap: 11px;
+}
+
+.poster {
+    position: relative;
+    height: 133px;
+    border-radius: 4px;
+    overflow: hidden;
+    padding: 9px;
+    background: #ddab7c;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.poster-coast {
+    background: linear-gradient(143deg,#eaad89 0 40%,#739c98 41% 55%,#c9d3ae 56%);
+}
+
+.poster-night {
+    background: radial-gradient(ellipse at 70% 30%,#d4a168 0 5%,transparent 6%),linear-gradient(140deg,#303e48,#33493f 50%,#0c1d21);
+}
+
+.poster-studio {
+    background: repeating-linear-gradient(90deg,#bea994 0 19px,#daaa87 19px 28px);
+}
+
+.poster::after {
+    content: "";
+    position: absolute;
+    inset: 50% 0 0;
+    background: linear-gradient(0deg,#142723e6,transparent);
+}
+
+.poster-number {
+    font-size: 23px;
+    letter-spacing: -1px;
+    opacity: .9;
+}
+
+.poster-caption {
+    font-size: 8px;
+    position: relative;
+    z-index: 1;
+    max-width: 55px;
+    margin-bottom: 13px;
+    line-height: 1.3;
+}
+
+.preview-progress {
+    height: 3px;
+    background: #ffffff59;
+    position: absolute;
+    z-index: 1;
+    bottom: 8px;
+    left: 9px;
+    right: 9px;
+    border-radius: 2px;
+}
+
+.preview-progress i {
+    display: block;
+    height: 100%;
+    width: 38%;
+    background: #efad92;
+}
+
+.poster-night .preview-progress i {
+    width: 68%;
+}
+
+.watched-label {
+    position: absolute;
+    z-index: 1;
+    font-size: 6px;
+    bottom: 8px;
+    background: #f1f5e9;
+    color: #243a30;
+    padding: 2px 5px;
+    border-radius: 2px;
+}
+
+.library-figure figcaption {
+    text-align: right;
+    margin-top: 13px;
+    font-size: .62rem;
+    color: var(--muted);
+    transform: rotate(2deg);
+}

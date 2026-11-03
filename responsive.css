@@ -1,0 +1,213 @@
+/* Responsive page layouts and reduced-motion preferences. */
+@media(min-width:1440px) {
+    .hero {
+        gap: 6%;
+        padding-block: 85px 125px;
+    }
+    .feature-art {
+        height: 250px;
+    }
+    .poster {
+        height: 155px;
+    }
+}
+
+@media(max-width:1000px) {
+    .wrap {
+        width: calc(100% - 64px);
+    }
+    .hero {
+        grid-template-columns: 1fr 1fr;
+        gap: 3%;
+        padding-top: 45px;
+    }
+    .hero h1 {
+        font-size: 4.1rem;
+    }
+    .hero-description {
+        font-size: .98rem;
+    }
+    .hero-actions {
+        gap: 1rem;
+    }
+    .library-figure {
+        padding-right: 0;
+    }
+    .preview-tabs {
+        gap: 7px;
+    }
+    .feature-art {
+        height: 195px;
+    }
+    .poster {
+        height: 110px;
+    }
+    .feature-copy strong {
+        font-size: 28px;
+    }
+    .watching-layout {
+        gap: 6%;
+    }
+    .release-panel {
+        padding: 36px;
+        gap: 7%;
+    }
+    .setup-steps {
+        gap: 26px;
+    }
+    .site-footer p {
+        display: none;
+    }
+}
+
+@media(max-width:720px) {
+    .wrap {
+        width: calc(100% - 40px);
+    }
+    .site-header {
+        min-height: 83px;
+        gap: 15px;
+    }
+    .site-header nav {
+        gap: 14px;
+        font-size: .75rem;
+    }
+    .site-header nav>a:first-child {
+        display: none;
+    }
+    .nav-release {
+        padding: .5rem .7rem;
+    }
+    .nav-release span {
+        margin-left: .3rem;
+    }
+    .wordmark {
+        font-size: 1.14rem;
+    }
+    .hero {
+        grid-template-columns: 1fr;
+        gap: 40px;
+        padding-block: 35px 60px;
+    }
+    .hero h1 {
+        font-size: clamp(3.9rem,12vw,5.6rem);
+    }
+    .hero-description {
+        max-width: 430px;
+        font-size: 1.03rem;
+    }
+    .hero-actions {
+        margin-top: 25px;
+    }
+    .hero-footnote {
+        margin-top: 23px;
+    }
+    .library-figure {
+        width: min(100%,510px);
+        justify-self: center;
+        padding: 10px 9px 0;
+    }
+    .feature-art {
+        height: 215px;
+    }
+    .poster {
+        height: 135px;
+    }
+    .watching-section {
+        padding-block: 55px;
+    }
+    .watching-layout {
+        grid-template-columns: 1fr;
+        gap: 32px;
+    }
+    .watching-layout h2 {
+        font-size: 3rem;
+    }
+    .watching-details article {
+        gap: 20px;
+    }
+    .watching-details p {
+        max-width: none;
+    }
+    .setup-section {
+        padding-block: 60px;
+    }
+    .section-heading {
+        display: block;
+    }
+    .section-heading>p {
+        margin-top: 22px;
+        max-width: 480px;
+    }
+    .setup-steps {
+        grid-template-columns: 1fr;
+        gap: 25px;
+        margin-top: 34px;
+    }
+    .setup-steps li {
+        display: grid;
+        grid-template-columns: 32px 1fr;
+        column-gap: 18px;
+        padding-top: 24px;
+    }
+    .step-index {
+        grid-row: 1/3;
+        margin: 0;
+    }
+    .setup-steps p,.setup-steps h3 {
+        grid-column: 2;
+    }
+    .setup-note {
+        display: block;
+        padding: 21px;
+        margin-top: 32px;
+    }
+    .setup-note p {
+        margin-top: 7px;
+    }
+    .release-section {
+        padding-bottom: 60px;
+    }
+    .release-panel {
+        grid-template-columns: 1fr;
+        gap: 32px;
+        padding: 30px 24px;
+    }
+    .release-panel h2 {
+        font-size: 2.35rem;
+    }
+    .release-links {
+        align-items: stretch;
+        max-width: 400px;
+    }
+    .release-links .text-link {
+        align-self: flex-start;
+    }
+    .questions {
+        padding-bottom: 60px;
+    }
+    .questions h2 {
+        font-size: 2.4rem;
+    }
+    .questions summary {
+        font-size: .9rem;
+        padding-block: 20px;
+    }
+    .site-footer {
+        padding-block: 25px;
+    }
+    .site-footer>a:last-child {
+        font-size: .69rem;
+        max-width: 145px;
+        text-align: right;
+    }
+}
+
+@media(prefers-reduced-motion:reduce) {
+    :root {
+        scroll-behavior: auto;
+    }
+    .button {
+        transition: none;
+    }
+}

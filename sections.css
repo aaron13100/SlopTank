@@ -1,0 +1,256 @@
+/* Product explanation, setup, release status, questions and footer. */
+.watching-section {
+    background: #e8ecdf;
+    border-block: 1px solid #dde3d3;
+    padding-block: 84px;
+}
+
+.watching-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10%;
+}
+
+.watching-layout h2 {
+    margin-top: 20px;
+}
+
+.watching-details article {
+    display: flex;
+    gap: 24px;
+    padding-block: 22px;
+    border-bottom: 1px solid #cbd4c4;
+}
+
+.watching-details article:first-child {
+    padding-top: 0;
+}
+
+.watching-details article:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+.detail-number {
+    font-size: .7rem;
+    line-height: 1.9;
+    font-weight: 600;
+    opacity: .7;
+}
+
+.watching-details p {
+    color: var(--muted);
+    font-size: .93rem;
+    margin-top: 8px;
+    max-width: 400px;
+}
+
+.setup-section {
+    padding-block: 100px;
+}
+
+.section-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8%;
+}
+
+.section-heading h2 {
+    margin-top: 20px;
+}
+
+.section-heading>p {
+    max-width: 340px;
+    color: var(--muted);
+    font-size: .94rem;
+}
+
+.setup-steps {
+    padding: 0;
+    margin: 52px 0 0;
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(3,1fr);
+    gap: 40px;
+}
+
+.setup-steps li {
+    border-top: 1px solid var(--line);
+    padding-top: 22px;
+}
+
+.step-index {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #e6eadf;
+    font-size: .8rem;
+    font-weight: 700;
+    margin-bottom: 24px;
+}
+
+.setup-steps h3 {
+    margin-bottom: 10px;
+}
+
+.setup-steps p {
+    font-size: .87rem;
+    color: var(--muted);
+}
+
+.setup-note {
+    display: flex;
+    gap: 30px;
+    align-items: baseline;
+    margin-top: 48px;
+    padding: 24px 26px;
+    background: #eeece2;
+    border-radius: 6px;
+    font-size: .85rem;
+}
+
+.setup-note strong {
+    white-space: nowrap;
+}
+
+.setup-note p {
+    color: var(--muted);
+}
+
+.release-section {
+    padding-bottom: 100px;
+}
+
+.release-panel {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap: 10%;
+    padding: 54px;
+    border-radius: 12px;
+    background: var(--ink);
+    color: var(--paper);
+}
+
+.release-panel .eyebrow {
+    color: #c6d2b6;
+}
+
+.release-panel .status-dot {
+    background: #ddac8b;
+}
+
+.release-panel h2 {
+    font-size: clamp(2.1rem,3vw,3rem);
+    margin-block: 20px;
+}
+
+.release-panel p {
+    max-width: 490px;
+    color: #c2cfc4;
+    font-size: .9rem;
+}
+
+.release-links {
+    align-self: center;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.release-state {
+    font-size: .77rem;
+    color: #c2cfc4;
+}
+
+.button-light {
+    background: var(--paper);
+    color: var(--ink);
+    width: 100%;
+}
+
+.button-light:hover {
+    background: #dce6ce;
+}
+
+.release-links .text-link {
+    color: #d0d7ce;
+}
+
+.questions {
+    max-width: 850px;
+    padding-bottom: 100px;
+}
+
+.questions h2 {
+    font-size: 2.6rem;
+    margin-block: 20px 36px;
+}
+
+.questions details {
+    border-top: 1px solid var(--line);
+}
+
+.questions details:last-child {
+    border-bottom: 1px solid var(--line);
+}
+
+.questions summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    font-size: .96rem;
+    font-weight: 600;
+    padding-block: 23px;
+}
+
+.questions summary::-webkit-details-marker {
+    display: none;
+}
+
+.questions summary::after {
+    content: "+";
+    font-size: 1.4rem;
+    font-weight: 400;
+}
+
+.questions details[open] summary::after {
+    content: "-";
+}
+
+.questions details p {
+    padding-bottom: 25px;
+    color: var(--muted);
+    font-size: .9rem;
+    max-width: 700px;
+}
+
+.site-footer {
+    border-top: 1px solid var(--line);
+    padding-block: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.site-footer .wordmark {
+    font-size: 1.1rem;
+}
+
+.site-footer .brand-mark {
+    width: 25px;
+    height: 27px;
+    font-size: 1.3rem;
+}
+
+.site-footer p,.site-footer>a:last-child {
+    font-size: .76rem;
+    color: var(--muted);
+}
