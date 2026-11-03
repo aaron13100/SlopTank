@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-10-13, 2026-10-16, 2026-11-01.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-10-13, 2026-10-16, 2026-11-01, 2026-11-03.
 /**
  * Owns a play request end to end: resolve the items to play, prepend intros,
  * run pre-play interceptors, settle the streaming bitrate, then hand the
@@ -8,8 +8,8 @@
  * PlaybackManager instance, for _currentPlayer / _playQueueManager),
  * context.items (getItemsForPlayback, translateItemsForPlayback,
  * getAdditionalParts, getIntros), context.registry (getPlayer,
- * removeCurrentPlayer), context.streams (getSavedMaxStreamingBitrate,
- * detectBitrate), context.launcher (playAfterBitrateDetect),
+ * removeCurrentPlayer), context.streams (getSavedMaxStreamingBitrate),
+ * context.launcher (playAfterBitrateDetect),
  * context.pluginManager (ofType), context.serverConnections (getApiClient)
  * and context.showPlaybackError. The PlaybackManager facade
  * (playbackmanager.js) creates this module and passes it the context object
@@ -43,7 +43,6 @@ function truncatePlayOptions(playOptions) {
         subtitleStreamIndex: playOptions.subtitleStreamIndex,
         startPositionTicks: playOptions.startPositionTicks,
         alreadyOnVideoOsd: playOptions.alreadyOnVideoOsd,
-        skipAutomaticBitrateDetection: playOptions.skipAutomaticBitrateDetection,
         startupTraceId: playOptions.startupTraceId
     };
 }
@@ -257,9 +256,7 @@ export function createPlaybackSession(context) {
 
         return traceOperation(playOptions.startupTraceId, 'preplay-interceptors', () => runInterceptors(item, playOptions))
             .catch(onInterceptorRejection)
-            .then(() => traceOperation(playOptions.startupTraceId, 'bitrate', () => playOptions.skipAutomaticBitrateDetection ?
-                context.streams.getSavedMaxStreamingBitrate(apiClient, mediaType) :
-                context.streams.detectBitrate(apiClient, item, mediaType)))
+            .then(() => traceOperation(playOptions.startupTraceId, 'bitrate', () => context.streams.getSavedMaxStreamingBitrate(apiClient, mediaType)))
             .then((bitrate) => {
                 return context.launcher.playAfterBitrateDetect(bitrate, item, playOptions, onPlaybackStartedFn, prevSource)
                     .catch(onPlaybackRejection);

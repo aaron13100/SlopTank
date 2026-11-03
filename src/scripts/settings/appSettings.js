@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-14, 2026-09-15.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-14, 2026-09-15, 2026-11-03.
 import browser from 'scripts/browser';
 import Events from '../../utils/events.ts';
 import { toBoolean } from '../../utils/string.ts';
@@ -68,18 +68,6 @@ class AppSettings {
             return true;
         }
 
-        // SlopTank: in-network video never runs the bitrate probe. Every
-        // browser client is on this server's own network, the library is
-        // pre-encoded for universal direct play, and the probe costs three
-        // escalating multi-MB server round trips before the first frame --
-        // which under load can even measure LOW and request a transcode this
-        // server cannot perform. The saved-or-huge cap from
-        // maxStreamingBitrate is used instead. Remote playback keeps the
-        // upstream automatic-detection behavior.
-        if (isInNetwork && mediaType === 'Video') {
-            return false;
-        }
-
         return toBoolean(this.get(key), true);
     }
 
@@ -93,27 +81,14 @@ class AppSettings {
             }
         }
 
-        if (isInNetwork && mediaType === 'Audio') {
-            // return a huge number so that it always direct plays
-            return 150000000;
+        // Auto uses the same maximum as an unset preference, ignoring old
+        // probe results. Explicit quality choices still use the saved value.
+        const defaultMaxBitrate = 150000000;
+        if (this.enableAutomaticBitrateDetection(isInNetwork, mediaType)) {
+            return defaultMaxBitrate;
         }
 
-        const saved = this.get(key);
-        if (mediaType === 'Video' && saved === null && isInNetwork !== false) {
-            // SlopTank: no cap was ever chosen, and this client is on the
-            // server's own network -- or the network origin is not known
-            // yet, as in a session-restored tab whose endpoint info was
-            // never fetched (the shared watch-link path). The library is
-            // pre-encoded for universal direct play and the server cannot
-            // transcode in real time, so an unset or unknown-origin default
-            // must be a huge direct-play cap (the Audio path above has
-            // always worked this way). An explicit user choice is still
-            // honored through the generic path below; only an endpoint the
-            // server actually reported as remote keeps the generic
-            // 1.5 Mbps default.
-            return 150000000;
-        }
-        return parseInt(saved || '0', 10) || 1500000;
+        return parseInt(this.get(key) || '0', 10) || defaultMaxBitrate;
     }
 
     maxStaticMusicBitrate(val) {

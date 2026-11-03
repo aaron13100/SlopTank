@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-09-27, 2026-10-13, 2026-10-16.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-09-27, 2026-10-13, 2026-10-16, 2026-11-03.
 /**
  * Resume-from-permalink playback: opening (or reloading) a video page URL
  * that carries `?id=&serverId=` re-fetches the item and resumes playback at
@@ -81,7 +81,6 @@ export function createPermalinkResume({ setPermalinkPreparing, canonicalizeVideo
 
         const id = getParameterByName('id');
         const serverId = getParameterByName('serverId');
-        const isPermalinkPlayback = getParameterByName('permalinkPlayback') === '1';
 
         if (!id || !serverId) {
             return;
@@ -138,8 +137,7 @@ export function createPermalinkResume({ setPermalinkPreparing, canonicalizeVideo
                 startupTraceId,
                 startPositionTicks: requestedStartTicks ?? reloadSnapshot?.positionTicks ?? (item.UserData?.PlaybackPositionTicks || 0),
                 fullscreen: true,
-                alreadyOnVideoOsd: true,
-                skipAutomaticBitrateDetection: isPermalinkPlayback
+                alreadyOnVideoOsd: true
             });
         }).then(() => {
             // The first play() can be interrupted while the resume seek is

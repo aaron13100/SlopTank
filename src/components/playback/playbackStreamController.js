@@ -1,7 +1,7 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-24.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-11-03.
 /**
- * Owns the stream a player is fed: bitrate caps (saved, automatic-detection,
- * user-set), seeking, and re-requesting a stream mid-playback when the
+ * Owns the stream a player is fed: bitrate caps (automatic or user-set),
+ * seeking, and re-requesting a stream mid-playback when the
  * bitrate, audio/subtitle track, or position changes in a way the player
  * cannot handle natively.
  *
@@ -12,7 +12,7 @@
  * (fetchPlaybackInfo, validatePlaybackInfoResult), context.streamInfo
  * (createStreamInfo), context.reporting.sendProgressUpdate,
  * context.lifecycle.onPlaybackError, context.serverConnections,
- * context.showPlaybackError, and context.isLocalItem.
+ * context.showPlaybackError.
  *
  * Created by the PlaybackManager facade (playbackmanager.js), which builds
  * the shared context object and passes it to every collaborator factory.
@@ -21,7 +21,6 @@
 import appSettings from '../../scripts/settings/appSettings';
 import { MediaError } from 'types/mediaError';
 import { getMediaError } from 'utils/mediaError';
-import { isServerItem } from './playbackMediaSource';
 import { enableLocalPlaylistManagement } from './playerRegistry';
 import { PlaybackManagerError, PlaybackManagerErrorCode } from './playbackManagerError';
 
@@ -31,7 +30,7 @@ import { PlaybackManagerError, PlaybackManagerErrorCode } from './playbackManage
  *   playbackmanager.js.
  * @returns {object} getMaxStreamingBitrate, enableAutomaticBitrateDetection,
  *   setMaxStreamingBitrate, seek, seekRelative (public members);
- *   getSavedMaxStreamingBitrate, detectBitrate, canPlayerSeek, changeStream
+ *   getSavedMaxStreamingBitrate, canPlayerSeek, changeStream
  *   (internal members used by sibling modules through context.streams).
  */
 export function createPlaybackStreamController(context) {
@@ -104,29 +103,6 @@ export function createPlaybackStreamController(context) {
         const endpointInfo = apiClient.getSavedEndpointInfo() || {};
 
         return appSettings.maxStreamingBitrate(endpointInfo.IsInNetwork, mediaType);
-    }
-
-    function detectBitrate(apiClient, item, mediaType) {
-        // FIXME: This is gnarly, but don't want to change too much here in a bugfix
-        return Promise.resolve()
-            .then(() => {
-                if (!isServerItem(item) || context.isLocalItem(item)) {
-                    return Promise.reject(new Error('skip bitrate detection'));
-                }
-
-                return apiClient.getEndpointInfo()
-                    .then((endpointInfo) => {
-                        if ((mediaType === 'Video' || mediaType === 'Audio') && appSettings.enableAutomaticBitrateDetection(endpointInfo.IsInNetwork, mediaType)) {
-                            return apiClient.detectBitrate().then((bitrate) => {
-                                appSettings.maxStreamingBitrate(endpointInfo.IsInNetwork, mediaType, bitrate);
-                                return bitrate;
-                            });
-                        }
-
-                        return Promise.reject(new Error('skip bitrate detection'));
-                    });
-            })
-            .catch(() => getSavedMaxStreamingBitrate(apiClient, mediaType));
     }
 
     // Returns true if the player can seek using native client-side seeking functions
@@ -286,28 +262,20 @@ export function createPlaybackStreamController(context) {
 
         const apiClient = context.serverConnections.getApiClient(manager.currentItem(player).ServerId);
 
-        // Return the whole chain (endpoint lookup, bitrate probe, settings
+        // Return the whole chain (endpoint lookup, settings
         // write, stream change) so callers such as the quality menu resolve
         // only once the new stream is actually playing.
         return apiClient.getEndpointInfo().then(function (endpointInfo) {
             const playerData = context.state.getPlayerData(player);
             const mediaType = playerData.streamInfo ? playerData.streamInfo.mediaType : null;
 
-            let promise;
-            if (options.enableAutomaticBitrateDetection) {
-                appSettings.enableAutomaticBitrateDetection(endpointInfo.IsInNetwork, mediaType, true);
-                promise = apiClient.detectBitrate(true);
-            } else {
-                appSettings.enableAutomaticBitrateDetection(endpointInfo.IsInNetwork, mediaType, false);
-                promise = Promise.resolve(options.maxBitrate);
+            appSettings.enableAutomaticBitrateDetection(endpointInfo.IsInNetwork, mediaType, options.enableAutomaticBitrateDetection);
+            if (!options.enableAutomaticBitrateDetection) {
+                appSettings.maxStreamingBitrate(endpointInfo.IsInNetwork, mediaType, options.maxBitrate);
             }
 
-            return promise.then(function (bitrate) {
-                appSettings.maxStreamingBitrate(endpointInfo.IsInNetwork, mediaType, bitrate);
-
-                return changeStream(player, context.state.getCurrentTicks(player), {
-                    MaxStreamingBitrate: bitrate
-                });
+            return changeStream(player, context.state.getCurrentTicks(player), {
+                MaxStreamingBitrate: appSettings.maxStreamingBitrate(endpointInfo.IsInNetwork, mediaType)
             });
         });
     };
@@ -335,7 +303,6 @@ export function createPlaybackStreamController(context) {
 
     return {
         getSavedMaxStreamingBitrate,
-        detectBitrate,
         canPlayerSeek,
         changeStream,
         getMaxStreamingBitrate,
