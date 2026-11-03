@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09, 2026-11-03.
 import escapeHtml from 'escape-html';
 
 import { getDefaultBackgroundClass } from 'components/cardbuilder/cardBuilderUtils';
@@ -10,6 +10,11 @@ import dom from 'utils/dom';
 import taskButton from 'scripts/taskbutton';
 import Dashboard, { pageClassOn, pageIdOn } from 'utils/dashboard';
 import imageHelper from 'utils/image';
+import {
+    completeStartupWizard,
+    formatStartupWizardError,
+    StartupWizardApiError
+} from 'apps/wizard/startupApi';
 
 import 'components/cardbuilder/card.scss';
 import 'elements/emby-itemrefreshindicator/emby-itemrefreshindicator';
@@ -167,11 +172,19 @@ function reloadLibrary(page) {
         .getVirtualFolders()
         .then(function (result) {
             reloadVirtualFolders(page, result);
+        }).catch(async function (cause) {
+            loading.hide();
+            console.error('[library] failed to load libraries', cause);
+            const error = page.querySelector('#wizardLibraryError');
+            if (error) {
+                error.textContent = await formatStartupWizardError(cause, globalize.translate('WizardLibraryLoadFailed'));
+                error.classList.remove('hide');
+            }
         });
 }
 
 function shouldRefreshLibraryAfterChanges(page) {
-    return page.id === 'mediaLibraryPage';
+    return page.id === 'mediaLibraryPage' || page.id === 'wizardLibraryPage';
 }
 
 function reloadVirtualFolders(page, virtualFolders) {
@@ -376,9 +389,58 @@ function getVirtualFolderHtml(page, virtualFolder, index) {
     return html;
 }
 
+let isCompletingWizard = false;
+
+async function openAdvancedWizardStep(route) {
+    try {
+        await Dashboard.navigate(route);
+    } catch (cause) {
+        const page = document.getElementById('wizardLibraryPage');
+        const error = page.querySelector('#wizardLibraryError');
+        const failure = new StartupWizardApiError(
+            'wizard-advanced-navigation-failed',
+            'The advanced setup page could not be opened.',
+            'Return to the library step and try again.',
+            cause
+        );
+        error.textContent = await formatStartupWizardError(failure, globalize.translate('WizardAdvancedNavigationFailed'));
+        error.classList.remove('hide');
+    }
+}
+
+async function completeWizard() {
+    const page = document.getElementById('wizardLibraryPage');
+    const button = page.querySelector('.button-submit');
+    const error = page.querySelector('#wizardLibraryError');
+    if (isCompletingWizard) {
+        return;
+    }
+
+    isCompletingWizard = true;
+    button.disabled = true;
+    error.textContent = '';
+    error.classList.add('hide');
+    loading.show();
+
+    try {
+        await completeStartupWizard(ServerConnections.currentApiClient());
+        window.location.href = '';
+    } catch (cause) {
+        error.textContent = await formatStartupWizardError(cause, globalize.translate('WizardSetupCompleteFailed'));
+        error.classList.remove('hide');
+        isCompletingWizard = false;
+        button.disabled = false;
+        loading.hide();
+    }
+}
+
 window.WizardLibraryPage = {
-    next: function () {
-        Dashboard.navigate('wizard/settings');
+    next: completeWizard,
+    openMetadataPreferences: function () {
+        return openAdvancedWizardStep('wizard/settings');
+    },
+    openRemoteAccessPreferences: function () {
+        return openAdvancedWizardStep('wizard/remoteaccess');
     }
 };
 pageClassOn('pageshow', 'mediaLibraryPage', function () {

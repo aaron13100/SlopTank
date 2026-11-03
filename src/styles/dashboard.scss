@@ -1,3 +1,4 @@
+/* SlopTank modification notice: added or changed by SlopTank on 2026-11-03. */
 .dashboardColumn,
 .dashboardSections {
     flex-direction: column;
@@ -261,6 +262,51 @@ div[data-role=controlgroup] a.ui-btn-active {
 
 .wizardContent form {
     max-width: 100%;
+}
+
+.wizardStepIndicator {
+    margin: 0 0 0.5em;
+    font-size: 0.9em;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+
+.wizardError {
+    padding: 0.75em 1em;
+    border-inline-start: 0.25em solid var(--jf-palette-error-main, #c62828);
+    color: var(--jf-palette-error-main, #c62828);
+}
+
+.wizardAdvancedOptions {
+    margin: 1.5em 0;
+}
+
+.wizardAdvancedOptions > summary {
+    width: fit-content;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.wizardAdvancedOptions > summary:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+}
+
+@media (max-width: 40em) {
+    .wizardContent {
+        padding: 0.75em 1em 1em;
+    }
+
+    .wizardNavigation {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.75em;
+    }
+
+    .wizardNavigation button {
+        margin: 0;
+    }
 }
 
 .scheduledTaskPaperIconItem {
