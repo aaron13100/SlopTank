@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-24.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-11-03.
 
 /**
  * Owns turning a play/queue request into the ordered list of items to play:
@@ -375,6 +375,10 @@ export function createPlaybackItemResolver(context) {
     function filterEpisodes(episodesResult, firstItem, options) {
         for (const [index, e] of episodesResult.Items.entries()) {
             if (e.Id === firstItem.Id) {
+                // Keep the details payload's streams and sources when the
+                // smaller queue DTO omits them. Dropping them forces another
+                // whole-item request before PlaybackInfo can start.
+                episodesResult.Items[index] = { ...firstItem, ...e };
                 episodesResult.StartIndex = index;
                 break;
             }
