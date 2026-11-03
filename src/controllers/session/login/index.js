@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-31, 2026-08-03, 2026-08-29, 2026-09-08, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-31, 2026-08-03, 2026-08-29, 2026-09-08, 2026-09-09, 2026-11-03.
 import DOMPurify from 'dompurify';
 import markdownIt from 'markdown-it';
 
@@ -230,7 +230,9 @@ export default function (view, params) {
 
         loadDynamicModule(() => import('../../../components/autoFocuser'),
             '../../../components/autoFocuser').then(({ default: autoFocuser }) => {
-            autoFocuser.autoFocus(view);
+            if (!view.querySelector('.visualLoginForm').classList.contains('hide')) {
+                autoFocuser.autoFocus(view);
+            }
         });
     }
 
@@ -312,21 +314,27 @@ export default function (view, params) {
             });
 
         apiClient.getPublicUsers().then(function (users) {
+            loadUserList(view, apiClient, users);
+            loading.hide();
+            if (!manualLoginForm.classList.contains('hide')) {
+                return;
+            }
+
             if (users.length) {
                 showVisualForm();
-                loadUserList(view, apiClient, users);
             } else {
                 view.querySelector('#txtManualName').value = '';
                 showManualForm(view, false, false);
             }
-            loading.hide();
         }, function (failure) {
             handlePublicUserFetchFailure(failure, {
                 hideLoading: () => loading.hide(),
                 log: (message, cause) => console.error(message, cause),
                 showManualForm: () => {
-                    view.querySelector('#txtManualName').value = '';
-                    showManualForm(view, false, false);
+                    if (manualLoginForm.classList.contains('hide')) {
+                        view.querySelector('#txtManualName').value = '';
+                        showManualForm(view, false, false);
+                    }
                 },
                 showToast: message => toast(message),
                 unableToConnectMessage: globalize.translate('MessageUnableToConnectToServer')
