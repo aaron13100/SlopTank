@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-24, 2026-08-03, 2026-08-29, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-24, 2026-08-03, 2026-08-29, 2026-09-09, 2026-11-03.
 const { merge } = require('webpack-merge');
 const path = require('path');
 
@@ -53,7 +53,7 @@ module.exports = merge(common, {
                     const apiRoots = /^\/(?:[A-Z][^/]*|videos|emby|health|socket|users)(?:\/|$)/;
                     return pathname === '/ws' || apiRoots.test(pathname);
                 },
-                target: 'http://127.0.0.1:8096',
+                target: process.env.SLOPTANK_DEV_SERVER_URL || 'http://127.0.0.1:8096',
                 changeOrigin: true,
                 ws: true
             }
