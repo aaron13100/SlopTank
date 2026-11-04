@@ -116,7 +116,7 @@ describe('canonicalizeLegacyGuidRoute', () => {
         expect(rewrites).toHaveLength(1);
         expect(rewrites[0].path).toBe('/tt0062622');
         // The handoff is what stops the destination route rebuilding the view
-        // and re-redeeming a single-use lease for an alias just minted here.
+        // and re-querying the item just opened here.
         expect(rewrites[0].state).toEqual({
             canonicalizedFrom: '/web/details',
             permalinkTarget: {

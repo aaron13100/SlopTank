@@ -7,29 +7,17 @@ test.setTimeout(loadScaledMs(600_000));
 /**
  * Budgets for the server round trips these tests wait on.
  *
- * Permalink evidence is a SHA-256 over the whole media file. Since
- * SlopTank-server 3fc58b5 that digest is cached against a filesystem change
- * token, so only the FIRST call for an item pays the full read and every
- * repeat is effectively free. Measured against the live server on 2026-08-01
- * (t_260720_015135_519), 868 MB episode: ensure 34.1s cold then 0.147s and
- * 0.132s warm; discovery 0.54s; details redemption 2.4s.
- *
- * The budgets stay sized for the cold call rather than the warm one, because
- * which call is cold depends on what ran before -- a fresh item, a rescan or a
- * server restart puts any test back on the 34s path. They are deliberately
- * generous rather than tight: a timeout tuned to the warm case fails as
- * "nothing was copied" or "never navigated" for an operation that was simply
- * still running, which hides real regressions behind a latency budget.
+ * Link creation and item resolution use the server's authenticated item APIs.
+ * Keep these bounds generous so a slow shared host is reported accurately
+ * instead of as a missing link or failed navigation.
  */
 const ENSURE_TIMEOUT_MS = loadScaledMs(90_000);
 
-/** Opening an info link: discovery plus details redemption. */
+/** Opening an info link: one authorized permalink item query. */
 const RESOLVE_TIMEOUT_MS = loadScaledMs(150_000);
 
 /**
- * Opening a play link, which is heavier than an info link: discovery, the
- * playback-lease exchange and the playback redemption, and the redemption
- * additionally materializes and hashes the immutable snapshot.
+ * Opening a play link includes the item query and the normal player startup.
  */
 const PLAYBACK_RESOLVE_TIMEOUT_MS = loadScaledMs(300_000);
 
@@ -54,17 +42,14 @@ const PLAYER_READY_TIMEOUT_MS = loadScaledMs(60_000);
  * Waits for a permalink route to reach its target, using the Retry affordance
  * when the server reports the designed transient conflict.
  *
- * Ensure commits the item's durable identity mutation, and a link opened in the
- * same breath can reach discovery while that mutation is still settling. The
- * server answers 409 `identity-mutation-pending` and the route renders it with
- * a Retry button rather than guessing -- observed live on 2026-08-01
- * (t_260720_015135_519) opening `#/w/<alias>` immediately after minting it.
+ * The route offers Retry for a server conflict while ordinary library
+ * membership is changing, rather than guessing at the result.
  *
  * Clicking Retry is what a real user does with that screen, so driving it here
  * covers the conflict path that nothing else exercised, while still failing if
  * the link never resolves. It never masks a permanent failure: the retries are
- * bounded, and any other permalink state (not found, evidence required,
- * invalid) has no Retry button and falls straight through to the URL wait.
+ * bounded, and other permalink states (not found or invalid) have no Retry
+ * button and fall straight through to the URL wait.
  *
  * @param page - Page under test, already navigated to the permalink route.
  * @param targetUrl - The canonical route that must remain in the address bar.
@@ -120,12 +105,12 @@ async function expectPlaybackStarted(page: import('@playwright/test').Page) {
 }
 
 /**
- * A well-formed IMDb id that no item in any library carries, used to observe the
- * server's refusal for an alias it holds no evidence for.
+ * A well-formed IMDb id that no item in any library carries, used to observe
+ * the empty result.
  */
 const UNMINTED_IMDB_ID = 'tt0000001';
 
-/** A well-formed sk- id the server has never issued, used to observe the empty-candidate state. */
+/** A well-formed sk- id with no library item, used to observe an empty result. */
 const UNKNOWN_SLOPTANK_ID = 'sk-00000000000000000000000000';
 
 interface CopyRecorderWindow extends Window {
@@ -257,14 +242,8 @@ async function copyFromItemMenu(
 }
 
 /**
- * Mints durable permalink evidence for an item the way a user does -- by
- * copying its link from the item page -- and returns the published alias.
- *
- * An external alias resolves only after evidence has been initialized from an
- * authenticated item page (docs/internal/permalink-url-design.md: the server
- * answers `EvidenceRequired` until then), so every test that opens an external
- * permalink mints it through this entry point first rather than assuming a
- * provider id in library metadata is already resolvable.
+ * Publishes an item's permalink the way a user does, by copying its link from
+ * the item page, and returns the alias in that URL.
  *
  * @param page - Page under test, already signed in.
  * @param context - Browser context, granted clipboard permissions here.
@@ -313,17 +292,14 @@ test.describe('pretty permalinks (docs/internal/permalink-url-design.md)', () =>
         await expectPlaybackStarted(page);
     });
 
-    test('an external alias the server holds no evidence for says so, quoting the server, and never guesses an item', async ({ page, config }) => {
+    test('an external alias with no matching item shows not found and never guesses', async ({ page, config }) => {
         await login(page, config.username, config.password);
 
         await page.goto(`/${UNMINTED_IMDB_ID}`);
 
         const message = page.locator('#permalinkMessagePage');
         await expect(message).toBeVisible({ timeout: loadScaledMs(20_000) });
-        // The distinct EvidenceRequired state, not the generic resolve error:
-        // this is what a bundle that loses typed failures collapses away.
-        await expect(message).toContainText('Open the item on this server and use Copy Link once');
-        await expect(message).toContainText('EvidenceRequired');
+        await expect(message).toContainText(UNMINTED_IMDB_ID);
         await expect(page).toHaveURL(new RegExp(`/${UNMINTED_IMDB_ID}$`));
     });
 

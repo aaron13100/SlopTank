@@ -3,7 +3,7 @@
  * Presentation for resolved and unresolved permalink route states.
  * allow-no-test-found: rendered through its own route by PermalinkRedirectPage.test.tsx and e2e/permalink.spec.ts
  */
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import React, { type FC, useCallback, useState } from 'react';
 import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 
@@ -28,14 +28,12 @@ export type PermalinkPurpose = 'info' | 'watch';
  * Renders one of the two pretty-permalink hash routes (/web/p/:permalinkId,
  * /web/w/:permalinkId, docs/internal/permalink-url-design.md sections 3 and 4.2).
  *
- * Resolution runs entirely through the server's protected permalink endpoint:
- * this page never queries the library, never ranks candidates and never
- * guesses. On a single verified match it replaces the entry with the
+ * Resolution uses the server's authenticated permalink-to-library query.
+ * On a single match it replaces the entry with the
  * corresponding legacy route (/web/details or /web/video) so the existing detail and
  * playback controllers own everything past this point. Ambiguity, absence,
- * a pending lineage (409), an unreachable capsule (503) and an unminted
- * external alias (EvidenceRequired) are each rendered as their own state,
- * with the server's own code in the message.
+ * absence, ambiguity, a conflict (409) and an unavailable server (503) are
+ * each rendered as their own state, with the server's own code in the message.
  */
 const PermalinkRedirectPage: FC<{
     purpose: PermalinkPurpose
@@ -45,23 +43,20 @@ const PermalinkRedirectPage: FC<{
     const [ searchParams ] = useSearchParams();
     const location = useLocation();
     const { api, user } = useApi();
-    const queryClient = useQueryClient();
     const parsed = permalinkId ? parsePermalinkId(permalinkId) : null;
     const serverId = user?.ServerId ?? '';
     const [ chosenTarget, setChosenTarget ] = useState<PermalinkTarget>();
     const handoff = permalinkCanonicalizationHandoff(location.state, permalinkId, serverId, user?.Id);
 
-    // Keyed on (permalinkId, purpose, serverId, userId) per design 4.2. Leases
-    // are single-use, so nothing here may be replayed from cache: `gcTime: 0`
-    // drops the entry the moment the route unmounts, which also aborts the
-    // in-flight request, and a retry re-runs discovery for a fresh lease.
+    // Each open resolves current library membership. The route can safely use
+    // the normal query lifecycle because the response contains ordinary items,
+    // not single-use capabilities.
     const { data, isPending, isError, error, refetch } = useQuery({
-        queryKey: [ 'Permalink', purpose, permalinkId, serverId, user?.Id ],
+        queryKey: [ 'Permalink', permalinkId, serverId, user?.Id ],
         queryFn: ({ signal }) => resolvePermalink({
             api: api!,
             serverId,
             parsed: parsed!,
-            kind: purpose,
             signal
         }),
         // Waits for the user, not just the api. serverId and the handoff check
@@ -70,28 +65,22 @@ const PermalinkRedirectPage: FC<{
         // the user arrived and a handoff became readable -- surfacing as an
         // unhandled CancelledError on the page.
         enabled: !!api && !!user && !!parsed && !handoff,
-        staleTime: Infinity,
-        gcTime: 0,
+        staleTime: 0,
         retry: false,
         refetchOnMount: 'always',
         refetchOnWindowFocus: false,
         refetchOnReconnect: false
     });
 
-    const retry = useCallback(() => {
-        queryClient
-            .removeQueries({ queryKey: [ 'Permalink', purpose, permalinkId, serverId, user?.Id ] });
-        void refetch();
-    }, [ permalinkId, purpose, queryClient, refetch, serverId, user?.Id ]);
+    const retry = useCallback(() => void refetch(), [ refetch ]);
 
     if (!permalinkId || !parsed) {
         return <PermalinkMessage text={globalize.translate('PermalinkInvalid')} />;
     }
 
     // The canonicalizer rewrote the address bar for the item this route is
-    // already showing, and carried that item with it. Re-resolving would burn
-    // a single-use lease to rediscover what the same process just minted, and
-    // would flash a spinner over a playing movie to do it.
+    // already showing, and carried that item with it. Re-resolving would make
+    // an unnecessary request and flash a spinner over a playing movie.
     if (handoff) {
         return (
             <PermalinkPresentation
@@ -146,12 +135,6 @@ const PermalinkRedirectPage: FC<{
             );
         case 'ambiguous':
             return <PermalinkChooser candidates={data.candidates} onChoose={setChosenTarget} />;
-        case 'evidence-required':
-            return (
-                <PermalinkMessage
-                    text={globalize.translate('PermalinkEvidenceRequired', data.message)}
-                />
-            );
         case 'conflict':
             return (
                 <PermalinkMessage
@@ -188,7 +171,6 @@ function presentationSearch(purpose: PermalinkPurpose, item: PermalinkTarget, se
     const parameters = new URLSearchParams({ id: item.itemId, serverId: item.serverId });
 
     if (purpose === 'watch') {
-        parameters.set('permalinkPlayback', '1');
         const startSeconds = searchParams.get('t');
         if (permalinkStartSecondsToTicks(startSeconds) !== null) {
             parameters.set('t', startSeconds!);

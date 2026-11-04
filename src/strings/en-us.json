@@ -1418,7 +1418,6 @@
     "People": "People",
     "PerfectMatch": "Perfect match",
     "PermalinkAmbiguous": "Several items on this server match this link. Choose the one you meant:",
-    "PermalinkEvidenceRequired": "This server has not prepared a permanent link for this item yet. Open the item on this server and use Copy Link once, then this link will work. ({0})",
     "PermalinkInvalid": "This link is not a valid permalink.",
     "PermalinkNotFound": "No item on this server matches \"{0}\".",
     "PermalinkPending": "This item is being updated on the server right now, so the link cannot be resolved yet. Try again in a moment. ({0})",

@@ -29,7 +29,7 @@ test.setTimeout(loadScaledMs(300_000));
  *
  * Measured from the user's action (the Play click, or the navigation to a
  * watch link) to the first decoded frame actually playing, so it includes
- * permalink minting, redemption, playback-info negotiation and player setup.
+ * permalink minting, item resolution, playback-info negotiation and player setup.
  * It deliberately does NOT include logging in or loading the details page,
  * which are separate interactions the user has already paid for.
  */
@@ -353,10 +353,6 @@ test.describe('playback start latency', () => {
                 const path = new URL(request.url()).pathname;
                 if (/^\/Permalinks\/[^/]+\/Items$/.test(path)) {
                     permalinkRequests.push(`${request.method()} /Permalinks/:id/Items`);
-                } else if (/^\/Permalinks\/Candidates\/[^/]+\/PlaybackReadyV1$/.test(path)) {
-                    permalinkRequests.push(
-                        `${request.method()} /Permalinks/Candidates/:handle/PlaybackReadyV1`
-                    );
                 } else if (path.startsWith('/Permalinks/')) {
                     permalinkRequests.push(`${request.method()} ${path}`);
                 }
@@ -377,10 +373,7 @@ test.describe('playback start latency', () => {
                     `opening watch link ${watchUrl} took ${(elapsedMs / 1000).toFixed(2)}s to reach a playing `
                     + `frame, over the ${(budgetMs / 1000).toFixed(1)}s budget in effect (10s baseline scaled by load)`
                 ).toBeLessThanOrEqual(budgetMs);
-                expect(permalinkRequests).toEqual([
-                    'GET /Permalinks/:id/Items',
-                    'POST /Permalinks/Candidates/:handle/PlaybackReadyV1'
-                ]);
+                expect(permalinkRequests).toEqual([ 'GET /Permalinks/:id/Items' ]);
             } finally {
                 shared.off('request', capturePermalinkRequest);
                 await shared.close();

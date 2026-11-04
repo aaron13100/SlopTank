@@ -52,12 +52,9 @@ function getDeletionConfirmContent(item) {
 /**
  * Extracts the server's real refusal reason from a delete rejection.
  *
- * The server answers a refused delete with a typed ProblemDetails body whose
- * title is the refusal code (for example "content-mismatch" when the
- * permalink capsule no longer matches the file). Asserting a permissions
- * cause the server never stated sent the owner checking folder write access
- * for a fence that has nothing to do with it. Pure: takes the rejection,
- * returns a suffix; the caller composes it after the translated framing.
+ * The server answers a refused delete with its ProblemDetails body. Preserve
+ * that actual reason instead of guessing at the cause. Pure: takes the
+ * rejection, returns a suffix; the caller composes it after translated text.
  *
  * @param {Error|Response|null} err - The rejection from the api client.
  * @returns {Promise<string>} The parenthesized reason, or '' when nothing

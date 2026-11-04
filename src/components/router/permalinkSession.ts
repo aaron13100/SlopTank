@@ -5,7 +5,7 @@ function key(serverId: string | null | undefined, itemId: string): string {
     return `${serverId ?? ''}:${itemId}`;
 }
 
-/** Remembers only aliases returned or redeemed by the server in this session. */
+/** Remembers only aliases returned by the server in this session. */
 export function rememberPermalinkAlias(serverId: string | null | undefined, itemId: string, alias: string) {
     aliases.set(key(serverId, itemId), alias);
 }

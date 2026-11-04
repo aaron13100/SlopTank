@@ -93,11 +93,11 @@ export async function canonicalizeLegacyGuidRoute({ api, item, kind, userId }: {
  * legacy controller rewritten `?id=&serverId=` parameters, so the view's
  * recorded URL never carries the address bar's own query string.
  *
- * `permalinkTarget` is the item the alias was just minted FOR, so the
- * destination route does not have to redeem a single-use lease to rediscover
- * what this process already knows. It is a handoff, never a resolution: an
- * alias arriving from anywhere else (a pasted link, a reload in a session that
- * did not mint it) carries no handoff and always goes through the server.
+ * `permalinkTarget` is the item the alias was just minted for, so the
+ * destination route can use the existing item without an unnecessary query.
+ * It is a handoff, never a resolution: an alias arriving from anywhere else
+ * (a pasted link or reload without this navigation state) goes through the
+ * server's authorized item query.
  */
 export interface PermalinkCanonicalizationState {
     canonicalizedFrom: string
@@ -118,8 +118,8 @@ export interface PermalinkCanonicalizationState {
  * alias now in the address bar, so it grants no reach the previous route did
  * not already have: the same item is addressable as `/web/video?id=<guid>`.
  * Everything else -- a pasted link, a permalink opened in a fresh tab, an
- * alias this session never minted -- carries no handoff and resolves through
- * the server's purpose-bound lease as before.
+ * alias this navigation never minted -- carries no handoff and resolves
+ * through the server's authorized item query.
  *
  * History state survives a reload, so the viewer is re-checked rather than
  * assumed: a different user signing in and returning to this entry does not

@@ -29,7 +29,7 @@ const LandingViewPage: FC<ViewManagerPageProps> = ({ controller, routeParameters
  * react-query cache and a real router, and replace only the HTTP transport to
  * the Jellyfin server -- an external service, and the single seam the mocking
  * policy allows. The stub answers with the exact statuses and `ProblemDetails`
- * bodies PermalinkResolutionController.cs emits, so what is asserted here is
+ * bodies the permalink endpoint emits, so what is asserted here is
  * what a user sees after opening a link, plus the exact request sequence the
  * client made to get there.
  */
@@ -157,16 +157,10 @@ function renderPermalink(
     );
 }
 
-const CANDIDATE = { Rank: 0, Namespace: 'external', Handle: 'handle-1', Lease: 'lease-1' };
-
 function discovery(id: string, items: unknown[]): Record<string, StubRoute> {
     return {
         [`GET /Permalinks/${id}/Items`]: { status: 200, body: { Items: items, TotalRecordCount: items.length } }
     };
-}
-
-function detailsFor(handle: string, item: unknown): Record<string, StubRoute> {
-    return { [`POST /Permalinks/Candidates/${handle}/Details`]: { status: 200, body: item } };
 }
 
 async function landingText(): Promise<string> {
@@ -197,37 +191,31 @@ beforeAll(async () => {
 describe('permalink info route (#/p/:permalinkId)', () => {
     afterEach(cleanup);
 
-    it('opens an external IMDb link on the item it resolves to, through the protected endpoint only', async () => {
+    it('opens an external IMDb link on the item returned by the authorized permalink query', async () => {
         const server = createServer({
-            ...discovery('tt0062622', [ CANDIDATE ]),
-            ...detailsFor('handle-1', { Id: 'item-1', ServerId: 'server-1', Name: '2001: A Space Odyssey' })
+            ...discovery('tt0062622', [ { Id: 'item-1', ServerId: 'server-1', Name: '2001: A Space Odyssey' } ])
         });
 
         renderPermalink(server, 'info', '/p/tt0062622');
 
         expect(await landingText()).toBe('/web/details?id=item-1&serverId=server-1');
-        expect(server.calls).toEqual([
-            'GET /Permalinks/tt0062622/Items',
-            'POST /Permalinks/Candidates/handle-1/Details'
-        ]);
+        expect(server.calls).toEqual([ 'GET /Permalinks/tt0062622/Items' ]);
     });
 
-    it('opens a no-provider movie by its sk- alias, with no library query anywhere in the sequence', async () => {
+    it('opens a no-provider movie by its sk- alias from the authorized permalink query', async () => {
         const server = createServer({
-            ...discovery(SK_MOVIE_ID, [ { ...CANDIDATE, Namespace: 'sloptank' } ]),
-            ...detailsFor('handle-1', { Id: 'item-9', ServerId: 'server-1', Name: 'Home Video 1994' })
+            ...discovery(SK_MOVIE_ID, [ { Id: 'item-9', ServerId: 'server-1', Name: 'Home Video 1994' } ])
         });
 
         renderPermalink(server, 'info', `/p/${SK_MOVIE_ID}`);
 
         expect(await landingText()).toBe('/web/details?id=item-9&serverId=server-1');
-        expect(server.calls.some(call => call.includes('/Items?')) || server.calls.some(call => call.startsWith('GET /Items'))).toBe(false);
+        expect(server.calls).toEqual([ `GET /Permalinks/${SK_MOVIE_ID}/Items` ]);
     });
 
     it('opens a Series by its sk- alias', async () => {
         const server = createServer({
-            ...discovery(SK_SERIES_ID, [ { ...CANDIDATE, Namespace: 'sloptank' } ]),
-            ...detailsFor('handle-1', { Id: 'series-3', ServerId: 'server-1', Name: 'Some Show', Type: 'Series' })
+            ...discovery(SK_SERIES_ID, [ { Id: 'series-3', ServerId: 'server-1', Name: 'Some Show', Type: 'Series' } ])
         });
 
         renderPermalink(server, 'info', `/p/${SK_SERIES_ID}`);
@@ -235,10 +223,9 @@ describe('permalink info route (#/p/:permalinkId)', () => {
         expect(await landingText()).toBe('/web/details?id=series-3&serverId=server-1');
     });
 
-    it('uses the server id the redeemed item reports, not the one the session happened to hold', async () => {
+    it('uses the server id the returned item reports, not the one the session happened to hold', async () => {
         const server = createServer({
-            ...discovery('tt0062622', [ CANDIDATE ]),
-            ...detailsFor('handle-1', { Id: 'item-1', ServerId: 'server-other' })
+            ...discovery('tt0062622', [ { Id: 'item-1', ServerId: 'server-other' } ])
         });
 
         renderPermalink(server, 'info', '/p/tt0062622');
@@ -246,11 +233,12 @@ describe('permalink info route (#/p/:permalinkId)', () => {
         expect(await landingText()).toBe('/web/details?id=item-1&serverId=server-other');
     });
 
-    it('lists every candidate in a chooser and auto-picks none when the same work exists twice', async () => {
+    it('lists every matching item in a chooser and auto-picks none when the same work exists twice', async () => {
         const server = createServer({
-            ...discovery('tt0062622', [ CANDIDATE, { ...CANDIDATE, Rank: 1, Handle: 'handle-2', Lease: 'lease-2' } ]),
-            ...detailsFor('handle-1', { Id: 'item-1', ServerId: 'server-1', Name: '2001: A Space Odyssey', Type: 'Movie', ProductionYear: 1968 }),
-            ...detailsFor('handle-2', { Id: 'item-2', ServerId: 'server-1', Name: '2001: A Space Odyssey', Type: 'Movie', ProductionYear: 2001 })
+            ...discovery('tt0062622', [
+                { Id: 'item-1', ServerId: 'server-1', Name: '2001: A Space Odyssey', Type: 'Movie', ProductionYear: 1968 },
+                { Id: 'item-2', ServerId: 'server-1', Name: '2001: A Space Odyssey', Type: 'Movie', ProductionYear: 2001 }
+            ])
         });
 
         renderPermalink(server, 'info', '/p/tt0062622');
@@ -263,69 +251,52 @@ describe('permalink info route (#/p/:permalinkId)', () => {
         expect(screen.queryByTestId('landing')).toBeNull();
     });
 
-    it('refuses to render a chooser containing a candidate the server redeemed without an id', async () => {
+    it('refuses to render a chooser containing an item without an id', async () => {
         const server = createServer({
-            ...discovery('tt0062622', [ CANDIDATE, { ...CANDIDATE, Rank: 1, Handle: 'handle-2', Lease: 'lease-2' } ]),
-            ...detailsFor('handle-1', { Id: 'item-1', ServerId: 'server-1', Name: '2001: A Space Odyssey' }),
-            ...detailsFor('handle-2', { ServerId: 'server-1', Name: 'Nameless duplicate' })
+            ...discovery('tt0062622', [
+                { Id: 'item-1', ServerId: 'server-1', Name: '2001: A Space Odyssey' },
+                { ServerId: 'server-1', Name: 'Nameless duplicate' }
+            ])
         });
 
         renderPermalink(server, 'info', '/p/tt0062622');
 
-        expect(await messageText()).toContain('redeemed-item-incomplete');
+        expect(await messageText()).toContain('item-incomplete');
         expect(document.querySelector('#permalinkChooserPage')).toBeNull();
         expect(screen.queryByTestId('landing')).toBeNull();
     });
 
-    it('says an external alias needs evidence, quoting the server, instead of reporting not found', async () => {
+    it('reports a server conflict as retriable, never as a dead link', async () => {
         const server = createServer({
             'GET /Permalinks/tt0062622/Items': {
                 status: 409,
-                body: {
-                    title: 'EvidenceRequired',
-                    detail: 'EvidenceRequired: initialize protected evidence from the authenticated local item page.',
-                    status: 409
-                }
-            }
-        });
-
-        renderPermalink(server, 'info', '/p/tt0062622');
-
-        expect(await messageText()).toContain('initialize protected evidence');
-        expect(screen.queryByTestId('landing')).toBeNull();
-    });
-
-    it('reports a pending identity mutation as a retriable conflict, never as a dead link', async () => {
-        const server = createServer({
-            'GET /Permalinks/tt0062622/Items': {
-                status: 409,
-                body: { title: 'identity-mutation-pending', detail: 'A replacement is in flight.', status: 409 }
+                body: { title: 'permalink-conflict', detail: 'Library membership is changing.', status: 409 }
             }
         });
 
         renderPermalink(server, 'info', '/p/tt0062622');
 
         const text = await messageText();
-        expect(text).toContain('identity-mutation-pending');
+        expect(text).toContain('permalink-conflict');
         expect(document.querySelector('#permalinkRetryButton')).not.toBeNull();
     });
 
-    it('reports an unreachable capsule as a retriable 503 state', async () => {
+    it('reports an unavailable server as a retriable 503 state', async () => {
         const server = createServer({
             'GET /Permalinks/tt0062622/Items': {
                 status: 503,
-                body: { title: 'capsule-unreachable', detail: 'The volume is not mounted.', status: 503 }
+                body: { title: 'server-unavailable', detail: 'The library is unavailable.', status: 503 }
             }
         });
 
         renderPermalink(server, 'info', '/p/tt0062622');
 
         const text = await messageText();
-        expect(text).toContain('capsule-unreachable');
+        expect(text).toContain('server-unavailable');
         expect(document.querySelector('#permalinkRetryButton')).not.toBeNull();
     });
 
-    it('reports not found when the server verified no candidate for a known-grammar sk- alias', async () => {
+    it('reports not found when the server returned no item for a known-grammar sk- alias', async () => {
         const server = createServer(discovery(SK_MOVIE_ID, []));
 
         renderPermalink(server, 'info', `/p/${SK_MOVIE_ID}`);
@@ -333,10 +304,9 @@ describe('permalink info route (#/p/:permalinkId)', () => {
         expect(await messageText()).toContain(SK_MOVIE_ID);
     });
 
-    it('follows a renamed item to its new id on reopen, never replaying the first resolution', async () => {
+    it('follows a renamed item to its new id on reopen by querying current library membership', async () => {
         const beforeRename = createServer({
-            ...discovery(SK_MOVIE_ID, [ { ...CANDIDATE, Namespace: 'sloptank' } ]),
-            ...detailsFor('handle-1', { Id: 'item-9', ServerId: 'server-1', Name: 'Home Video 1994' })
+            ...discovery(SK_MOVIE_ID, [ { Id: 'item-9', ServerId: 'server-1', Name: 'Home Video 1994' } ])
         });
         const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
@@ -346,22 +316,16 @@ describe('permalink info route (#/p/:permalinkId)', () => {
         cleanup();
 
         // The file was renamed, so the library rebuilt the item under a new
-        // GUID. The durable sk- alias is unchanged, and the server now verifies
-        // it against the new item -- which the client only sees because it
-        // discovers and redeems again instead of reusing the cached result.
+        // id. The alias is unchanged, and the next open resolves current items.
         const afterRename = createServer({
-            ...discovery(SK_MOVIE_ID, [ { ...CANDIDATE, Namespace: 'sloptank', Handle: 'handle-r', Lease: 'lease-r' } ]),
-            ...detailsFor('handle-r', { Id: 'item-renamed', ServerId: 'server-1', Name: 'Family Trip 1994' })
+            ...discovery(SK_MOVIE_ID, [ { Id: 'item-renamed', ServerId: 'server-1', Name: 'Family Trip 1994' } ])
         });
 
         renderPermalink(afterRename, 'info', `/p/${SK_MOVIE_ID}`, queryClient);
 
         await waitFor(() => expect(screen.getByTestId('landing').textContent)
             .toBe('/web/details?id=item-renamed&serverId=server-1'));
-        expect(afterRename.calls).toEqual([
-            `GET /Permalinks/${SK_MOVIE_ID}/Items`,
-            'POST /Permalinks/Candidates/handle-r/Details'
-        ]);
+        expect(afterRename.calls).toEqual([ `GET /Permalinks/${SK_MOVIE_ID}/Items` ]);
     });
 
     it('rejects a malformed id without contacting the server at all', async () => {
@@ -373,17 +337,17 @@ describe('permalink info route (#/p/:permalinkId)', () => {
         expect(server.calls).toEqual([]);
     });
 
-    it('refuses to decide when the server counted more candidates than it returned', async () => {
+    it('refuses to decide when the server counted more items than it returned', async () => {
         const server = createServer({
             'GET /Permalinks/tt0062622/Items': {
                 status: 200,
-                body: { Items: [ CANDIDATE ], TotalRecordCount: 2 }
+                body: { Items: [ { Id: 'item-1', ServerId: 'server-1' } ], TotalRecordCount: 2 }
             }
         });
 
         renderPermalink(server, 'info', '/p/tt0062622');
 
-        expect(await messageText()).toContain('candidate-set-truncated');
+        expect(await messageText()).toContain('item-set-truncated');
         expect(screen.queryByTestId('landing')).toBeNull();
     });
 
@@ -391,7 +355,7 @@ describe('permalink info route (#/p/:permalinkId)', () => {
         const server = createServer({
             'GET /Permalinks/tt0062622/Items': {
                 status: 200,
-                body: { Items: [ CANDIDATE ], TotalRecordCount: 1 },
+                body: { Items: [ { Id: 'item-1', ServerId: 'server-1' } ], TotalRecordCount: 1 },
                 delayMs: 200
             }
         });
@@ -408,125 +372,66 @@ describe('permalink info route (#/p/:permalinkId)', () => {
 describe('permalink watch route (#/w/:permalinkId)', () => {
     afterEach(cleanup);
 
-    it('redeems the details lease into a player-ready snapshot in one post', async () => {
+    it('opens the ordinary player route with the resolved library item id', async () => {
         const server = createServer({
-            ...discovery('tt0062622', [ CANDIDATE ]),
-            'POST /Permalinks/Candidates/handle-1/PlaybackReadyV1': {
-                status: 200,
-                body: { ItemId: 'item-1', QueueCount: 1, PlaybackSessionId: 'session-1' }
-            }
+            ...discovery('tt0062622', [ { Id: 'item-1', ServerId: 'server-1' } ])
         });
 
         renderPermalink(server, 'watch', '/w/tt0062622');
 
-        expect(await landingText()).toBe('/web/video?id=item-1&serverId=server-1&permalinkPlayback=1');
-        expect(server.calls).toEqual([
-            'GET /Permalinks/tt0062622/Items',
-            'POST /Permalinks/Candidates/handle-1/PlaybackReadyV1'
-        ]);
+        expect(await landingText()).toBe('/web/video?id=item-1&serverId=server-1');
+        expect(server.calls).toEqual([ 'GET /Permalinks/tt0062622/Items' ]);
     });
 
     it('carries a valid start offset through to the player route', async () => {
         const server = createServer({
-            ...discovery('tt0062622', [ CANDIDATE ]),
-            'POST /Permalinks/Candidates/handle-1/PlaybackReadyV1': {
-                status: 200,
-                body: { ItemId: 'item-1', QueueCount: 1, PlaybackSessionId: 'session-1' }
-            }
+            ...discovery('tt0062622', [ { Id: 'item-1', ServerId: 'server-1' } ])
         });
 
         renderPermalink(server, 'watch', '/w/tt0062622?t=90');
 
-        expect(await landingText()).toBe('/web/video?id=item-1&serverId=server-1&permalinkPlayback=1&t=90');
+        expect(await landingText()).toBe('/web/video?id=item-1&serverId=server-1&t=90');
     });
 
     it('drops a malformed start offset rather than guessing a position', async () => {
         const server = createServer({
-            ...discovery('tt0062622', [ CANDIDATE ]),
-            'POST /Permalinks/Candidates/handle-1/PlaybackReadyV1': {
-                status: 200,
-                body: { ItemId: 'item-1', QueueCount: 1, PlaybackSessionId: 'session-1' }
-            }
+            ...discovery('tt0062622', [ { Id: 'item-1', ServerId: 'server-1' } ])
         });
 
         renderPermalink(server, 'watch', '/w/tt0062622?t=-5');
 
-        expect(await landingText()).toBe('/web/video?id=item-1&serverId=server-1&permalinkPlayback=1');
+        expect(await landingText()).toBe('/web/video?id=item-1&serverId=server-1');
     });
 
-    it('surfaces a replacement race as a retriable conflict rather than playing the replaced file', async () => {
-        const server = createServer({
-            ...discovery('tt0062622', [ CANDIDATE ]),
-            'POST /Permalinks/Candidates/handle-1/PlaybackReadyV1': {
-                status: 409,
-                body: { title: 'assignment-head-moved', detail: 'The item was replaced while this link was opening.', status: 409 }
-            }
-        });
-
-        renderPermalink(server, 'watch', '/w/tt0062622');
-
-        const text = await messageText();
-        expect(text).toContain('assignment-head-moved');
-        expect(screen.queryByTestId('landing')).toBeNull();
-    });
-
-    it('never starts playback from a snapshot with no item id', async () => {
-        const server = createServer({
-            ...discovery('tt0062622', [ CANDIDATE ]),
-            'POST /Permalinks/Candidates/handle-1/PlaybackReadyV1': { status: 200, body: { QueueCount: 1 } }
-        });
-
-        renderPermalink(server, 'watch', '/w/tt0062622');
-
-        expect(await messageText()).toContain('playback-snapshot-incomplete');
-    });
-
-    it('re-runs the whole ready exchange on a second open, so append-only growth is never replayed', async () => {
+    it('resolves an updated item when the same permalink is opened again', async () => {
         const beforeGrowth = createServer({
-            ...discovery(SK_SERIES_ID, [ { ...CANDIDATE, Namespace: 'sloptank' } ]),
-            'POST /Permalinks/Candidates/handle-1/PlaybackReadyV1': {
-                status: 200,
-                body: { ItemId: 'episode-1', QueueCount: 1, PlaybackSessionId: 'session-1' }
-            }
+            ...discovery(SK_SERIES_ID, [ { Id: 'episode-1', ServerId: 'server-1', Name: 'Example S01E01', Type: 'Episode' } ])
         });
         const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
         const first = renderPermalink(beforeGrowth, 'watch', `/w/${SK_SERIES_ID}`, queryClient);
-        expect(await landingText()).toBe('/web/video?id=episode-1&serverId=server-1&permalinkPlayback=1');
+        expect(await landingText()).toBe('/web/video?id=episode-1&serverId=server-1');
         first.unmount();
         cleanup();
 
-        // A rescan appended episodes: the server now freezes a larger queue and
-        // issues different handles. The client must discover and redeem again
-        // rather than reuse anything it learned on the first open.
+        // The library now reports the current matching episode directly.
         const afterGrowth = createServer({
-            ...discovery(SK_SERIES_ID, [ { ...CANDIDATE, Namespace: 'sloptank', Handle: 'handle-3', Lease: 'lease-3' } ]),
-            'POST /Permalinks/Candidates/handle-3/PlaybackReadyV1': {
-                status: 200,
-                body: { ItemId: 'episode-1', QueueCount: 12, PlaybackSessionId: 'session-2' }
-            }
+            ...discovery(SK_SERIES_ID, [ { Id: 'episode-1', ServerId: 'server-1', Name: 'Example S01E01', Type: 'Episode' } ])
         });
 
         renderPermalink(afterGrowth, 'watch', `/w/${SK_SERIES_ID}`, queryClient);
 
-        expect(await landingText()).toBe('/web/video?id=episode-1&serverId=server-1&permalinkPlayback=1');
-        expect(afterGrowth.calls).toEqual([
-            `GET /Permalinks/${SK_SERIES_ID}/Items`,
-            'POST /Permalinks/Candidates/handle-3/PlaybackReadyV1'
-        ]);
+        expect(await landingText()).toBe('/web/video?id=episode-1&serverId=server-1');
+        expect(afterGrowth.calls).toEqual([ `GET /Permalinks/${SK_SERIES_ID}/Items` ]);
     });
 
     it('plays a no-provider item opened by its sk- watch link', async () => {
         const server = createServer({
-            ...discovery(SK_MOVIE_ID, [ { ...CANDIDATE, Namespace: 'sloptank' } ]),
-            'POST /Permalinks/Candidates/handle-1/PlaybackReadyV1': {
-                status: 200,
-                body: { ItemId: 'item-9', QueueCount: 1, PlaybackSessionId: 'session-1' }
-            }
+            ...discovery(SK_MOVIE_ID, [ { Id: 'item-9', ServerId: 'server-1', Name: 'Home Video 1994' } ])
         });
 
         renderPermalink(server, 'watch', `/w/${SK_MOVIE_ID}`);
 
-        expect(await landingText()).toBe('/web/video?id=item-9&serverId=server-1&permalinkPlayback=1');
+        expect(await landingText()).toBe('/web/video?id=item-9&serverId=server-1');
     });
 });

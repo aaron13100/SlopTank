@@ -17,9 +17,6 @@ import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base
  * path and authorization header the generated classes use.
  */
 
-/** Redemption purpose accepted by the server's discovery endpoint. */
-export type PermalinkRedemptionPurpose = 'details' | 'playback';
-
 /** How a permalink request failed, once the HTTP status has been classified. */
 export type PermalinkFailureKind =
     | 'conflict'
@@ -30,14 +27,6 @@ export type PermalinkFailureKind =
     | 'transport'
     | 'aborted';
 
-/** One metadata-free candidate returned by discovery. Handle and lease are opaque. */
-export interface PermalinkCandidateEnvelope {
-    rank: number
-    namespace: string
-    handle: string
-    lease: string
-}
-
 /** The ordered active aliases the server persisted for an item. */
 export interface PermalinkAliasSet {
     version: number
@@ -45,18 +34,10 @@ export interface PermalinkAliasSet {
     canonicalId: string
 }
 
-/** The immutable playback plan the server froze when a playback lease was consumed. */
-export interface PermalinkPlaybackSnapshot {
-    itemId: string
-    queueCount: number
-    playbackSessionId: string
-}
-
 /**
- * A permalink request that did not succeed, carrying the server's stable
- * diagnostic code (`EvidenceRequired`, `alias-detached`,
- * `identity-mutation-pending`, ...) alongside the HTTP status, so callers can
- * branch on the failure instead of on prose.
+ * A permalink request that did not succeed, carrying the server's diagnostic
+ * code alongside the HTTP status, so callers can branch on the failure
+ * instead of on prose.
  */
 export class PermalinkRequestError extends Error {
     /**
@@ -103,7 +84,8 @@ export class PermalinkRequestError extends Error {
  * code-split bundle can hold two copies of a module, giving two class
  * identities for the same error. Both make `instanceof` report false in the
  * shipped build while passing in tests, which silently collapses every typed
- * server refusal (`EvidenceRequired`, 409, 503) into one generic error state.
+ * server errors such as conflicts and unavailable responses into one generic
+ * error state.
  * A brand cannot be lost either way.
  *
  * @param error The caught value.
@@ -120,50 +102,16 @@ interface ProblemDetailsBody {
     status?: number
 }
 
-/** The `QueryResult<T>` envelope the discovery endpoint returns. */
-interface QueryResultBody<T> {
+/** The ordinary library query envelope returned for a permalink alias. */
+interface QueryResult<T> {
     Items?: T[]
     TotalRecordCount?: number
-}
-
-interface CandidateEnvelopeBody {
-    Rank?: number
-    Namespace?: string
-    Handle?: string
-    Lease?: string
 }
 
 interface AliasSetBody {
     Version?: number
     Ids?: string[]
     CanonicalId?: string
-}
-
-interface PlaybackSnapshotBody {
-    ItemId?: string
-    QueueCount?: number
-    PlaybackSessionId?: string
-}
-
-function toPlaybackSnapshot(
-    body: PlaybackSnapshotBody,
-    url: string,
-    playbackSessionId: string
-): PermalinkPlaybackSnapshot {
-    if (!body.ItemId) {
-        throw new PermalinkRequestError({
-            kind: 'conflict',
-            code: 'playback-snapshot-incomplete',
-            message: 'The server returned a playback snapshot without an item id.',
-            hint: `Response from ${url} does not satisfy the snapshot contract; playback was not started.`
-        });
-    }
-
-    return {
-        itemId: body.ItemId,
-        queueCount: body.QueueCount ?? 1,
-        playbackSessionId: body.PlaybackSessionId ?? playbackSessionId
-    };
 }
 
 interface PermalinkRequest {
@@ -245,161 +193,27 @@ async function request<T>({ api, method, url, params, body, signal }: PermalinkR
     }
 }
 
-function toCandidate(body: CandidateEnvelopeBody, url: string): PermalinkCandidateEnvelope {
-    if (!body.Handle || !body.Lease) {
-        throw new PermalinkRequestError({
-            kind: 'conflict',
-            code: 'candidate-envelope-incomplete',
-            message: 'The server returned a permalink candidate without a handle or lease.',
-            hint: `Response from ${url} does not satisfy the candidate contract; nothing was resolved from it.`
-        });
-    }
-
-    return {
-        rank: body.Rank ?? 0,
-        namespace: body.Namespace ?? 'external',
-        handle: body.Handle,
-        lease: body.Lease
-    };
-}
-
 /**
- * Discovers the verified candidates for one alias.
+ * Reads the current, authorized library items for one permalink alias.
  *
  * @param options.api The SDK Api for the server being asked.
  * @param options.permalinkId The opaque permalink id, exactly as it appeared in the URL.
- * @param options.purpose The redemption purpose the returned leases are bound to.
  * @param options.signal Aborts the request when the route changes.
- * @returns Every candidate the server verified, never a truncated subset.
- * @throws PermalinkRequestError When the server fails the request or reports fewer rows than it counted.
+ * @returns The server's normal QueryResult of authorized library items.
+ * @throws PermalinkRequestError When the server fails the request.
  */
-export async function discoverPermalinkCandidates({ api, permalinkId, purpose, signal }: {
+export async function getPermalinkItems({ api, permalinkId, signal }: {
     api: Api
     permalinkId: string
-    purpose: PermalinkRedemptionPurpose
     signal?: AbortSignal
-}): Promise<PermalinkCandidateEnvelope[]> {
+}): Promise<QueryResult<BaseItemDto>> {
     const url = `/Permalinks/${encodeURIComponent(permalinkId)}/Items`;
-    const result = await request<QueryResultBody<CandidateEnvelopeBody>>({
+    return request<QueryResult<BaseItemDto>>({
         api,
         method: 'GET',
         url,
-        params: { purpose },
         signal
     });
-
-    const rows = result.Items ?? [];
-    const total = result.TotalRecordCount ?? rows.length;
-    // Design section 4.2 rule 3: never decide from a truncated result set. The
-    // endpoint returns every candidate in one response today, so a shortfall
-    // means the contract changed underneath us, not that paging is needed.
-    if (total > rows.length) {
-        throw new PermalinkRequestError({
-            kind: 'conflict',
-            code: 'candidate-set-truncated',
-            message: `The server counted ${total} permalink candidates but returned ${rows.length}.`,
-            hint: 'Resolution stops rather than deciding from an incomplete candidate set.'
-        });
-    }
-
-    return rows.map(row => toCandidate(row, url));
-}
-
-/**
- * Consumes a details lease and returns the revalidated item.
- *
- * @param options.api The SDK Api for the server being asked.
- * @param options.candidate The candidate whose details lease is being spent.
- * @param options.signal Aborts the request when the route changes.
- * @returns The item DTO the server re-verified at redemption time.
- * @throws PermalinkRequestError When the lease is spent, replayed, or its evidence no longer holds.
- */
-export async function redeemPermalinkDetails({ api, candidate, signal }: {
-    api: Api
-    candidate: PermalinkCandidateEnvelope
-    signal?: AbortSignal
-}): Promise<BaseItemDto> {
-    return request<BaseItemDto>({
-        api,
-        method: 'POST',
-        url: `/Permalinks/Candidates/${encodeURIComponent(candidate.handle)}/Details`,
-        body: { Lease: candidate.lease },
-        signal
-    });
-}
-
-/**
- * Exchanges a details lease for a freshly re-checked playback lease.
- *
- * @param options.api The SDK Api for the server being asked.
- * @param options.candidate The candidate whose details lease is being exchanged.
- * @param options.signal Aborts the request when the route changes.
- * @returns A replacement candidate envelope bound to the playback purpose.
- * @throws PermalinkRequestError When the details lease is spent or its evidence changed.
- */
-export async function exchangePermalinkPlaybackLease({ api, candidate, signal }: {
-    api: Api
-    candidate: PermalinkCandidateEnvelope
-    signal?: AbortSignal
-}): Promise<PermalinkCandidateEnvelope> {
-    const url = `/Permalinks/Candidates/${encodeURIComponent(candidate.handle)}/PlaybackLease`;
-    const body = await request<CandidateEnvelopeBody>({
-        api,
-        method: 'POST',
-        url,
-        body: { Lease: candidate.lease },
-        signal
-    });
-    return toCandidate(body, url);
-}
-
-/**
- * Runs the established details-to-playback exchange and redemption inside one
- * versioned server request, returning the same immutable playback snapshot.
- */
-export async function redeemPermalinkPlaybackReadyV1({ api, candidate, playbackSessionId, signal }: {
-    api: Api
-    candidate: PermalinkCandidateEnvelope
-    playbackSessionId: string
-    signal?: AbortSignal
-}): Promise<PermalinkPlaybackSnapshot> {
-    const url = `/Permalinks/Candidates/${encodeURIComponent(candidate.handle)}/PlaybackReadyV1`;
-    const body = await request<PlaybackSnapshotBody>({
-        api,
-        method: 'POST',
-        url,
-        body: { Lease: candidate.lease, PlaybackSessionId: playbackSessionId },
-        signal
-    });
-    return toPlaybackSnapshot(body, url, playbackSessionId);
-}
-
-/**
- * Consumes a playback lease and returns the immutable plan the server froze.
- *
- * @param options.api The SDK Api for the server being asked.
- * @param options.candidate The playback-purpose candidate being redeemed.
- * @param options.playbackSessionId The client-minted id binding this redemption to one session.
- * @param options.signal Aborts the request when the route changes.
- * @returns The frozen snapshot, whose item id is the only identity the client acts on.
- * @throws PermalinkRequestError When the lease is spent, replayed, or the item was replaced.
- */
-export async function redeemPermalinkPlayback({ api, candidate, playbackSessionId, signal }: {
-    api: Api
-    candidate: PermalinkCandidateEnvelope
-    playbackSessionId: string
-    signal?: AbortSignal
-}): Promise<PermalinkPlaybackSnapshot> {
-    const url = `/Permalinks/Candidates/${encodeURIComponent(candidate.handle)}/Playback`;
-    const body = await request<PlaybackSnapshotBody>({
-        api,
-        method: 'POST',
-        url,
-        body: { Lease: candidate.lease, PlaybackSessionId: playbackSessionId },
-        signal
-    });
-
-    return toPlaybackSnapshot(body, url, playbackSessionId);
 }
 
 /**

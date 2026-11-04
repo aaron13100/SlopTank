@@ -73,11 +73,8 @@ export function requireAssSubtitleItemId(): string {
 /**
  * Read the fixture id for a real TV episode that carries external provider ids.
  *
- * Permalink specs use this instead of `config.itemId` wherever a test has to
- * complete several permalink round trips, because permalink evidence hashes the
- * whole media file on every call: an episode-sized file keeps that cost from
- * dominating what the test is actually measuring, while still exercising the
- * external-id path for real.
+ * Permalink specs use this instead of `config.itemId` where they need a real
+ * episode with provider ids, while keeping the route's actual media behavior.
  *
  * @returns The configured episode item id.
  */

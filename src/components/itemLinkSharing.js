@@ -1,8 +1,8 @@
 // SlopTank modification notice: added or changed by SlopTank on 2026-10-06.
 /**
  * Publishes and copies an item's shareable permalink link (extracted from
- * itemContextMenu, c188 split): ensures the server has bound the link to
- * evidence, shows progress while it does, then copies the URL with an honest
+ * itemContextMenu, c188 split): asks the server for the item's permalink
+ * aliases, shows progress while it does, then copies the URL with an honest
  * account of what the user got.
  */
 
@@ -15,13 +15,8 @@ import toast from './toast/toast';
 
 /**
  * Guards the shared loading spinner while a permalink ensure/publish call is
- * in flight. Ensure's cost scales with the media file's size (tens of
- * seconds for a multi-GB movie; docs/internal PermalinkEvidence hashing) and
- * previously gave no feedback at all while it ran, so a user seeing nothing
- * happen would reasonably invoke Copy Link, Copy Play Link or Share again
- * before the first call finished. Counting overlapping calls keeps the
- * spinner visible for the whole span instead of one call hiding it out from
- * under a sibling call still in flight.
+ * in flight. Counting overlapping calls keeps one call from hiding the
+ * spinner while another call is still running.
  */
 let pendingLinkPublishCalls = 0;
 
@@ -40,16 +35,15 @@ function endLinkPublishProgress() {
 }
 
 /**
- * Asks the server to persist this item's permalink evidence and returns the
+ * Asks the server to persist this item's permalink aliases and returns the
  * URL to publish (docs/internal/permalink-url-design.md section 5). Ensure
- * always runs before any URL is constructed, for every item, so a published
- * link is always one the server has bound to evidence -- or an explicitly
- * temporary legacy link carrying the server's own reason.
+ * always runs before a permanent URL is constructed, so a published link is
+ * one of the aliases persisted by the server, or an explicitly temporary
+ * legacy link carrying the server's own reason.
  *
  * Keeps the shared loading spinner visible for the call's full duration
  * (`beginLinkPublishProgress`/`endLinkPublishProgress`) so Copy Link, Copy
- * Play Link and Share all show progress immediately instead of appearing to
- * do nothing while ensure hashes the file server-side.
+ * Play Link and Share all show progress while the server persists the aliases.
  *
  * @param {object} apiClient The legacy api client for the item's server.
  * @param {import('@jellyfin/sdk/lib/api').Api} api The SDK api for the same server.
