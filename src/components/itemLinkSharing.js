@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-10-06.
+// SlopTank modification notice: added or changed by SlopTank on 2026-10-06, 2026-11-04.
 /**
  * Publishes and copies an item's shareable permalink link (extracted from
  * itemContextMenu, c188 split): asks the server for the item's permalink

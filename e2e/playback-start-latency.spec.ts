@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-02, 2026-09-08, 2026-09-09, 2026-09-10, 2026-09-28, 2026-10-13, 2026-10-16.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-02, 2026-09-08, 2026-09-09, 2026-09-10, 2026-09-28, 2026-10-13, 2026-10-16, 2026-11-04.
 import os from 'node:os';
 import { VIDEO_ROUTE, WATCH_PERMALINK_ROUTE, expect, login, test } from './fixtures';
 import { loadScaledMs } from './load-scaled-bounds';

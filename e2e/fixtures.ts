@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-24, 2026-07-31, 2026-08-01, 2026-08-09, 2026-08-12, 2026-09-02, 2026-09-09, 2026-09-14, 2026-09-15, 2026-09-29, 2026-10-01.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-18, 2026-07-19, 2026-07-24, 2026-07-31, 2026-08-01, 2026-08-09, 2026-08-12, 2026-09-02, 2026-09-09, 2026-09-14, 2026-09-15, 2026-09-29, 2026-10-01, 2026-11-04.
 import { test as base, expect, type Locator, type Page } from '@playwright/test';
 
 import permalinkGrammar from '../src/components/router/permalink-grammar-v1.json';

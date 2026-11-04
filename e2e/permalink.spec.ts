@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-07-24, 2026-07-31, 2026-08-01, 2026-08-03, 2026-09-09, 2026-09-28.
+// SlopTank modification notice: added or changed by SlopTank on 2026-07-24, 2026-07-31, 2026-08-01, 2026-08-03, 2026-09-09, 2026-09-28, 2026-11-04.
 import { expect, login, requireEpisodeItemId, requireNoProviderItemId, submitManualLogin, test } from './fixtures';
 import { loadScaledMs } from './load-scaled-bounds';
 

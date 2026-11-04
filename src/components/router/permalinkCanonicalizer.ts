@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-08-03, 2026-08-11, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-08-03, 2026-08-11, 2026-09-09, 2026-11-04.
 import type { Api } from '@jellyfin/sdk/lib/api';
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base-item-dto';
 
