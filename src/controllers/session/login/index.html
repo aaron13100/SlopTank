@@ -1,4 +1,4 @@
-<!-- SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-31, 2026-09-09. -->
+<!-- SlopTank modification notice: added or changed by SlopTank on 2026-07-22, 2026-07-31, 2026-09-09, 2026-11-04. -->
 <div id="loginPage" data-role="page" class="page standalonePage backdropPage" data-backbutton="false" data-backdroptype="splashscreen">
     <div class="sloptankLoginShell padded-left padded-right padded-bottom-page margin-auto-y">
         <img class="sloptankLoginBrand" src="../../../assets/img/branding/sloptank-wordmark.svg" alt="SlopTank" />
@@ -12,6 +12,7 @@
 
             <div class="inputContainer">
                 <input is="emby-input" id="txtManualPassword" type="password" label="${LabelPassword}" autocomplete="current-password" />
+                <button is="emby-button" type="button" id="btnTogglePassword" class="button-flat" aria-controls="txtManualPassword" aria-pressed="false">${ShowPassword}</button>
             </div>
 
             <label class="checkboxContainer">

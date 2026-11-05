@@ -1,6 +1,6 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-10-01, 2026-10-07.
+// SlopTank modification notice: added or changed by SlopTank on 2026-10-01, 2026-10-07, 2026-11-04.
 import { PlaybackManager } from './playbackmanager';
-import { TICKS_PER_MILLISECOND, TICKS_PER_SECOND } from 'constants/time';
+import { TICKS_PER_MILLISECOND } from 'constants/time';
 import type { MediaSegmentDto } from '@jellyfin/sdk/lib/generated-client/models/media-segment-dto';
 import type { PlaybackStopInfo } from 'types/playbackStopInfo';
 import type { PlayerPlugin } from 'types/plugin';
@@ -60,13 +60,8 @@ class SkipSegment extends PlaybackSubscriber {
             this.skipElement = document.body.querySelector('.skip-button');
             if (this.skipElement) {
                 this.skipElement.addEventListener('click', () => {
-                    const time = this.playbackManager.currentTime() * TICKS_PER_MILLISECOND;
                     if (this.currentSegment?.EndTicks) {
-                        if (time < this.currentSegment.EndTicks - TICKS_PER_SECOND) {
-                            this.playbackManager.seek(this.currentSegment.EndTicks);
-                        } else {
-                            this.hideSkipButton();
-                        }
+                        this.playbackManager.seek(this.currentSegment.EndTicks);
                     }
                 });
             }
