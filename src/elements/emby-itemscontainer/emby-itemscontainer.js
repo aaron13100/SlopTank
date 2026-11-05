@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09, 2026-11-03, 2026-11-05.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09, 2026-11-05.
 import 'webcomponents.js/webcomponents-lite';
 import Sortable from 'sortablejs';
 
