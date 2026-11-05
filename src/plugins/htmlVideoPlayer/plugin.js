@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-03-12, 2026-07-18, 2026-07-19, 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-25, 2026-07-26, 2026-07-31, 2026-08-09, 2026-08-29, 2026-09-08, 2026-09-09, 2026-09-27, 2026-09-30, 2026-10-01, 2026-10-07, 2026-10-08, 2026-10-13, 2026-10-16, 2026-11-01.
+// SlopTank modification notice: added or changed by SlopTank on 2026-03-12, 2026-07-18, 2026-07-19, 2026-07-22, 2026-07-23, 2026-07-24, 2026-07-25, 2026-07-26, 2026-07-31, 2026-08-09, 2026-08-29, 2026-09-08, 2026-09-09, 2026-09-27, 2026-09-30, 2026-10-01, 2026-10-07, 2026-10-08, 2026-10-13, 2026-10-16, 2026-11-01, 2026-11-05.
 import DOMPurify from 'dompurify';
 import debounce from 'lodash-es/debounce';
 import ResizeObserver from 'resize-observer-polyfill';
@@ -3043,6 +3043,14 @@ export class HtmlVideoPlayer {
         const mediaElement = this.#mediaElement;
         if (mediaElement) {
             if (val != null) {
+                const duration = mediaElement.duration;
+                if (Number.isFinite(duration) && duration > 0 && val / 1000 >= duration) {
+                    // A terminal seek need not emit ended. Preserve the final
+                    // position before the normal completion path resets the source.
+                    this.#currentTime = duration;
+                    this.stop(false);
+                    return;
+                }
                 mediaElement.currentTime = val / 1000;
                 return;
             }

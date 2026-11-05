@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-11-03.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-11-03, 2026-11-05.
 /**
  * Owns the stream a player is fed: bitrate caps (automatic or user-set),
  * seeking, and re-requesting a stream mid-playback when the
@@ -134,7 +134,8 @@ export function createPlaybackStreamController(context) {
 
     function changeStream(player, ticks, params) {
         if (canPlayerSeek(player) && params == null) {
-            player.currentTime(parseInt(ticks / 10000, 10));
+            const offset = context.state.getPlayerData(player).streamInfo?.transcodingOffsetTicks || 0;
+            player.currentTime(Math.max(0, Math.floor((ticks - offset) / 10000)));
             return;
         }
 
