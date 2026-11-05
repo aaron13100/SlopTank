@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-11-05.
 import React, { type FC } from 'react';
 import Box from '@mui/material/Box';
 
@@ -19,7 +20,7 @@ const CardText: FC<CardTextProps> = ({ className, textLine }) => {
         <Box className={className}>
             {titleAction ? (
                 ensureArray(titleAction).map((action, i, arr) => (
-                    <>
+                    <React.Fragment key={action.url}>
                         <a
                             className='itemAction textActionButton'
                             href={action.url}
@@ -30,7 +31,7 @@ const CardText: FC<CardTextProps> = ({ className, textLine }) => {
                         </a>
                         {/* If there are more items, add the separator */}
                         {(i < arr.length - 1) && SEPARATOR}
-                    </>
+                    </React.Fragment>
                 ))
             ) : (
                 ensureArray(title).join(SEPARATOR)

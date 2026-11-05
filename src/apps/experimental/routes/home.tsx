@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09, 2026-11-05.
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -129,7 +129,7 @@ const Home = () => {
         } else if (currentTabController?.onResume) {
             currentTabController.onResume({});
         }
-        (documentRef.current.querySelector('.skinHeader') as HTMLDivElement).classList.add('noHomeButtonHeader');
+        (documentRef.current.querySelector('.skinHeader') as HTMLDivElement)?.classList.add('noHomeButtonHeader');
     }, [ initialTabIndex, mainTabsManager ]);
 
     const onPause = useCallback(() => {
@@ -137,7 +137,7 @@ const Home = () => {
         if (currentTabController?.onPause) {
             currentTabController.onPause();
         }
-        (documentRef.current.querySelector('.skinHeader') as HTMLDivElement).classList.remove('noHomeButtonHeader');
+        (documentRef.current.querySelector('.skinHeader') as HTMLDivElement)?.classList.remove('noHomeButtonHeader');
     }, []);
 
     const renderHome = useCallback(() => {

@@ -1,4 +1,4 @@
-<!-- SlopTank modification notice: added or changed by SlopTank on 2026-09-07, 2026-09-08, 2026-09-09. -->
+<!-- SlopTank modification notice: added or changed by SlopTank on 2026-09-07, 2026-09-08, 2026-09-09, 2026-11-03, 2026-11-05. -->
 # SlopTank web distribution source and licence election
 
 Every released web directory must contain `SOURCE-MANIFEST.json`. That
@@ -15,26 +15,27 @@ are retained for the period recorded in each artifact manifest. Each
 versioned deployment, including one retained for rollback, keeps its own
 manifest and points to its own archive.
 
-## Licence version actually used
+## Candidate licence version
 
-For inherited Jellyfin web material, SlopTank exercises the permissions of
-GNU GPL version 2. For independently copyrightable post-fork changes owned by
-the SlopTank maintainer, the maintainer elects GNU GPL version 2 or, at the
-recipient's option, any later FSF-published version. The exact manifest value
-for this split is:
+The current web candidate exercises GNU GPL version 3 under its existing
+express GPL-2.0-or-later program grant, independently of the server grant
+interpretation. Independently copyrightable post-fork changes owned by the
+SlopTank maintainer retain their GPL-2.0-or-later election. The exact scoped
+manifest policy is:
 
-`inherited-web=GPL-2.0;owner-increments=GPL-2.0-or-later`
+`inherited-web=GPL-2.0-or-later;owner-increments=GPL-2.0-or-later;candidate-binary-election=GPL-3.0-only`
 
-The `GPL-2.0-or-later` value in `package.json` is inherited project/package
-metadata and evidence of the upstream project's intended treatment. It is not
-a claim by SlopTank that one metadata editor had authority to relicense every
-earlier contributor's work. SlopTank therefore does not describe the whole
-repository as GPL-3.0-only or, without the scope above, GPL-2.0-or-later.
+This is a claim by SlopTank about the candidate election supported by the
+existing web grant, not authority to relicense earlier contributors. The
+historical GPL-2 declaration and later correction remain contrary context;
+this document does not assert universal contributor consent or override a
+separately restricted grant. The root licence text and component notices
+remain intact.
 
-This is a conservative project policy based on the repository's observed
-notices and GPLv2 sections 0 and 9, not a warranty about every historical
-rightsholder's grant. A release remains blocked unless its exact runtime
-dependency graph is compatible with the elected option.
+The candidate election does not qualify an output bundle. Release still
+requires the exact shipped dependencies, assets, translations, notices and
+corresponding source to satisfy their applicable grants. A compatible
+package label alone does not establish those facts.
 
 ## Handwritten source gate
 

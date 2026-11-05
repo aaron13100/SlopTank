@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-08, 2026-09-09, 2026-11-03, 2026-11-05.
 import 'webcomponents.js/webcomponents-lite';
 import Sortable from 'sortablejs';
 
@@ -75,6 +75,9 @@ ItemsContainerPrototype.enableMultiSelect = function (enabled) {
     const self = this;
     loadDynamicModule(() => import('../../components/multiSelect/multiSelect'),
         '../../components/multiSelect/multiSelect').then(({ default: MultiSelect }) => {
+        if (!self.isConnected || self.multiSelect) {
+            return;
+        }
         self.multiSelect = new MultiSelect({
             container: self,
             bindOnClick: false
@@ -382,7 +385,21 @@ ItemsContainerPrototype.refreshItems = function () {
 
     this.needsRefresh = false;
 
-    return this.fetchData().then(onDataFetched.bind(this));
+    const fetchData = this.fetchData;
+    const getItemsHtml = this.getItemsHtml;
+
+    return fetchData.call(this).then(result => {
+        // Detachment clears these callbacks; reconfiguration replaces them.
+        // A reply from the old setup must not render or restart its timers.
+        if (!this.isConnected || this.fetchData !== fetchData || this.getItemsHtml !== getItemsHtml) {
+            return;
+        }
+        if (this.paused) {
+            this.needsRefresh = true;
+            return;
+        }
+        onDataFetched.call(this, result);
+    });
 };
 
 ItemsContainerPrototype.notifyRefreshNeeded = function (isInForeground) {
