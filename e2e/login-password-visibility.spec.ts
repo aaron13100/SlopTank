@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-11-04.
+// SlopTank modification notice: added or changed by SlopTank on 2026-11-05.
 /** The login password control must be on screen and operable with real input. */
 import { test, expect } from '@playwright/test';
 import { onScreenState } from './fixtures';

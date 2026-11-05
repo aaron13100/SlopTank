@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-11-04.
+// SlopTank modification notice: added or changed by SlopTank on 2026-11-05.
 /** End-seeks must produce the same stopped event and final position as natural completion. */
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import Events from '../../utils/events.ts';

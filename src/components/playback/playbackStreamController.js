@@ -1,4 +1,4 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-11-03, 2026-11-04.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-24, 2026-11-03, 2026-11-05.
 /**
  * Owns the stream a player is fed: bitrate caps (automatic or user-set),
  * seeking, and re-requesting a stream mid-playback when the
