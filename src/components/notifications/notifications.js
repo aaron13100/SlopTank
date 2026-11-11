@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-11-11.
 import serverNotifications from '../../scripts/serverNotifications';
 import { playbackManager } from '../playback/playbackmanager';
 import Events from '../../utils/events.ts';
@@ -6,6 +7,7 @@ import { ServerConnections } from 'lib/jellyfin-apiclient';
 import { getItems } from '../../utils/jellyfin-apiclient/getItems.ts';
 
 import NotificationIcon from './notificationicon.png';
+import { canShowNotifications } from './notificationPermission';
 
 function onOneDocumentClick() {
     document.removeEventListener('click', onOneDocumentClick);
@@ -89,6 +91,14 @@ function showNonPersistentNotification(title, options, timeoutMs) {
 }
 
 function showNotification(options, timeoutMs, apiClient) {
+    // Without granted permission both routes below fail loudly (a rejected
+    // showNotification promise or a Notification error event) and nothing is
+    // shown anyway, so a library change or server restart would only surface as
+    // a page error. The one-time click handler above asks for permission.
+    if (!canShowNotifications(window.Notification)) {
+        return;
+    }
+
     const title = options.title;
 
     options.data = options.data || {};
