@@ -1,9 +1,8 @@
-// SlopTank modification notice: added or changed by SlopTank on 2026-09-02, 2026-09-09.
+// SlopTank modification notice: added or changed by SlopTank on 2026-09-02, 2026-09-09, 2026-11-14.
 import type { Api } from '@jellyfin/sdk/lib/api';
 import type { UserViewsApiGetUserViewsRequest } from '@jellyfin/sdk/lib/generated-client/api/user-views-api';
 import { getUserViewsApi } from '@jellyfin/sdk/lib/utils/api/user-views-api';
 import { queryOptions, useQuery } from '@tanstack/react-query';
-import type { AxiosRequestConfig } from 'axios';
 
 import { isPermalinkResolutionPath } from 'components/router/permalinkId';
 
@@ -12,11 +11,10 @@ import { useApi } from './useApi';
 const fetchUserViews = async (
     api: Api,
     userId: string,
-    params?: UserViewsApiGetUserViewsRequest,
-    options?: AxiosRequestConfig
+    params?: UserViewsApiGetUserViewsRequest
 ) => {
     const response = await getUserViewsApi(api)
-        .getUserViews({ ...params, userId }, options);
+        .getUserViews({ ...params, userId });
     return response.data;
 };
 
@@ -26,7 +24,8 @@ export const getUserViewsQuery = (
     params?: UserViewsApiGetUserViewsRequest
 ) => queryOptions({
     queryKey: [ 'User', userId, 'Views', params ],
-    queryFn: ({ signal }) => fetchUserViews(api!, userId!, params, { signal }),
+    // Imperative consumers may still await this shared request after React observers unmount.
+    queryFn: () => fetchUserViews(api!, userId!, params),
     // On initial page load we request user views 3x. Setting a 1 second stale time
     // allows a single request to be made to resolve all 3.
     staleTime: 1000, // 1 second

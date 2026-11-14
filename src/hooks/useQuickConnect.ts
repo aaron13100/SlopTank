@@ -1,3 +1,4 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-11-14.
 import { getQuickConnectApi } from '@jellyfin/sdk/lib/utils/api/quick-connect-api';
 import { useQuery } from '@tanstack/react-query';
 import type { AxiosRequestConfig } from 'axios';
@@ -20,6 +21,7 @@ export const useQuickConnectEnabled = () => {
     const currentApi = useApi();
     return useQuery({
         queryKey: [ 'QuickConnect', 'Enabled' ],
-        queryFn: ({ signal }) => fetchQuickConnectEnabled(currentApi, { signal })
+        queryFn: ({ signal }) => fetchQuickConnectEnabled(currentApi, { signal }),
+        enabled: !!currentApi.api
     });
 };

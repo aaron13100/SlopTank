@@ -1,7 +1,7 @@
+// SlopTank modification notice: added or changed by SlopTank on 2026-11-14.
 import type { Api } from '@jellyfin/sdk/lib/api';
 import { getUserLibraryApi } from '@jellyfin/sdk/lib/utils/api/user-library-api';
 import { queryOptions, useQuery } from '@tanstack/react-query';
-import type { AxiosRequestConfig } from 'axios';
 
 import { useApi } from './useApi';
 import type { ItemDto } from 'types/base/models/item-dto';
@@ -9,11 +9,10 @@ import type { ItemDto } from 'types/base/models/item-dto';
 const fetchItem = async (
     api: Api,
     itemId: string,
-    userId: string,
-    options?: AxiosRequestConfig
+    userId: string
 ) => {
     const response = await getUserLibraryApi(api)
-        .getItem({ userId, itemId }, options);
+        .getItem({ userId, itemId });
     return response.data as ItemDto;
 };
 
@@ -23,7 +22,8 @@ export const getItemQuery = (
     userId?: string
 ) => queryOptions({
     queryKey: [ 'User', userId, 'Items', itemId ],
-    queryFn: ({ signal }) => fetchItem(api!, itemId!, userId!, { signal }),
+    // Imperative consumers may still await this shared request after React observers unmount.
+    queryFn: () => fetchItem(api!, itemId!, userId!),
     staleTime: 1000, // 1 second
     enabled: !!api && !!userId && !!itemId
 });
